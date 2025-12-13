@@ -27,6 +27,7 @@ func Connect(dbPath string) error {
 	// Auto-migrate models
 	err = DB.AutoMigrate(
 		&models.User{},
+		&models.Server{},
 	)
 	if err != nil {
 		return err

@@ -70,5 +70,18 @@ func setupRouter() *gin.Engine {
 		protectedGroup.PUT("/change-password", handlers.ChangePassword)
 	}
 
+	// Server routes (protected)
+	serverGroup := router.Group("/servers")
+	serverGroup.Use(middleware.AuthMiddleware())
+	{
+		serverGroup.POST("", handlers.CreateAgent)
+		serverGroup.GET("", handlers.ListServers)
+		serverGroup.GET("/:id", handlers.GetServer)
+		serverGroup.PUT("/:id/validate-ip", handlers.ValidateIP)
+		serverGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
+		serverGroup.POST("/:id/regenerate-token", handlers.RegenerateToken)
+		serverGroup.DELETE("/:id", handlers.DeleteServer)
+	}
+
 	return router
 }
