@@ -1,0 +1,6 @@
+# Binaries
+watchflare-agent
+watchflare-agent-*
+
+# Config (generated at runtime)
+/etc/watchflare/
