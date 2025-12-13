@@ -45,7 +45,7 @@ func Register(c *gin.Context) {
 	})
 }
 
-// Login authenticates a user and returns a JWT token
+// Login authenticates a user and sets JWT token in HttpOnly cookie
 func Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -59,8 +59,37 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// Set JWT token in HttpOnly cookie
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(
+		"jwt_token",           // name
+		token,                 // value
+		60*60*24*7,           // maxAge (7 days in seconds)
+		"/",                   // path
+		"",                    // domain (empty = current domain)
+		false,                 // secure (set to true in production with HTTPS)
+		true,                  // httpOnly
+	)
+
 	c.JSON(http.StatusOK, gin.H{
-		"token": token,
+		"message": "Login successful",
+	})
+}
+
+// Logout clears the JWT cookie
+func Logout(c *gin.Context) {
+	c.SetCookie(
+		"jwt_token",
+		"",
+		-1,    // maxAge -1 deletes the cookie
+		"/",
+		"",
+		false,
+		true,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Logout successful",
 	})
 }
 

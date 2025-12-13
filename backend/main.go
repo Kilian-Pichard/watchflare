@@ -60,6 +60,7 @@ func setupRouter() *gin.Engine {
 	{
 		authGroup.POST("/register", handlers.Register)
 		authGroup.POST("/login", handlers.Login)
+		authGroup.POST("/logout", handlers.Logout)
 	}
 
 	// Protected routes (require JWT)
