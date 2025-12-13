@@ -2,13 +2,18 @@ package main
 
 import (
 	"log"
+	"net"
+	"sync"
 	"watchflare/backend/config"
 	"watchflare/backend/database"
+	grpcservice "watchflare/backend/grpc"
 	"watchflare/backend/handlers"
 	"watchflare/backend/middleware"
+	pb "watchflare/backend/proto"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -20,14 +25,30 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	// Setup Gin router
-	router := setupRouter()
+	// Use WaitGroup to run both servers concurrently
+	var wg sync.WaitGroup
+	wg.Add(2)
 
 	// Start HTTP server
-	log.Printf("Starting HTTP server on port %s", config.AppConfig.Port)
-	if err := router.Run(":" + config.AppConfig.Port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	go func() {
+		defer wg.Done()
+		router := setupRouter()
+		log.Printf("Starting HTTP server on port %s", config.AppConfig.Port)
+		if err := router.Run(":" + config.AppConfig.Port); err != nil {
+			log.Fatalf("Failed to start HTTP server: %v", err)
+		}
+	}()
+
+	// Start gRPC server
+	go func() {
+		defer wg.Done()
+		if err := startGRPCServer(config.AppConfig.GRPCPort); err != nil {
+			log.Fatalf("Failed to start gRPC server: %v", err)
+		}
+	}()
+
+	log.Println("Watchflare backend started successfully")
+	wg.Wait()
 }
 
 func setupRouter() *gin.Engine {
@@ -84,4 +105,19 @@ func setupRouter() *gin.Engine {
 	}
 
 	return router
+}
+
+// startGRPCServer initializes and starts the gRPC server
+func startGRPCServer(port string) error {
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		return err
+	}
+
+	grpcServer := grpc.NewServer()
+	agentService := grpcservice.NewAgentServer()
+	pb.RegisterAgentServiceServer(grpcServer, agentService)
+
+	log.Printf("Starting gRPC server on port %s", port)
+	return grpcServer.Serve(listener)
 }

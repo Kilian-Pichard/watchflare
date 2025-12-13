@@ -19,3 +19,6 @@
 *.out
 coverage.txt
 tests_report.txt
+
+# Test files
+test_grpc_client.go

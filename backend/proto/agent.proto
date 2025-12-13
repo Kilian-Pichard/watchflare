@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package agent;
+
+option go_package = "watchflare/backend/proto";
+
+// AgentService handles agent registration and heartbeats
+service AgentService {
+  // RegisterServer is called when an agent first connects
+  rpc RegisterServer(RegisterRequest) returns (RegisterResponse);
+
+  // Heartbeat is called every 30 seconds by the agent
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// RegisterRequest contains information sent during initial registration
+message RegisterRequest {
+  string registration_token = 1;  // The registration token from CreateAgent
+  string hostname = 2;
+  string ip_address_v4 = 3;
+  string ip_address_v6 = 4;
+  string os = 5;
+  string os_version = 6;
+}
+
+// RegisterResponse is sent back after successful registration
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+  string agent_id = 3;      // UUID of the server
+  string agent_key = 4;     // Key for authenticating future requests
+}
+
+// HeartbeatRequest contains info sent with each heartbeat
+message HeartbeatRequest {
+  string agent_id = 1;      // UUID of the server
+  string agent_key = 2;     // Authentication key
+  string ip_address_v4 = 3; // Current IPv4 (may change)
+  string ip_address_v6 = 4; // Current IPv6 (may change)
+}
+
+// HeartbeatResponse acknowledges the heartbeat
+message HeartbeatResponse {
+  bool success = 1;
+  string message = 2;
+}
