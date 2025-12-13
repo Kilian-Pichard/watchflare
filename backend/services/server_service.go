@@ -158,7 +158,7 @@ func RegenerateToken(serverID uint) (string, error) {
 	return token, nil
 }
 
-// DeleteServer deletes a server (only if pending or expired)
+// DeleteServer deletes a server
 func DeleteServer(serverID uint) error {
 	var server models.Server
 	if err := database.DB.First(&server, serverID).Error; err != nil {
@@ -166,11 +166,6 @@ func DeleteServer(serverID uint) error {
 			return errors.New("server not found")
 		}
 		return err
-	}
-
-	// Only allow deletion for pending or expired servers
-	if server.Status != "pending" && server.Status != "expired" {
-		return errors.New("can only delete pending or expired servers")
 	}
 
 	if err := database.DB.Delete(&server).Error; err != nil {

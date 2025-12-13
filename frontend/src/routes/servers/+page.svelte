@@ -7,6 +7,8 @@
 	let servers = [];
 	let loading = true;
 	let error = '';
+	let showDeleteConfirm = false;
+	let serverToDelete = null;
 
 	async function handleLogout() {
 		try {
@@ -47,6 +49,34 @@
 	function formatDate(dateString) {
 		if (!dateString) return '-';
 		return new Date(dateString).toLocaleString('fr-FR');
+	}
+
+	function openDeleteModal(server, e) {
+		e.stopPropagation();
+		serverToDelete = server;
+		showDeleteConfirm = true;
+	}
+
+	function cancelDelete() {
+		showDeleteConfirm = false;
+		serverToDelete = null;
+	}
+
+	async function handleDelete() {
+		if (!serverToDelete) return;
+
+		try {
+			await api.deleteServer(serverToDelete.id);
+			// Reload servers list
+			const response = await api.listServers();
+			servers = response.servers || [];
+			showDeleteConfirm = false;
+			serverToDelete = null;
+		} catch (err) {
+			error = err.message || 'Failed to delete server';
+			showDeleteConfirm = false;
+			serverToDelete = null;
+		}
 	}
 </script>
 
@@ -120,15 +150,23 @@
 								<td>{server.ip_address_v4 || server.configured_ip || '-'}</td>
 								<td>{formatDate(server.last_seen)}</td>
 								<td>
-									<button
-										class="link-btn"
-										on:click={(e) => {
-											e.stopPropagation();
-											goto(`/servers/${server.id}`);
-										}}
-									>
-										View Details
-									</button>
+									<div class="action-buttons">
+										<button
+											class="link-btn"
+											on:click={(e) => {
+												e.stopPropagation();
+												goto(`/servers/${server.id}`);
+											}}
+										>
+											View Details
+										</button>
+										<button
+											class="delete-btn"
+											on:click={(e) => openDeleteModal(server, e)}
+										>
+											Delete
+										</button>
+									</div>
 								</td>
 							</tr>
 						{/each}
@@ -138,6 +176,26 @@
 		{/if}
 	</main>
 </div>
+
+{#if showDeleteConfirm}
+	<div class="modal-overlay" on:click={cancelDelete}>
+		<div class="modal-box" on:click={(e) => e.stopPropagation()}>
+			<h3>Confirm Delete</h3>
+			<p>Are you sure you want to delete the server "{serverToDelete?.name}"?</p>
+			{#if serverToDelete?.status === 'online'}
+				<p class="info-text">
+					Note: This will remove the server from the database, but the agent will remain
+					installed on the server. You will need to uninstall it manually.
+				</p>
+			{/if}
+			<p class="warning-text">This action cannot be undone.</p>
+			<div class="modal-actions">
+				<button class="btn-secondary" on:click={cancelDelete}>Cancel</button>
+				<button class="btn-danger" on:click={handleDelete}>Delete Server</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	:global(body) {
@@ -389,5 +447,109 @@
 	.link-btn:hover {
 		color: #5a67d8;
 		text-decoration: underline;
+	}
+
+	.action-buttons {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.delete-btn {
+		background: none;
+		border: none;
+		color: #e53e3e;
+		font-weight: 500;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.delete-btn:hover {
+		color: #c53030;
+		text-decoration: underline;
+	}
+
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+
+	.modal-box {
+		background: white;
+		border-radius: 12px;
+		padding: 2rem;
+		max-width: 500px;
+		width: 90%;
+		box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+	}
+
+	.modal-box h3 {
+		margin: 0 0 1rem 0;
+		color: #1a202c;
+		font-size: 1.5rem;
+	}
+
+	.modal-box p {
+		margin: 0 0 1rem 0;
+		color: #4a5568;
+	}
+
+	.info-text {
+		background: #ebf8ff;
+		color: #2c5282;
+		padding: 0.75rem;
+		border-radius: 6px;
+		border-left: 3px solid #3182ce;
+		font-size: 0.9rem;
+	}
+
+	.warning-text {
+		color: #e53e3e;
+		font-weight: 500;
+		margin-bottom: 1.5rem !important;
+	}
+
+	.modal-actions {
+		display: flex;
+		gap: 1rem;
+		justify-content: flex-end;
+	}
+
+	.btn-secondary {
+		padding: 0.75rem 1.5rem;
+		background: #e2e8f0;
+		color: #1a202c;
+		border: none;
+		border-radius: 6px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+
+	.btn-secondary:hover {
+		background: #cbd5e0;
+	}
+
+	.btn-danger {
+		padding: 0.75rem 1.5rem;
+		background: #e53e3e;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+
+	.btn-danger:hover {
+		background: #c53030;
 	}
 </style>
