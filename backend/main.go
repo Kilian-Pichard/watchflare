@@ -10,6 +10,7 @@ import (
 	"watchflare/backend/handlers"
 	"watchflare/backend/middleware"
 	pb "watchflare/backend/proto"
+	"watchflare/backend/scheduler"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,9 @@ func main() {
 	if err := database.Connect(config.AppConfig.DBPath); err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
+
+	// Start offline checker
+	scheduler.StartOfflineChecker()
 
 	// Use WaitGroup to run both servers concurrently
 	var wg sync.WaitGroup
@@ -102,6 +106,7 @@ func setupRouter() *gin.Engine {
 		serverGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
 		serverGroup.POST("/:id/regenerate-token", handlers.RegenerateToken)
 		serverGroup.DELETE("/:id", handlers.DeleteServer)
+		serverGroup.GET("/events", handlers.ServerEvents)
 	}
 
 	return router

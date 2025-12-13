@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
@@ -9,6 +9,7 @@
 	let error = '';
 	let showDeleteConfirm = false;
 	let serverToDelete = null;
+	let eventSource = null;
 
 	async function handleLogout() {
 		try {
@@ -20,14 +21,67 @@
 		}
 	}
 
+	function connectSSE() {
+		// Connect to SSE endpoint
+		eventSource = new EventSource('http://localhost:8080/servers/events', {
+			withCredentials: true
+		});
+
+		eventSource.addEventListener('connected', (e) => {
+			const data = JSON.parse(e.data);
+			console.log('SSE connected:', data);
+		});
+
+		eventSource.addEventListener('server_update', (e) => {
+			const update = JSON.parse(e.data);
+			console.log('Server update received:', update);
+
+			// Find and update the server in the list
+			const serverIndex = servers.findIndex((s) => s.id === update.id);
+			if (serverIndex !== -1) {
+				servers[serverIndex] = {
+					...servers[serverIndex],
+					status: update.status,
+					ip_address_v4: update.ip_address_v4,
+					ip_address_v6: update.ip_address_v6,
+					last_seen: update.last_seen
+				};
+				servers = [...servers]; // Trigger reactivity
+				console.log('Server updated in UI:', servers[serverIndex]);
+			}
+		});
+
+		eventSource.onerror = (err) => {
+			console.error('SSE error:', err);
+			// Reconnect after 5 seconds
+			setTimeout(() => {
+				if (eventSource) {
+					eventSource.close();
+					connectSSE();
+				}
+			}, 5000);
+		};
+	}
+
 	onMount(async () => {
 		try {
 			const response = await api.listServers();
 			servers = response.servers || [];
+
+			// Connect to SSE for real-time updates
+			connectSSE();
 		} catch (err) {
 			error = err.message || 'Failed to load servers';
 		} finally {
 			loading = false;
+		}
+	});
+
+	onDestroy(() => {
+		// Close SSE connection when component is destroyed
+		if (eventSource) {
+			eventSource.close();
+			eventSource = null;
 		}
 	});
 

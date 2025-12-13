@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"watchflare/backend/services"
 
 	"github.com/gin-gonic/gin"
@@ -68,13 +67,9 @@ func ListServers(c *gin.Context) {
 
 // GetServer returns a specific server by ID
 func GetServer(c *gin.Context) {
-	serverID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid server ID"})
-		return
-	}
+	serverID := c.Param("id")
 
-	server, err := services.GetServer(uint(serverID))
+	server, err := services.GetServer(serverID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -87,11 +82,7 @@ func GetServer(c *gin.Context) {
 
 // ValidateIP validates and updates the server IP
 func ValidateIP(c *gin.Context) {
-	serverID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid server ID"})
-		return
-	}
+	serverID := c.Param("id")
 
 	var req ValidateIPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -99,7 +90,7 @@ func ValidateIP(c *gin.Context) {
 		return
 	}
 
-	if err := services.ValidateIP(uint(serverID), req.SelectedIP); err != nil {
+	if err := services.ValidateIP(serverID, req.SelectedIP); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -111,11 +102,7 @@ func ValidateIP(c *gin.Context) {
 
 // UpdateConfiguredIP changes the configured IP for a server
 func UpdateConfiguredIP(c *gin.Context) {
-	serverID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid server ID"})
-		return
-	}
+	serverID := c.Param("id")
 
 	var req UpdateConfiguredIPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -123,7 +110,7 @@ func UpdateConfiguredIP(c *gin.Context) {
 		return
 	}
 
-	if err := services.UpdateConfiguredIP(uint(serverID), req.NewIP); err != nil {
+	if err := services.UpdateConfiguredIP(serverID, req.NewIP); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -135,13 +122,9 @@ func UpdateConfiguredIP(c *gin.Context) {
 
 // RegenerateToken regenerates a registration token for an expired/pending server
 func RegenerateToken(c *gin.Context) {
-	serverID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid server ID"})
-		return
-	}
+	serverID := c.Param("id")
 
-	token, err := services.RegenerateToken(uint(serverID))
+	token, err := services.RegenerateToken(serverID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -153,15 +136,11 @@ func RegenerateToken(c *gin.Context) {
 	})
 }
 
-// DeleteServer deletes a server (only if pending or expired)
+// DeleteServer deletes a server
 func DeleteServer(c *gin.Context) {
-	serverID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid server ID"})
-		return
-	}
+	serverID := c.Param("id")
 
-	if err := services.DeleteServer(uint(serverID)); err != nil {
+	if err := services.DeleteServer(serverID); err != nil{
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

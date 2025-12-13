@@ -178,12 +178,12 @@ func TestListServers(t *testing.T) {
 
 	// Verify server data
 	firstServer := servers[0].(map[string]interface{})
-	assert.Equal(t, float64(server1.ID), firstServer["id"])
+	assert.Equal(t, server1.ID, firstServer["id"])
 	assert.Equal(t, "server01", firstServer["name"])
 	assert.Equal(t, "pending", firstServer["status"])
 
 	secondServer := servers[1].(map[string]interface{})
-	assert.Equal(t, float64(server2.ID), secondServer["id"])
+	assert.Equal(t, server2.ID, secondServer["id"])
 	assert.Equal(t, "server02", secondServer["name"])
 }
 
@@ -206,7 +206,7 @@ func TestGetServer(t *testing.T) {
 	}{
 		{
 			name:           "Success - Get existing server",
-			serverID:       fmt.Sprintf("%d", server.ID),
+			serverID:       server.ID,
 			withCookie:     true,
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
@@ -218,7 +218,7 @@ func TestGetServer(t *testing.T) {
 		},
 		{
 			name:           "Fail - Server not found",
-			serverID:       "999",
+			serverID:       "00000000-0000-0000-0000-000000000000",
 			withCookie:     true,
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
@@ -229,9 +229,9 @@ func TestGetServer(t *testing.T) {
 			name:           "Fail - Invalid server ID",
 			serverID:       "invalid",
 			withCookie:     true,
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
-				assert.NotNil(t, resp["error"])
+				assert.Contains(t, resp["error"], "not found")
 			},
 		},
 	}
@@ -266,7 +266,7 @@ func TestRegenerateToken(t *testing.T) {
 	// Create test server
 	server, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
 
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/servers/%d/regenerate-token", server.ID), nil)
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/servers/%s/regenerate-token", server.ID), nil)
 	req.AddCookie(cookie)
 
 	w := httptest.NewRecorder()
@@ -294,13 +294,13 @@ func TestDeleteServer(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		setupServer    func() uint
+		setupServer    func() string
 		expectedStatus int
 		checkResponse  func(*testing.T, map[string]interface{})
 	}{
 		{
 			name: "Success - Delete pending server",
-			setupServer: func() uint {
+			setupServer: func() string {
 				server, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
 				return server.ID
 			},
@@ -311,8 +311,8 @@ func TestDeleteServer(t *testing.T) {
 		},
 		{
 			name: "Fail - Delete non-existent server",
-			setupServer: func() uint {
-				return 999
+			setupServer: func() string {
+				return "00000000-0000-0000-0000-000000000000"
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
@@ -325,7 +325,7 @@ func TestDeleteServer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			serverID := tt.setupServer()
 
-			req, _ := http.NewRequest("DELETE", fmt.Sprintf("/servers/%d", serverID), nil)
+			req, _ := http.NewRequest("DELETE", fmt.Sprintf("/servers/%s", serverID), nil)
 			req.AddCookie(cookie)
 
 			w := httptest.NewRecorder()
@@ -355,7 +355,7 @@ func TestValidateIP(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%d/validate-ip", server.ID), bytes.NewBuffer(body))
+	req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%s/validate-ip", server.ID), bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(cookie)
 
@@ -384,7 +384,7 @@ func TestUpdateConfiguredIP(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%d/change-ip", server.ID), bytes.NewBuffer(body))
+	req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%s/change-ip", server.ID), bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(cookie)
 

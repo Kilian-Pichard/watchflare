@@ -108,7 +108,7 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	err := services.ChangePassword(userID.(uint), req.CurrentPassword, req.NewPassword)
+	err := services.ChangePassword(userID.(string), req.CurrentPassword, req.NewPassword)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

@@ -10,6 +10,7 @@ import (
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 	pb "watchflare/backend/proto"
+	"watchflare/backend/sse"
 
 	"gorm.io/gorm"
 )
@@ -76,6 +77,16 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		return nil, err
 	}
 
+	// Broadcast SSE event for server registration
+	broker := sse.GetBroker()
+	broker.BroadcastServerUpdate(sse.ServerUpdate{
+		ID:          server.ID,
+		Status:      "online",
+		IPv4Address: req.IpAddressV4,
+		IPv6Address: req.IpAddressV6,
+		LastSeen:    now.Format(time.RFC3339),
+	})
+
 	return &pb.RegisterResponse{
 		Success:  true,
 		Message:  "Server registered successfully",
@@ -111,6 +122,16 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	if err := database.DB.Model(&server).Updates(updates).Error; err != nil {
 		return nil, err
 	}
+
+	// Broadcast SSE event for heartbeat
+	broker := sse.GetBroker()
+	broker.BroadcastServerUpdate(sse.ServerUpdate{
+		ID:          server.ID,
+		Status:      "online",
+		IPv4Address: req.IpAddressV4,
+		IPv6Address: req.IpAddressV6,
+		LastSeen:    now.Format(time.RFC3339),
+	})
 
 	return &pb.HeartbeatResponse{
 		Success: true,

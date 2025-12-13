@@ -67,7 +67,7 @@ func Login(email, password string) (string, error) {
 }
 
 // ChangePassword updates user password after verifying current password
-func ChangePassword(userID uint, currentPassword, newPassword string) error {
+func ChangePassword(userID string, currentPassword, newPassword string) error {
 	var user models.User
 
 	// Find user by ID
@@ -99,7 +99,7 @@ func ChangePassword(userID uint, currentPassword, newPassword string) error {
 }
 
 // generateJWT creates a new JWT token for a user
-func generateJWT(userID uint) (string, error) {
+func generateJWT(userID string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"exp":     time.Now().Add(time.Hour * 24 * 7).Unix(), // 7 days expiration

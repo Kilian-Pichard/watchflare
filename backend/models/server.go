@@ -1,9 +1,14 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
 
 type Server struct {
-	ID        uint   `gorm:"primarykey" json:"id"`
+	ID        string `gorm:"type:char(36);primarykey" json:"id"`
 	AgentID   string `gorm:"unique;not null" json:"agent_id"`
 	AgentKey  string `gorm:"not null" json:"-"` // AES-256 key, hidden in JSON
 
@@ -31,4 +36,12 @@ type Server struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// BeforeCreate hook to generate UUID before creating a server
+func (s *Server) BeforeCreate(tx *gorm.DB) error {
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+	return nil
 }

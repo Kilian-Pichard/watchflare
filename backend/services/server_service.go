@@ -41,6 +41,7 @@ func CreateAgent(name, serverType, configuredIP string, allowAnyIP bool) (*model
 
 	// Create server with status "pending"
 	server := &models.Server{
+		ID:                     uuid.New().String(),
 		AgentID:                agentID,
 		AgentKey:               agentKey,
 		Name:                   name,
@@ -69,9 +70,9 @@ func ListServers() ([]models.Server, error) {
 }
 
 // GetServer returns a server by ID
-func GetServer(serverID uint) (*models.Server, error) {
+func GetServer(serverID string) (*models.Server, error) {
 	var server models.Server
-	if err := database.DB.First(&server, serverID).Error; err != nil {
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("server not found")
 		}
@@ -81,9 +82,9 @@ func GetServer(serverID uint) (*models.Server, error) {
 }
 
 // ValidateIP validates and updates the server IP
-func ValidateIP(serverID uint, selectedIP string) error {
+func ValidateIP(serverID string, selectedIP string) error {
 	var server models.Server
-	if err := database.DB.First(&server, serverID).Error; err != nil {
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil{
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("server not found")
 		}
@@ -102,9 +103,9 @@ func ValidateIP(serverID uint, selectedIP string) error {
 }
 
 // UpdateConfiguredIP changes the configured IP for a server
-func UpdateConfiguredIP(serverID uint, newIP string) error {
+func UpdateConfiguredIP(serverID string, newIP string) error {
 	var server models.Server
-	if err := database.DB.First(&server, serverID).Error; err != nil {
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("server not found")
 		}
@@ -121,9 +122,9 @@ func UpdateConfiguredIP(serverID uint, newIP string) error {
 }
 
 // RegenerateToken generates a new registration token for an expired server
-func RegenerateToken(serverID uint) (string, error) {
+func RegenerateToken(serverID string) (string, error) {
 	var server models.Server
-	if err := database.DB.First(&server, serverID).Error; err != nil {
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("server not found")
 		}
@@ -159,9 +160,9 @@ func RegenerateToken(serverID uint) (string, error) {
 }
 
 // DeleteServer deletes a server
-func DeleteServer(serverID uint) error {
+func DeleteServer(serverID string) error {
 	var server models.Server
-	if err := database.DB.First(&server, serverID).Error; err != nil {
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("server not found")
 		}

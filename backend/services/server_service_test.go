@@ -65,7 +65,7 @@ func TestCreateAgent(t *testing.T) {
 
 	// Verify server is saved in DB
 	var dbServer models.Server
-	database.DB.First(&dbServer, server.ID)
+	database.DB.Where("id = ?", server.ID).First(&dbServer)
 	assert.Equal(t, server.ID, dbServer.ID)
 	assert.Equal(t, "pending", dbServer.Status)
 }
@@ -122,7 +122,7 @@ func TestGetServer_NotFound(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
-	server, err := GetServer(999)
+	server, err := GetServer("00000000-0000-0000-0000-000000000000")
 
 	assert.Error(t, err)
 	assert.Nil(t, server)
@@ -229,18 +229,22 @@ func TestDeleteServer_OnlineServer(t *testing.T) {
 	server, _, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
 	database.DB.Model(&server).Update("status", "online")
 
-	// Try to delete server
+	// Delete server (should succeed now - restriction removed)
 	err := DeleteServer(server.ID)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "can only delete pending or expired servers")
+	assert.NoError(t, err)
+
+	// Verify server was deleted
+	var deletedServer models.Server
+	err = database.DB.Where("id = ?", server.ID).First(&deletedServer).Error
+	assert.Error(t, err) // Should not find the server
 }
 
 func TestDeleteServer_NotFound(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
-	err := DeleteServer(999)
+	err := DeleteServer("00000000-0000-0000-0000-000000000000")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")

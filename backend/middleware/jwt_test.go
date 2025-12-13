@@ -18,7 +18,7 @@ func setupTestConfig() {
 	}
 }
 
-func generateTestJWT(userID uint, secret string, expired bool) string {
+func generateTestJWT(userID string, secret string, expired bool) string {
 	var exp time.Time
 	if expired {
 		exp = time.Now().Add(-time.Hour) // Expired 1 hour ago
@@ -49,7 +49,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "Success - Valid JWT token",
 			setupRequest: func(req *http.Request) {
-				token := generateTestJWT(1, config.AppConfig.JWTSecret, false)
+				token := generateTestJWT("550e8400-e29b-41d4-a716-446655440001", config.AppConfig.JWTSecret, false)
 				req.AddCookie(&http.Cookie{
 					Name:  "jwt_token",
 					Value: token,
@@ -73,7 +73,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "Fail - Expired JWT token",
 			setupRequest: func(req *http.Request) {
-				token := generateTestJWT(1, config.AppConfig.JWTSecret, true)
+				token := generateTestJWT("550e8400-e29b-41d4-a716-446655440001", config.AppConfig.JWTSecret, true)
 				req.AddCookie(&http.Cookie{
 					Name:  "jwt_token",
 					Value: token,
@@ -87,7 +87,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "Fail - Invalid JWT secret",
 			setupRequest: func(req *http.Request) {
-				token := generateTestJWT(1, "wrong-secret", false)
+				token := generateTestJWT("550e8400-e29b-41d4-a716-446655440001", "wrong-secret", false)
 				req.AddCookie(&http.Cookie{
 					Name:  "jwt_token",
 					Value: token,
@@ -140,16 +140,18 @@ func TestAuthMiddleware_UserIDInContext(t *testing.T) {
 	setupTestConfig()
 	gin.SetMode(gin.TestMode)
 
+	testUserID := "550e8400-e29b-41d4-a716-446655440042"
+
 	router := gin.New()
 	router.Use(AuthMiddleware())
 	router.GET("/test", func(c *gin.Context) {
 		userID, exists := c.Get("user_id")
 		assert.True(t, exists, "user_id should exist in context")
-		assert.Equal(t, uint(42), userID, "user_id should be 42")
+		assert.Equal(t, testUserID, userID, "user_id should match")
 		c.String(http.StatusOK, "ok")
 	})
 
-	token := generateTestJWT(42, config.AppConfig.JWTSecret, false)
+	token := generateTestJWT(testUserID, config.AppConfig.JWTSecret, false)
 	req, _ := http.NewRequest("GET", "/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "jwt_token",
