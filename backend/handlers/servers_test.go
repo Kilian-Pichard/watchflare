@@ -82,7 +82,6 @@ func TestCreateAgent(t *testing.T) {
 				assert.NotNil(t, resp["server"])
 				assert.NotNil(t, resp["token"])
 				assert.NotNil(t, resp["agent_key"])
-				assert.NotNil(t, resp["install_command"])
 
 				server := resp["server"].(map[string]interface{})
 				assert.Equal(t, "server01", server["name"])
@@ -280,7 +279,6 @@ func TestRegenerateToken(t *testing.T) {
 
 	assert.Equal(t, "Token regenerated successfully", response["message"])
 	assert.NotNil(t, response["token"])
-	assert.NotNil(t, response["install_command"])
 
 	// Verify token format
 	token := response["token"].(string)

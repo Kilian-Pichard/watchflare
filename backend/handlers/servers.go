@@ -46,13 +46,10 @@ func CreateAgent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Server created successfully",
-		"server":  server,
-		"token":   token,    // Return plain token for installation
-		"agent_key": agentKey, // Return agent key (will be given to agent during registration)
-		"install_command": gin.H{
-			"curl": "curl -sSL https://watchflare.io/install.sh | bash -s -- --token " + token + " --host backend.local --port 50051",
-		},
+		"message":   "Server created successfully",
+		"server":    server,
+		"token":     token,    // Return plain token for installation
+		"agent_key": agentKey, // Return agent key for the agent
 	})
 }
 
@@ -153,9 +150,6 @@ func RegenerateToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Token regenerated successfully",
 		"token":   token,
-		"install_command": gin.H{
-			"curl": "curl -sSL https://watchflare.io/install.sh | bash -s -- --token " + token + " --host backend.local --port 50051",
-		},
 	})
 }
 

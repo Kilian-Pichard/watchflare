@@ -23,6 +23,7 @@
 		<div class="nav-content">
 			<h1>Watchflare</h1>
 			<div class="nav-actions">
+				<a href="/servers" class="nav-link">Servers</a>
 				<a href="/settings" class="nav-link">Settings</a>
 				<button on:click={handleLogout} class="logout-btn">Logout</button>
 			</div>
@@ -35,13 +36,14 @@
 			<p>Your server monitoring dashboard</p>
 
 			<div class="info-box">
-				<h3>Authentication successful!</h3>
-				<p>You are now logged in to the Watchflare dashboard.</p>
-				<p class="muted">Server monitoring features will be available soon.</p>
+				<h3>Get Started</h3>
+				<p>Monitor your servers and receive real-time status updates.</p>
+				<p class="muted">Add your first server to start monitoring its health and performance.</p>
 			</div>
 
 			<div class="actions">
-				<a href="/settings" class="btn btn-primary">Change Password</a>
+				<a href="/servers" class="btn btn-primary">Manage Servers</a>
+				<a href="/settings" class="btn btn-secondary">Settings</a>
 			</div>
 		</div>
 	</main>
@@ -186,5 +188,15 @@
 	.btn-primary {
 		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 		color: white;
+	}
+
+	.btn-secondary {
+		background: white;
+		color: #4a5568;
+		border: 2px solid #e2e8f0;
+	}
+
+	.btn-secondary:hover {
+		background: #f7fafc;
 	}
 </style>

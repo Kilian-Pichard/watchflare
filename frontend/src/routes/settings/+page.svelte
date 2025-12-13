@@ -61,6 +61,7 @@
 			<h1>Watchflare</h1>
 			<div class="nav-actions">
 				<a href="/" class="nav-link">Dashboard</a>
+				<a href="/servers" class="nav-link">Servers</a>
 				<button on:click={handleLogout} class="logout-btn">Logout</button>
 			</div>
 		</div>

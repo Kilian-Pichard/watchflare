@@ -52,3 +52,50 @@ export async function changePassword(currentPassword, newPassword) {
 		})
 	});
 }
+
+// Server API calls
+export async function listServers() {
+	return apiRequest('/servers');
+}
+
+export async function getServer(id) {
+	return apiRequest(`/servers/${id}`);
+}
+
+export async function createServer(name, type, configuredIP, allowAnyIP) {
+	return apiRequest('/servers', {
+		method: 'POST',
+		body: JSON.stringify({
+			name,
+			type,
+			configured_ip: configuredIP,
+			allow_any_ip: allowAnyIP
+		})
+	});
+}
+
+export async function deleteServer(id) {
+	return apiRequest(`/servers/${id}`, {
+		method: 'DELETE'
+	});
+}
+
+export async function regenerateToken(id) {
+	return apiRequest(`/servers/${id}/regenerate-token`, {
+		method: 'POST'
+	});
+}
+
+export async function validateIP(id, selectedIP) {
+	return apiRequest(`/servers/${id}/validate-ip`, {
+		method: 'PUT',
+		body: JSON.stringify({ selected_ip: selectedIP })
+	});
+}
+
+export async function updateConfiguredIP(id, newIP) {
+	return apiRequest(`/servers/${id}/change-ip`, {
+		method: 'PUT',
+		body: JSON.stringify({ new_ip: newIP })
+	});
+}

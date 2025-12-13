@@ -15,6 +15,7 @@ vendor/
 # Build outputs
 dist/
 build/
+.svelte-kit/
 *.exe
 *.out
 

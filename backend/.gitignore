@@ -1,0 +1,21 @@
+# Go builds
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary files
+/tmp/
+/temp/
+
+# Test coverage
+*.out
+coverage.txt
+tests_report.txt
