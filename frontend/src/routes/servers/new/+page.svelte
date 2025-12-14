@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
+	import InstallInstructions from '$lib/components/InstallInstructions.svelte';
 
 	let name = '';
 	let configuredIP = '';
@@ -12,7 +13,7 @@
 	let createdServer = null;
 	let token = '';
 	let agentKey = '';
-	let installCommand = '';
+	let backendHost = '';
 
 	async function handleLogout() {
 		try {
@@ -35,8 +36,9 @@
 			createdServer = response.server;
 			token = response.token;
 			agentKey = response.agent_key;
-			// Generate install command on frontend
-			installCommand = `curl -sSL https://get.watchflare.io/ | bash -s -- --token ${token}`;
+
+			// Get backend host (for now using window.location, later can be from config)
+			backendHost = window.location.hostname;
 		} catch (err) {
 			error = err.message || 'Failed to create server';
 		} finally {
@@ -135,7 +137,7 @@
 					<div class="success-icon">✓</div>
 					<div>
 						<h2>Server Created Successfully!</h2>
-						<p>Server "{createdServer.name}" has been created with status: pending</p>
+						<p>Server "{createdServer.name}" has been created with status: {createdServer.status}</p>
 					</div>
 				</div>
 
@@ -156,27 +158,10 @@
 							<button class="copy-btn" on:click={() => copyToClipboard(agentKey)}>Copy</button>
 						</div>
 					</div>
-
-					<div class="token-item">
-						<label>Installation Command</label>
-						<div class="code-block-wrapper">
-							<pre class="code-block">{installCommand}</pre>
-							<button class="copy-btn-absolute" on:click={() => copyToClipboard(installCommand)}>
-								Copy
-							</button>
-						</div>
-					</div>
 				</div>
 
-				<div class="info-box">
-					<h3>Next Steps:</h3>
-					<ol>
-						<li>Copy the registration token and keep it secure</li>
-						<li>Run the installation command on your server</li>
-						<li>The agent will register automatically using the token</li>
-						<li>Once registered, the server status will change to "online"</li>
-					</ol>
-				</div>
+				<!-- Install Instructions Component -->
+				<InstallInstructions server={createdServer} {token} {agentKey} {backendHost} />
 
 				<div class="form-actions">
 					<button class="btn-primary" on:click={() => goto(`/servers/${createdServer.id}`)}>
