@@ -13,11 +13,23 @@ import (
 func ServerEvents(c *gin.Context) {
 	// Set CORS headers explicitly for SSE
 	// EventSource requires explicit origin when using credentials
-	origin := "http://localhost:5173" // default
-	if len(config.AppConfig.CORSOrigins) > 0 {
-		origin = config.AppConfig.CORSOrigins[0]
+	requestOrigin := c.Request.Header.Get("Origin")
+
+	// Check if the request origin is in the allowed list
+	allowedOrigin := ""
+	for _, origin := range config.AppConfig.CORSOrigins {
+		if origin == requestOrigin {
+			allowedOrigin = origin
+			break
+		}
 	}
-	c.Header("Access-Control-Allow-Origin", origin)
+
+	// Fallback to first allowed origin if request origin not found
+	if allowedOrigin == "" && len(config.AppConfig.CORSOrigins) > 0 {
+		allowedOrigin = config.AppConfig.CORSOrigins[0]
+	}
+
+	c.Header("Access-Control-Allow-Origin", allowedOrigin)
 	c.Header("Access-Control-Allow-Credentials", "true")
 	c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
