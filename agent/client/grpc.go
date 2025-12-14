@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"watchflare/agent/metrics"
 	pb "watchflare/agent/proto"
 
 	"google.golang.org/grpc"
@@ -89,6 +90,41 @@ func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) error {
 
 	if !resp.Success {
 		return fmt.Errorf("heartbeat rejected: %s", resp.Message)
+	}
+
+	return nil
+}
+
+// SendMetrics sends system metrics to the backend
+func (c *Client) SendMetrics(agentID, agentKey string, m *metrics.SystemMetrics) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := &pb.MetricsRequest{
+		AgentId:  agentID,
+		AgentKey: agentKey,
+		Metrics: &pb.Metrics{
+			CpuUsagePercent:      m.CPUUsagePercent,
+			MemoryTotalBytes:     m.MemoryTotalBytes,
+			MemoryUsedBytes:      m.MemoryUsedBytes,
+			MemoryAvailableBytes: m.MemoryAvailableBytes,
+			LoadAvg_1Min:         m.LoadAvg1Min,
+			LoadAvg_5Min:         m.LoadAvg5Min,
+			LoadAvg_15Min:        m.LoadAvg15Min,
+			DiskTotalBytes:       m.DiskTotalBytes,
+			DiskUsedBytes:        m.DiskUsedBytes,
+			UptimeSeconds:        m.UptimeSeconds,
+			Timestamp:            m.Timestamp,
+		},
+	}
+
+	resp, err := c.client.SendMetrics(ctx, req)
+	if err != nil {
+		return fmt.Errorf("send metrics failed: %w", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("metrics rejected: %s", resp.Message)
 	}
 
 	return nil

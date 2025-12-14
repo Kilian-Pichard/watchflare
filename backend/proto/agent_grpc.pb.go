@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AgentService_RegisterServer_FullMethodName = "/agent.AgentService/RegisterServer"
 	AgentService_Heartbeat_FullMethodName      = "/agent.AgentService/Heartbeat"
+	AgentService_SendMetrics_FullMethodName    = "/agent.AgentService/SendMetrics"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -33,6 +34,8 @@ type AgentServiceClient interface {
 	RegisterServer(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	// Heartbeat is called every 30 seconds by the agent
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	// SendMetrics sends system metrics to the backend
+	SendMetrics(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error)
 }
 
 type agentServiceClient struct {
@@ -63,6 +66,16 @@ func (c *agentServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest
 	return out, nil
 }
 
+func (c *agentServiceClient) SendMetrics(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MetricsResponse)
+	err := c.cc.Invoke(ctx, AgentService_SendMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -73,6 +86,8 @@ type AgentServiceServer interface {
 	RegisterServer(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	// Heartbeat is called every 30 seconds by the agent
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	// SendMetrics sends system metrics to the backend
+	SendMetrics(context.Context, *MetricsRequest) (*MetricsResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -88,6 +103,9 @@ func (UnimplementedAgentServiceServer) RegisterServer(context.Context, *Register
 }
 func (UnimplementedAgentServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedAgentServiceServer) SendMetrics(context.Context, *MetricsRequest) (*MetricsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendMetrics not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -146,6 +164,24 @@ func _AgentService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_SendMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SendMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SendMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SendMetrics(ctx, req.(*MetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -160,6 +196,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Heartbeat",
 			Handler:    _AgentService_Heartbeat_Handler,
+		},
+		{
+			MethodName: "SendMetrics",
+			Handler:    _AgentService_SendMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

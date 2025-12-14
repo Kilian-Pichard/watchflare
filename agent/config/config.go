@@ -49,10 +49,22 @@ func GetLogDir() string {
 
 // Config holds the agent configuration
 type Config struct {
-	ServerHost string `toml:"server_host"`
-	ServerPort string `toml:"server_port"`
-	AgentID    string `toml:"agent_id"`
-	AgentKey   string `toml:"agent_key"`
+	ServerHost       string `toml:"server_host"`
+	ServerPort       string `toml:"server_port"`
+	AgentID          string `toml:"agent_id"`
+	AgentKey         string `toml:"agent_key"`
+	HeartbeatInterval int   `toml:"heartbeat_interval"` // in seconds, default 30
+	MetricsInterval   int   `toml:"metrics_interval"`   // in seconds, default 30
+}
+
+// SetDefaults sets default values for optional configuration fields
+func (c *Config) SetDefaults() {
+	if c.HeartbeatInterval == 0 {
+		c.HeartbeatInterval = 30
+	}
+	if c.MetricsInterval == 0 {
+		c.MetricsInterval = 30
+	}
 }
 
 // Load reads the configuration from disk
@@ -66,6 +78,9 @@ func Load() (*Config, error) {
 		}
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
+
+	// Set default values for optional fields
+	cfg.SetDefaults()
 
 	return &cfg, nil
 }

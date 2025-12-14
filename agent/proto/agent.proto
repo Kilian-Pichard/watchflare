@@ -11,6 +11,9 @@ service AgentService {
 
   // Heartbeat is called every 30 seconds by the agent
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // SendMetrics sends system metrics to the backend
+  rpc SendMetrics(MetricsRequest) returns (MetricsResponse);
 }
 
 // RegisterRequest contains information sent during initial registration
@@ -44,6 +47,34 @@ message HeartbeatRequest {
 
 // HeartbeatResponse acknowledges the heartbeat
 message HeartbeatResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Metrics contains system performance data
+message Metrics {
+  double cpu_usage_percent = 1;
+  uint64 memory_total_bytes = 2;
+  uint64 memory_used_bytes = 3;
+  uint64 memory_available_bytes = 4;
+  double load_avg_1min = 5;
+  double load_avg_5min = 6;
+  double load_avg_15min = 7;
+  uint64 disk_total_bytes = 8;
+  uint64 disk_used_bytes = 9;
+  uint64 uptime_seconds = 10;
+  int64 timestamp = 11;  // Unix timestamp
+}
+
+// MetricsRequest contains authentication and metrics data
+message MetricsRequest {
+  string agent_id = 1;   // UUID of the server
+  string agent_key = 2;  // Authentication key
+  Metrics metrics = 3;   // System metrics
+}
+
+// MetricsResponse acknowledges metric reception
+message MetricsResponse {
   bool success = 1;
   string message = 2;
 }
