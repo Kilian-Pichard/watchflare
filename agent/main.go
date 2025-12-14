@@ -26,6 +26,7 @@ func main() {
 	token := flag.String("token", "", "Registration token")
 	serverHost := flag.String("host", DefaultServerHost, "Backend server host")
 	serverPort := flag.String("port", DefaultServerPort, "Backend server port")
+	registerOnly := flag.Bool("register-only", false, "Register agent and exit (don't start heartbeat loop)")
 	flag.Parse()
 
 	log.Println("Watchflare Agent starting...")
@@ -54,6 +55,12 @@ func main() {
 
 		log.Println("✅ Registration successful!")
 		log.Printf("Agent ID: %s", cfg.AgentID)
+
+		// If register-only mode, exit here
+		if *registerOnly {
+			log.Println("Registration complete. Exiting (--register-only mode)")
+			return
+		}
 	}
 
 	// Start heartbeat loop
