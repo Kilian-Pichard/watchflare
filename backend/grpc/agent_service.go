@@ -203,6 +203,23 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 		return nil, fmt.Errorf("failed to save metrics: %w", err)
 	}
 
+	// Broadcast metrics update via SSE
+	broker := sse.GetBroker()
+	broker.BroadcastMetricsUpdate(sse.MetricsUpdate{
+		ServerID:             server.ID,
+		Timestamp:            metric.Timestamp.Format(time.RFC3339),
+		CPUUsagePercent:      metric.CPUUsagePercent,
+		MemoryTotalBytes:     metric.MemoryTotalBytes,
+		MemoryUsedBytes:      metric.MemoryUsedBytes,
+		MemoryAvailableBytes: metric.MemoryAvailableBytes,
+		LoadAvg1Min:          metric.LoadAvg1Min,
+		LoadAvg5Min:          metric.LoadAvg5Min,
+		LoadAvg15Min:         metric.LoadAvg15Min,
+		DiskTotalBytes:       metric.DiskTotalBytes,
+		DiskUsedBytes:        metric.DiskUsedBytes,
+		UptimeSeconds:        metric.UptimeSeconds,
+	})
+
 	return &pb.MetricsResponse{
 		Success: true,
 		Message: "Metrics received successfully",

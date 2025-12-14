@@ -24,6 +24,22 @@ type ServerUpdate struct {
 	LastSeen         string `json:"last_seen"`
 }
 
+// MetricsUpdate represents a real-time metrics update
+type MetricsUpdate struct {
+	ServerID             string  `json:"server_id"`
+	Timestamp            string  `json:"timestamp"`
+	CPUUsagePercent      float64 `json:"cpu_usage_percent"`
+	MemoryTotalBytes     uint64  `json:"memory_total_bytes"`
+	MemoryUsedBytes      uint64  `json:"memory_used_bytes"`
+	MemoryAvailableBytes uint64  `json:"memory_available_bytes"`
+	LoadAvg1Min          float64 `json:"load_avg_1min"`
+	LoadAvg5Min          float64 `json:"load_avg_5min"`
+	LoadAvg15Min         float64 `json:"load_avg_15min"`
+	DiskTotalBytes       uint64  `json:"disk_total_bytes"`
+	DiskUsedBytes        uint64  `json:"disk_used_bytes"`
+	UptimeSeconds        uint64  `json:"uptime_seconds"`
+}
+
 // Client represents an SSE client connection
 type Client struct {
 	ID      string
@@ -101,6 +117,15 @@ func (b *Broker) Broadcast(event Event) {
 func (b *Broker) BroadcastServerUpdate(update ServerUpdate) {
 	event := Event{
 		Type: "server_update",
+		Data: update,
+	}
+	b.Broadcast(event)
+}
+
+// BroadcastMetricsUpdate sends a metrics update event to all clients
+func (b *Broker) BroadcastMetricsUpdate(update MetricsUpdate) {
+	event := Event{
+		Type: "metrics_update",
 		Data: update,
 	}
 	b.Broadcast(event)
