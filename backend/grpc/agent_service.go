@@ -78,8 +78,11 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		"hostname":           req.Hostname,
 		"ip_address_v4":      req.IpAddressV4,
 		"ip_address_v6":      req.IpAddressV6,
-		"os":                 req.Os,
-		"os_version":         req.OsVersion,
+		"platform":           req.Platform,
+		"platform_version":   req.PlatformVersion,
+		"platform_family":    req.PlatformFamily,
+		"architecture":       req.Architecture,
+		"kernel":             req.Kernel,
 		"status":             "online",
 		"last_seen":          &now,
 		"registration_token": nil, // Clear the token after successful registration

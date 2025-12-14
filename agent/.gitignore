@@ -1,6 +1,7 @@
 # Binaries
 watchflare-agent
 watchflare-agent-*
+agent
 
 # Config (generated at runtime)
 /etc/watchflare/

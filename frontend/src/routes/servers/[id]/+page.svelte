@@ -305,10 +305,31 @@
 								<span class="info-value">{server.ip_address_v6}</span>
 							</div>
 						{/if}
-						{#if server.os}
+						{#if server.platform || server.os}
 							<div class="info-item">
 								<span class="info-label">Operating System</span>
-								<span class="info-value">{server.os} {server.os_version || ''}</span>
+								<span class="info-value">
+									{server.platform || server.os}
+									{server.platform_version || server.os_version || ''}
+								</span>
+							</div>
+						{/if}
+						{#if server.architecture}
+							<div class="info-item">
+								<span class="info-label">Architecture</span>
+								<span class="info-value">{server.architecture}</span>
+							</div>
+						{/if}
+						{#if server.kernel}
+							<div class="info-item">
+								<span class="info-label">Kernel</span>
+								<span class="info-value">{server.kernel}</span>
+							</div>
+						{/if}
+						{#if server.platform_family}
+							<div class="info-item">
+								<span class="info-label">Platform Family</span>
+								<span class="info-value">{server.platform_family}</span>
 							</div>
 						{/if}
 						{#if server.last_seen}

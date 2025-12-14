@@ -91,8 +91,11 @@ func register(token, serverHost, serverPort string) (*config.Config, error) {
 		info.Hostname,
 		info.IPv4Address,
 		info.IPv6Address,
-		info.OS,
-		info.OSVersion,
+		info.Platform,
+		info.PlatformVersion,
+		info.PlatformFamily,
+		info.Architecture,
+		info.Kernel,
 	)
 	if err != nil {
 		return nil, err

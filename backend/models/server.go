@@ -24,12 +24,15 @@ type Server struct {
 	ExpiresAt         *time.Time `json:"expires_at"` // NULL après enregistrement réussi
 
 	// Infos remontées par l'agent (NULL si pas encore installé)
-	Hostname    *string `json:"hostname"`
-	IPAddressV4 *string `json:"ip_address_v4"`
-	IPAddressV6 *string `json:"ip_address_v6"`
-	OS          *string `json:"os"`
-	OSVersion   *string `json:"os_version"`
-	LastSeen    *time.Time `json:"last_seen"`
+	Hostname        *string `json:"hostname"`
+	IPAddressV4     *string `json:"ip_address_v4"`
+	IPAddressV6     *string `json:"ip_address_v6"`
+	Platform        *string `json:"platform"`         // "macOS", "Linux", "Windows" (user-friendly)
+	PlatformVersion *string `json:"platform_version"` // "15.6.1", "22.04.3"
+	PlatformFamily  *string `json:"platform_family"`  // "darwin", "linux", "windows" (technical)
+	Architecture    *string `json:"architecture"`     // "arm64", "amd64"
+	Kernel          *string `json:"kernel"`           // "24.6.0", "5.15.0-97-generic"
+	LastSeen        *time.Time `json:"last_seen"`
 
 	// Statut du serveur
 	// Valeurs: "pending", "online", "offline", "expired"

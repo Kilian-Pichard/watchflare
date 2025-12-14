@@ -16,19 +16,37 @@ func TestCollect(t *testing.T) {
 		t.Error("Hostname is empty")
 	}
 
-	// Check OS is detected
-	if info.OS == "" {
-		t.Error("OS is empty")
+	// Check Platform fields
+	if info.Platform == "" {
+		t.Error("Platform is empty")
 	}
 
-	// OS should match runtime.GOOS
-	if info.OS != runtime.GOOS {
-		t.Errorf("OS = %v, want %v", info.OS, runtime.GOOS)
+	if info.PlatformFamily == "" {
+		t.Error("PlatformFamily is empty")
 	}
 
-	// OS version should not be empty
-	if info.OSVersion == "" {
-		t.Error("OSVersion is empty")
+	// PlatformFamily should match runtime.GOOS
+	if info.PlatformFamily != runtime.GOOS {
+		t.Errorf("PlatformFamily = %v, want %v", info.PlatformFamily, runtime.GOOS)
+	}
+
+	// Platform version should not be empty
+	if info.PlatformVersion == "" {
+		t.Error("PlatformVersion is empty")
+	}
+
+	// Architecture should not be empty and match runtime.GOARCH
+	if info.Architecture == "" {
+		t.Error("Architecture is empty")
+	}
+
+	if info.Architecture != runtime.GOARCH {
+		t.Errorf("Architecture = %v, want %v", info.Architecture, runtime.GOARCH)
+	}
+
+	// Kernel should not be empty
+	if info.Kernel == "" {
+		t.Error("Kernel is empty")
 	}
 
 	// At least one IP address should be present
@@ -36,6 +54,13 @@ func TestCollect(t *testing.T) {
 	if info.IPv4Address == "" && info.IPv6Address == "" {
 		t.Error("Both IPv4 and IPv6 addresses are empty")
 	}
+
+	// Log the collected info for visibility
+	t.Logf("Platform: %s", info.Platform)
+	t.Logf("PlatformVersion: %s", info.PlatformVersion)
+	t.Logf("PlatformFamily: %s", info.PlatformFamily)
+	t.Logf("Architecture: %s", info.Architecture)
+	t.Logf("Kernel: %s", info.Kernel)
 }
 
 func TestGetIPAddresses(t *testing.T) {
@@ -61,21 +86,21 @@ func TestGetIPAddresses(t *testing.T) {
 	}
 }
 
-func TestGetOSVersion(t *testing.T) {
-	version := getOSVersion()
+func TestGetPlatformVersion(t *testing.T) {
+	version := getPlatformVersion()
 
 	if version == "" {
-		t.Error("OS version is empty")
+		t.Error("Platform version is empty")
 	}
 
 	// Version should not be "Unknown" for supported OSes
 	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		if version == "Unknown" {
-			t.Error("OS version is 'Unknown' for supported OS")
+			t.Error("Platform version is 'Unknown' for supported OS")
 		}
 	}
 
-	t.Logf("OS Version: %s", version)
+	t.Logf("Platform Version: %s", version)
 }
 
 func TestGetLinuxVersion(t *testing.T) {
@@ -102,14 +127,12 @@ func TestGetMacOSVersion(t *testing.T) {
 
 	version := getMacOSVersion()
 
-	if version == "" {
-		t.Error("macOS version is empty")
+	if version == "" || version == "Unknown" {
+		t.Error("macOS version is empty or Unknown")
 	}
 
-	// Should return "macOS" as per current implementation
-	if version != "macOS" {
-		t.Errorf("getMacOSVersion() = %v, want 'macOS'", version)
-	}
+	// Should return a version number like "15.6.1"
+	t.Logf("macOS version: %s", version)
 }
 
 func TestGetWindowsVersion(t *testing.T) {
@@ -132,11 +155,14 @@ func TestGetWindowsVersion(t *testing.T) {
 
 func TestSystemInfoFields(t *testing.T) {
 	info := &SystemInfo{
-		Hostname:    "test-host",
-		IPv4Address: "192.168.1.100",
-		IPv6Address: "fe80::1",
-		OS:          "linux",
-		OSVersion:   "Ubuntu 22.04",
+		Hostname:        "test-host",
+		IPv4Address:     "192.168.1.100",
+		IPv6Address:     "fe80::1",
+		Platform:        "Linux",
+		PlatformVersion: "22.04.3",
+		PlatformFamily:  "linux",
+		Architecture:    "amd64",
+		Kernel:          "5.15.0-97-generic",
 	}
 
 	tests := []struct {
@@ -147,8 +173,11 @@ func TestSystemInfoFields(t *testing.T) {
 		{"hostname", "Hostname", info.Hostname},
 		{"ipv4", "IPv4Address", info.IPv4Address},
 		{"ipv6", "IPv6Address", info.IPv6Address},
-		{"os", "OS", info.OS},
-		{"osversion", "OSVersion", info.OSVersion},
+		{"platform", "Platform", info.Platform},
+		{"platform_version", "PlatformVersion", info.PlatformVersion},
+		{"platform_family", "PlatformFamily", info.PlatformFamily},
+		{"architecture", "Architecture", info.Architecture},
+		{"kernel", "Kernel", info.Kernel},
 	}
 
 	for _, tt := range tests {

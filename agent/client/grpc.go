@@ -42,7 +42,7 @@ func (c *Client) Close() error {
 }
 
 // Register attempts to register the agent with the backend
-func (c *Client) Register(token, hostname, ipv4, ipv6, os, osVersion string) (string, string, error) {
+func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -51,8 +51,11 @@ func (c *Client) Register(token, hostname, ipv4, ipv6, os, osVersion string) (st
 		Hostname:          hostname,
 		IpAddressV4:       ipv4,
 		IpAddressV6:       ipv6,
-		Os:                os,
-		OsVersion:         osVersion,
+		Platform:          platform,
+		PlatformVersion:   platformVersion,
+		PlatformFamily:    platformFamily,
+		Architecture:      architecture,
+		Kernel:            kernel,
 	}
 
 	resp, err := c.client.RegisterServer(ctx, req)
