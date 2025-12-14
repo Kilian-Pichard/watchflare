@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { logout } from '$lib/api.js';
@@ -14,6 +14,7 @@
 	let newIP = '';
 	let regeneratedToken = '';
 	let regeneratedCommand = '';
+	let eventSource = null;
 
 	$: serverId = $page.params.id;
 
@@ -27,8 +28,50 @@
 		}
 	}
 
+	function connectSSE() {
+		// Connect to SSE endpoint
+		eventSource = new EventSource('http://localhost:8080/servers/events', {
+			withCredentials: true
+		});
+
+		eventSource.addEventListener('server_update', (e) => {
+			const update = JSON.parse(e.data);
+			// Only update if it's the current server
+			if (server && update.id === server.id) {
+				server = {
+					...server,
+					status: update.status,
+					ip_address_v4: update.ip_address_v4,
+					ip_address_v6: update.ip_address_v6,
+					last_seen: update.last_seen
+				};
+			}
+		});
+
+		eventSource.onerror = (err) => {
+			console.error('SSE error:', err);
+			// Reconnect after 5 seconds
+			setTimeout(() => {
+				if (eventSource) {
+					eventSource.close();
+					connectSSE();
+				}
+			}, 5000);
+		};
+	}
+
 	onMount(async () => {
 		await loadServer();
+		// Connect to SSE for real-time updates
+		connectSSE();
+	});
+
+	onDestroy(() => {
+		// Close SSE connection when component is destroyed
+		if (eventSource) {
+			eventSource.close();
+			eventSource = null;
+		}
 	});
 
 	async function loadServer() {
