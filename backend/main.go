@@ -103,6 +103,7 @@ func setupRouter() *gin.Engine {
 		serverGroup.POST("", handlers.CreateAgent)
 		serverGroup.GET("", handlers.ListServers)
 		serverGroup.GET("/:id", handlers.GetServer)
+		serverGroup.GET("/:id/metrics", handlers.GetMetrics)
 		serverGroup.PUT("/:id/validate-ip", handlers.ValidateIP)
 		serverGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
 		serverGroup.PUT("/:id/ignore-ip-mismatch", handlers.IgnoreIPMismatch)
