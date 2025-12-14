@@ -15,7 +15,7 @@ import (
 )
 
 // CreateAgent creates a new server with status "pending"
-func CreateAgent(name, serverType, configuredIP string, allowAnyIP bool) (*models.Server, string, string, error) {
+func CreateAgent(name, configuredIP string, allowAnyIP bool) (*models.Server, string, string, error) {
 	// Generate agent ID
 	agentID := uuid.New().String()
 
@@ -45,7 +45,6 @@ func CreateAgent(name, serverType, configuredIP string, allowAnyIP bool) (*model
 		AgentID:                agentID,
 		AgentKey:               agentKey,
 		Name:                   name,
-		Type:                   serverType,
 		ConfiguredIP:           &configuredIP,
 		AllowAnyIPRegistration: allowAnyIP,
 		RegistrationToken:      &hashedToken,

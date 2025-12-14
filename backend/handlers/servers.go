@@ -10,7 +10,6 @@ import (
 // CreateAgentRequest represents the create agent request body
 type CreateAgentRequest struct {
 	Name         string `json:"name" binding:"required"`
-	Type         string `json:"type" binding:"required,oneof=physical vm docker lxc"`
 	ConfiguredIP string `json:"configured_ip" binding:"required"`
 	AllowAnyIP   bool   `json:"allow_any_ip"`
 }
@@ -35,7 +34,6 @@ func CreateAgent(c *gin.Context) {
 
 	server, token, agentKey, err := services.CreateAgent(
 		req.Name,
-		req.Type,
 		req.ConfiguredIP,
 		req.AllowAnyIP,
 	)

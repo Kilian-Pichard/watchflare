@@ -12,19 +12,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// Register creates a new user (first admin only)
-func Register(email, password string) (*models.User, error) {
+// Register creates a new user (first admin only) and returns a JWT token
+func Register(email, password string) (*models.User, string, error) {
 	// Check if any user already exists
 	var count int64
 	database.DB.Model(&models.User{}).Count(&count)
 	if count > 0 {
-		return nil, errors.New("registration is closed - admin user already exists")
+		return nil, "", errors.New("registration is closed - admin user already exists")
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Create user
@@ -34,10 +34,16 @@ func Register(email, password string) (*models.User, error) {
 	}
 
 	if err := database.DB.Create(user).Error; err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return user, nil
+	// Generate JWT token
+	token, err := generateJWT(user.ID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return user, token, nil
 }
 
 // Login authenticates a user and returns a JWT token

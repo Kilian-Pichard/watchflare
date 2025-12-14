@@ -179,7 +179,6 @@
 					<thead>
 						<tr>
 							<th>Name</th>
-							<th>Type</th>
 							<th>Status</th>
 							<th>IP Address</th>
 							<th>Last Seen</th>
@@ -195,7 +194,6 @@
 										<div class="server-hostname">{server.hostname}</div>
 									{/if}
 								</td>
-								<td class="capitalize">{server.type}</td>
 								<td>
 									<span class="status-badge {getStatusClass(server.status)}">
 										{server.status}

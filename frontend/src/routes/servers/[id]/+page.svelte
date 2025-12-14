@@ -157,10 +157,6 @@
 				<h3>Server Information</h3>
 				<div class="info-grid">
 					<div class="info-item">
-						<span class="info-label">Type</span>
-						<span class="info-value capitalize">{server.type}</span>
-					</div>
-					<div class="info-item">
 						<span class="info-label">Configured IP</span>
 						<span class="info-value">{server.configured_ip || 'Not set'}</span>
 					</div>

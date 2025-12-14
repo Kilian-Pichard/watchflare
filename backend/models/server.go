@@ -14,7 +14,6 @@ type Server struct {
 
 	// Infos saisies lors de la création (admin)
 	Name                   string  `gorm:"not null" json:"name"`
-	Type                   string  `gorm:"not null" json:"type"` // physical, vm, docker, lxc
 	ConfiguredIP           *string `json:"configured_ip"` // Nullable
 	AllowAnyIPRegistration bool    `gorm:"default:false" json:"allow_any_ip_registration"`
 

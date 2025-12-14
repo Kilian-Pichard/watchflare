@@ -30,7 +30,7 @@ func TestCreateAgent(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
-	server, token, agentKey, err := CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, token, agentKey, err := CreateAgent("server01", "192.168.1.100", false)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, server)
@@ -39,7 +39,6 @@ func TestCreateAgent(t *testing.T) {
 
 	// Verify server fields
 	assert.Equal(t, "server01", server.Name)
-	assert.Equal(t, "vm", server.Type)
 	assert.Equal(t, "192.168.1.100", *server.ConfiguredIP)
 	assert.False(t, server.AllowAnyIPRegistration)
 	assert.Equal(t, "pending", server.Status)
@@ -75,9 +74,9 @@ func TestListServers(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create test servers
-	CreateAgent("server01", "vm", "192.168.1.100", false)
-	CreateAgent("server02", "physical", "192.168.1.101", true)
-	CreateAgent("server03", "docker", "192.168.1.102", false)
+	CreateAgent("server01", "192.168.1.100", false)
+	CreateAgent("server02", "192.168.1.101", true)
+	CreateAgent("server03", "192.168.1.102", false)
 
 	servers, err := ListServers()
 
@@ -106,7 +105,7 @@ func TestGetServer(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create test server
-	createdServer, _, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
+	createdServer, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
 
 	// Get server
 	server, err := GetServer(createdServer.ID)
@@ -115,7 +114,6 @@ func TestGetServer(t *testing.T) {
 	assert.NotNil(t, server)
 	assert.Equal(t, createdServer.ID, server.ID)
 	assert.Equal(t, "server01", server.Name)
-	assert.Equal(t, "vm", server.Type)
 }
 
 func TestGetServer_NotFound(t *testing.T) {
@@ -134,7 +132,7 @@ func TestValidateIP(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create test server
-	server, _, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
 
 	// Validate IP
 	err := ValidateIP(server.ID, "192.168.1.150")
@@ -152,7 +150,7 @@ func TestUpdateConfiguredIP(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create test server
-	server, _, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
 
 	// Update configured IP
 	err := UpdateConfiguredIP(server.ID, "192.168.1.200")
@@ -169,7 +167,7 @@ func TestRegenerateToken(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create test server
-	server, originalToken, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, originalToken, _, _ := CreateAgent("server01", "192.168.1.100", false)
 
 	// Regenerate token
 	newToken, err := RegenerateToken(server.ID)
@@ -193,7 +191,7 @@ func TestRegenerateToken_OnlineServer(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create server and set to online
-	server, _, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
 	database.DB.Model(&server).Update("status", "online")
 
 	// Try to regenerate token
@@ -208,7 +206,7 @@ func TestDeleteServer(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create test server
-	server, _, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
 
 	// Delete server
 	err := DeleteServer(server.ID)
@@ -226,7 +224,7 @@ func TestDeleteServer_OnlineServer(t *testing.T) {
 	defer teardownTestDB()
 
 	// Create server and set to online
-	server, _, _, _ := CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
 	database.DB.Model(&server).Update("status", "online")
 
 	// Delete server (should succeed now - restriction removed)

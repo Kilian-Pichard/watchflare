@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 	"watchflare/backend/config"
+	"watchflare/backend/database"
+	"watchflare/backend/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -15,7 +17,18 @@ import (
 func setupTestConfig() {
 	config.AppConfig = &config.Config{
 		JWTSecret: "test-secret-key",
+		DBPath:    ":memory:",
 	}
+}
+
+func setupTestDB(t *testing.T) {
+	if err := database.Connect(config.AppConfig.DBPath); err != nil {
+		t.Fatalf("Failed to connect to test database: %v", err)
+	}
+}
+
+func teardownTestDB() {
+	database.DB.Exec("DELETE FROM users")
 }
 
 func generateTestJWT(userID string, secret string, expired bool) string {
@@ -38,7 +51,17 @@ func generateTestJWT(userID string, secret string, expired bool) string {
 
 func TestAuthMiddleware(t *testing.T) {
 	setupTestConfig()
+	setupTestDB(t)
+	defer teardownTestDB()
 	gin.SetMode(gin.TestMode)
+
+	// Create a test user
+	testUser := &models.User{
+		ID:       "550e8400-e29b-41d4-a716-446655440001",
+		Email:    "test@example.com",
+		Password: "hashedpassword",
+	}
+	database.DB.Create(testUser)
 
 	tests := []struct {
 		name           string
@@ -58,6 +81,21 @@ func TestAuthMiddleware(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Equal(t, "protected content", w.Body.String())
+			},
+		},
+		{
+			name: "Fail - User not found in database",
+			setupRequest: func(req *http.Request) {
+				// Use a valid JWT but for a user that doesn't exist
+				token := generateTestJWT("00000000-0000-0000-0000-000000000000", config.AppConfig.JWTSecret, false)
+				req.AddCookie(&http.Cookie{
+					Name:  "jwt_token",
+					Value: token,
+				})
+			},
+			expectedStatus: http.StatusUnauthorized,
+			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Contains(t, w.Body.String(), "User not found")
 			},
 		},
 		{
@@ -138,9 +176,19 @@ func TestAuthMiddleware(t *testing.T) {
 
 func TestAuthMiddleware_UserIDInContext(t *testing.T) {
 	setupTestConfig()
+	setupTestDB(t)
+	defer teardownTestDB()
 	gin.SetMode(gin.TestMode)
 
 	testUserID := "550e8400-e29b-41d4-a716-446655440042"
+
+	// Create a test user
+	testUser := &models.User{
+		ID:       testUserID,
+		Email:    "test2@example.com",
+		Password: "hashedpassword",
+	}
+	database.DB.Create(testUser)
 
 	router := gin.New()
 	router.Use(AuthMiddleware())

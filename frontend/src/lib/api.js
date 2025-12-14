@@ -62,12 +62,11 @@ export async function getServer(id) {
 	return apiRequest(`/servers/${id}`);
 }
 
-export async function createServer(name, type, configuredIP, allowAnyIP) {
+export async function createServer(name, configuredIP, allowAnyIP) {
 	return apiRequest('/servers', {
 		method: 'POST',
 		body: JSON.stringify({
 			name,
-			type,
 			configured_ip: configuredIP,
 			allow_any_ip: allowAnyIP
 		})

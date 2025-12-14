@@ -4,7 +4,6 @@
 	import * as api from '$lib/api.js';
 
 	let name = '';
-	let type = 'vm';
 	let configuredIP = '';
 	let allowAnyIP = false;
 	let error = '';
@@ -31,7 +30,7 @@
 		loading = true;
 
 		try {
-			const response = await api.createServer(name, type, configuredIP, allowAnyIP);
+			const response = await api.createServer(name, configuredIP, allowAnyIP);
 			success = true;
 			createdServer = response.server;
 			token = response.token;
@@ -88,17 +87,6 @@
 							required
 							placeholder="e.g., web-server-01"
 						/>
-					</div>
-
-					<div class="form-group">
-						<label for="type">
-							Server Type <span class="required">*</span>
-						</label>
-						<select id="type" bind:value={type} required>
-							<option value="vm">Virtual Machine</option>
-							<option value="physical">Physical Server</option>
-							<option value="docker">Docker Container</option>
-						</select>
 					</div>
 
 					<div class="form-group">

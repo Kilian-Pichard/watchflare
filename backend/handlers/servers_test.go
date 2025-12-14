@@ -71,7 +71,6 @@ func TestCreateAgent(t *testing.T) {
 			name: "Success - Create pending server",
 			payload: map[string]interface{}{
 				"name":          "server01",
-				"type":          "vm",
 				"configured_ip": "192.168.1.100",
 				"allow_any_ip":  false,
 			},
@@ -85,22 +84,7 @@ func TestCreateAgent(t *testing.T) {
 
 				server := resp["server"].(map[string]interface{})
 				assert.Equal(t, "server01", server["name"])
-				assert.Equal(t, "vm", server["type"])
 				assert.Equal(t, "pending", server["status"])
-			},
-		},
-		{
-			name: "Fail - Invalid server type",
-			payload: map[string]interface{}{
-				"name":          "server02",
-				"type":          "invalid_type",
-				"configured_ip": "192.168.1.101",
-				"allow_any_ip":  false,
-			},
-			withCookie:     true,
-			expectedStatus: http.StatusBadRequest,
-			checkResponse: func(t *testing.T, resp map[string]interface{}) {
-				assert.NotNil(t, resp["error"])
 			},
 		},
 		{
@@ -118,7 +102,6 @@ func TestCreateAgent(t *testing.T) {
 			name: "Fail - No authentication",
 			payload: map[string]interface{}{
 				"name":          "server04",
-				"type":          "vm",
 				"configured_ip": "192.168.1.102",
 			},
 			withCookie:     false,
@@ -159,8 +142,8 @@ func TestListServers(t *testing.T) {
 	cookie := createTestUser(t)
 
 	// Create test servers
-	server1, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
-	server2, _, _, _ := services.CreateAgent("server02", "physical", "192.168.1.101", true)
+	server1, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
+	server2, _, _, _ := services.CreateAgent("server02", "192.168.1.101", true)
 
 	req, _ := http.NewRequest("GET", "/servers", nil)
 	req.AddCookie(cookie)
@@ -195,7 +178,7 @@ func TestGetServer(t *testing.T) {
 	cookie := createTestUser(t)
 
 	// Create test server
-	server, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
 
 	tests := []struct {
 		name           string
@@ -212,7 +195,6 @@ func TestGetServer(t *testing.T) {
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
 				serverData := resp["server"].(map[string]interface{})
 				assert.Equal(t, "server01", serverData["name"])
-				assert.Equal(t, "vm", serverData["type"])
 				assert.Equal(t, "pending", serverData["status"])
 			},
 		},
@@ -264,7 +246,7 @@ func TestRegenerateToken(t *testing.T) {
 	cookie := createTestUser(t)
 
 	// Create test server
-	server, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
 
 	req, _ := http.NewRequest("POST", fmt.Sprintf("/servers/%s/regenerate-token", server.ID), nil)
 	req.AddCookie(cookie)
@@ -301,7 +283,7 @@ func TestDeleteServer(t *testing.T) {
 		{
 			name: "Success - Delete pending server",
 			setupServer: func() string {
-				server, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
+				server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
 				return server.ID
 			},
 			expectedStatus: http.StatusOK,
@@ -348,7 +330,7 @@ func TestValidateIP(t *testing.T) {
 	cookie := createTestUser(t)
 
 	// Create test server
-	server, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
 
 	payload := map[string]string{
 		"selected_ip": "192.168.1.100",
@@ -377,7 +359,7 @@ func TestUpdateConfiguredIP(t *testing.T) {
 	cookie := createTestUser(t)
 
 	// Create test server
-	server, _, _, _ := services.CreateAgent("server01", "vm", "192.168.1.100", false)
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
 
 	payload := map[string]string{
 		"new_ip": "192.168.1.200",

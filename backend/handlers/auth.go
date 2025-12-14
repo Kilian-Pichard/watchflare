@@ -27,7 +27,7 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" binding:"required,min=8"`
 }
 
-// Register creates the first admin user
+// Register creates the first admin user and automatically logs them in
 func Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -35,11 +35,23 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	user, err := services.Register(req.Email, req.Password)
+	user, token, err := services.Register(req.Email, req.Password)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Set JWT token in HttpOnly cookie (auto-login after registration)
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(
+		"jwt_token",           // name
+		token,                 // value
+		60*60*24*7,           // maxAge (7 days in seconds)
+		"/",                   // path
+		"",                    // domain (empty = current domain)
+		false,                 // secure (set to true in production with HTTPS)
+		true,                  // httpOnly
+	)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
