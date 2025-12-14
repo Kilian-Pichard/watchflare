@@ -15,11 +15,13 @@ type Event struct {
 
 // ServerUpdate represents a server status update
 type ServerUpdate struct {
-	ID            string `json:"id"`
-	Status        string `json:"status"`
-	IPv4Address   string `json:"ip_address_v4,omitempty"`
-	IPv6Address   string `json:"ip_address_v6,omitempty"`
-	LastSeen      string `json:"last_seen"`
+	ID               string `json:"id"`
+	Status           string `json:"status"`
+	IPv4Address      string `json:"ip_address_v4,omitempty"`
+	IPv6Address      string `json:"ip_address_v6,omitempty"`
+	ConfiguredIP     string `json:"configured_ip,omitempty"`
+	IgnoreIPMismatch bool   `json:"ignore_ip_mismatch"`
+	LastSeen         string `json:"last_seen"`
 }
 
 // Client represents an SSE client connection

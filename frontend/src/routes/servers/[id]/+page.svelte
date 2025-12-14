@@ -43,6 +43,8 @@
 					status: update.status,
 					ip_address_v4: update.ip_address_v4,
 					ip_address_v6: update.ip_address_v6,
+					configured_ip: update.configured_ip,
+					ignore_ip_mismatch: update.ignore_ip_mismatch,
 					last_seen: update.last_seen
 				};
 			}
@@ -143,6 +145,34 @@
 	function copyToClipboard(text) {
 		navigator.clipboard.writeText(text);
 	}
+
+	// Reactive statement - automatically updates when server changes
+	$: showIPMismatchWarning =
+		server &&
+		server.configured_ip &&
+		server.ip_address_v4 &&
+		server.configured_ip !== server.ip_address_v4 &&
+		!server.ignore_ip_mismatch; // Don't show warning if user chose to ignore
+
+	async function handleUpdateIP() {
+		if (!server) return;
+		try {
+			await api.updateConfiguredIP(server.id, server.ip_address_v4);
+			await loadServer();
+		} catch (err) {
+			error = err.message || 'Failed to update IP';
+		}
+	}
+
+	async function handleIgnoreIP() {
+		if (!server) return;
+		try {
+			await api.ignoreIPMismatch(server.id);
+			await loadServer();
+		} catch (err) {
+			error = err.message || 'Failed to ignore IP mismatch';
+		}
+	}
 </script>
 
 <svelte:head>
@@ -195,6 +225,44 @@
 				</div>
 			</div>
 
+			<!-- IP Mismatch Warning -->
+			{#if showIPMismatchWarning}
+				<div class="warning-card">
+					<div class="warning-header">
+						<span class="warning-icon">⚠️</span>
+						<h3>IP Address Mismatch Detected</h3>
+					</div>
+					<p class="warning-message">
+						The configured IP address does not match the actual IP address reported by the
+						agent.
+					</p>
+					<div class="ip-comparison">
+						<div class="ip-item">
+							<span class="ip-label">Configured IP:</span>
+							<span class="ip-value configured">{server.configured_ip}</span>
+						</div>
+						<div class="ip-item">
+							<span class="ip-label">Actual IP (from agent):</span>
+							<span class="ip-value actual">{server.ip_address_v4}</span>
+						</div>
+					</div>
+					<div class="warning-actions">
+						<div class="warning-buttons">
+							<button class="btn-update" on:click={handleUpdateIP}>
+								Update configured IP to {server.ip_address_v4}
+							</button>
+							<button class="btn-ignore" on:click={handleIgnoreIP}>
+								Ignore this warning
+							</button>
+						</div>
+						<p class="warning-note">
+							Updating will replace the configured IP with the actual IP reported by the agent.
+							Ignoring will hide this warning until the IPs change again.
+						</p>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Server Information Card -->
 			<div class="card">
 				<h3>Server Information</h3>
@@ -205,7 +273,7 @@
 					</div>
 					<div class="info-item">
 						<span class="info-label">Allow Any IP</span>
-						<span class="info-value">{server.allow_any_ip ? 'Yes' : 'No'}</span>
+						<span class="info-value">{server.allow_any_ip_registration ? 'Yes' : 'No'}</span>
 					</div>
 					<div class="info-item">
 						<span class="info-label">Created At</span>
@@ -733,15 +801,140 @@
 
 	.warning-card {
 		background: #fef5e7;
-		border: 1px solid #f6e05e;
-		padding: 1rem;
-		border-radius: 6px;
+		border-left: 4px solid #f6ad55;
+		padding: 1.5rem;
+		border-radius: 8px;
+		margin-bottom: 2rem;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 	}
 
-	.warning-card p {
+	.warning-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+	}
+
+	.warning-icon {
+		font-size: 1.5rem;
+		flex-shrink: 0;
+	}
+
+	.warning-header h3 {
 		margin: 0;
+		font-size: 1.125rem;
+		color: #744210;
+		font-weight: 600;
+	}
+
+	.warning-message {
+		margin: 0 0 1.25rem 0;
+		color: #975a16;
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+
+	.ip-comparison {
+		background: white;
+		border: 1px solid #f6e05e;
+		border-radius: 6px;
+		padding: 1rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.ip-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.5rem 0;
+	}
+
+	.ip-item:not(:last-child) {
+		border-bottom: 1px solid #fef5e7;
+		margin-bottom: 0.5rem;
+	}
+
+	.ip-label {
+		font-weight: 500;
 		color: #744210;
 		font-size: 0.875rem;
+	}
+
+	.ip-value {
+		font-family: 'Monaco', 'Courier New', monospace;
+		font-size: 0.875rem;
+		padding: 0.25rem 0.75rem;
+		border-radius: 4px;
+		font-weight: 600;
+	}
+
+	.ip-value.configured {
+		background: #fed7d7;
+		color: #c53030;
+	}
+
+	.ip-value.actual {
+		background: #c6f6d5;
+		color: #2f855a;
+	}
+
+	.warning-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.warning-buttons {
+		display: flex;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.btn-update {
+		flex: 1;
+		min-width: 200px;
+		padding: 0.75rem 1.25rem;
+		background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: transform 0.2s;
+		font-size: 0.9rem;
+	}
+
+	.btn-update:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	}
+
+	.btn-ignore {
+		padding: 0.75rem 1.25rem;
+		background: white;
+		color: #975a16;
+		border: 2px solid #f6ad55;
+		border-radius: 6px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+		font-size: 0.9rem;
+	}
+
+	.btn-ignore:hover {
+		background: #fef5e7;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	}
+
+	.warning-note {
+		margin: 0;
+		color: #975a16;
+		font-size: 0.8rem;
+		font-style: italic;
+		padding: 0.5rem;
+		background: rgba(246, 173, 85, 0.1);
+		border-radius: 4px;
 	}
 
 	/* Modal Styles */

@@ -105,6 +105,7 @@ func setupRouter() *gin.Engine {
 		serverGroup.GET("/:id", handlers.GetServer)
 		serverGroup.PUT("/:id/validate-ip", handlers.ValidateIP)
 		serverGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
+		serverGroup.PUT("/:id/ignore-ip-mismatch", handlers.IgnoreIPMismatch)
 		serverGroup.POST("/:id/regenerate-token", handlers.RegenerateToken)
 		serverGroup.DELETE("/:id", handlers.DeleteServer)
 		serverGroup.GET("/events", handlers.ServerEvents)

@@ -134,6 +134,20 @@ func RegenerateToken(c *gin.Context) {
 	})
 }
 
+// IgnoreIPMismatch marks the IP mismatch warning as ignored
+func IgnoreIPMismatch(c *gin.Context) {
+	serverID := c.Param("id")
+
+	if err := services.IgnoreIPMismatch(serverID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "IP mismatch warning ignored",
+	})
+}
+
 // DeleteServer deletes a server
 func DeleteServer(c *gin.Context) {
 	serverID := c.Param("id")

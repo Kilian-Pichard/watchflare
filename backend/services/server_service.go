@@ -111,7 +111,36 @@ func UpdateConfiguredIP(serverID string, newIP string) error {
 		return err
 	}
 
+	// Save current configured IP to previous_configured_ip
+	if server.ConfiguredIP != nil && *server.ConfiguredIP != "" {
+		server.PreviousConfiguredIP = server.ConfiguredIP
+	}
+
+	// Update to new IP
 	server.ConfiguredIP = &newIP
+
+	// Reset ignore flag when IP is updated
+	server.IgnoreIPMismatch = false
+
+	if err := database.DB.Save(&server).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// IgnoreIPMismatch marks the IP mismatch warning as ignored by the user
+func IgnoreIPMismatch(serverID string) error {
+	var server models.Server
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("server not found")
+		}
+		return err
+	}
+
+	// Mark the mismatch as ignored
+	server.IgnoreIPMismatch = true
 
 	if err := database.DB.Save(&server).Error; err != nil {
 		return err

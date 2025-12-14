@@ -90,11 +90,14 @@
 					</div>
 
 					<div class="form-group">
-						<label for="ip">Configured IP Address</label>
+						<label for="ip">
+							Configured IP Address <span class="required">*</span>
+						</label>
 						<input
 							id="ip"
 							type="text"
 							bind:value={configuredIP}
+							required
 							placeholder="e.g., 192.168.1.100"
 						/>
 						<p class="help-text">The IP address you expect this server to connect from</p>

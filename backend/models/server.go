@@ -14,8 +14,10 @@ type Server struct {
 
 	// Infos saisies lors de la création (admin)
 	Name                   string  `gorm:"not null" json:"name"`
-	ConfiguredIP           *string `json:"configured_ip"` // Nullable
+	ConfiguredIP           *string `json:"configured_ip"`           // Nullable
+	PreviousConfiguredIP   *string `json:"previous_configured_ip"` // Ancienne IP configurée
 	AllowAnyIPRegistration bool    `gorm:"default:false" json:"allow_any_ip_registration"`
+	IgnoreIPMismatch       bool    `gorm:"default:false" json:"ignore_ip_mismatch"` // L'utilisateur a choisi d'ignorer l'alerte
 
 	// Token d'enregistrement
 	RegistrationToken *string    `json:"-"` // Hashé, NULL après enregistrement

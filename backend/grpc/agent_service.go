@@ -59,6 +59,19 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		}, nil
 	}
 
+	// Validate IP address if allow_any_ip_registration is false
+	if !server.AllowAnyIPRegistration {
+		if server.ConfiguredIP != nil && *server.ConfiguredIP != "" {
+			// Check if the actual IP matches the configured IP
+			if req.IpAddressV4 != *server.ConfiguredIP {
+				return &pb.RegisterResponse{
+					Success: false,
+					Message: "IP address mismatch. Expected: " + *server.ConfiguredIP + ", Got: " + req.IpAddressV4,
+				}, nil
+			}
+		}
+	}
+
 	// Update server with agent information
 	now := time.Now()
 	updates := map[string]interface{}{
@@ -79,12 +92,18 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 
 	// Broadcast SSE event for server registration
 	broker := sse.GetBroker()
+	configuredIP := ""
+	if server.ConfiguredIP != nil {
+		configuredIP = *server.ConfiguredIP
+	}
 	broker.BroadcastServerUpdate(sse.ServerUpdate{
-		ID:          server.ID,
-		Status:      "online",
-		IPv4Address: req.IpAddressV4,
-		IPv6Address: req.IpAddressV6,
-		LastSeen:    now.Format(time.RFC3339),
+		ID:               server.ID,
+		Status:           "online",
+		IPv4Address:      req.IpAddressV4,
+		IPv6Address:      req.IpAddressV6,
+		ConfiguredIP:     configuredIP,
+		IgnoreIPMismatch: server.IgnoreIPMismatch,
+		LastSeen:         now.Format(time.RFC3339),
 	})
 
 	return &pb.RegisterResponse{
@@ -125,12 +144,18 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 
 	// Broadcast SSE event for heartbeat
 	broker := sse.GetBroker()
+	configuredIP := ""
+	if server.ConfiguredIP != nil {
+		configuredIP = *server.ConfiguredIP
+	}
 	broker.BroadcastServerUpdate(sse.ServerUpdate{
-		ID:          server.ID,
-		Status:      "online",
-		IPv4Address: req.IpAddressV4,
-		IPv6Address: req.IpAddressV6,
-		LastSeen:    now.Format(time.RFC3339),
+		ID:               server.ID,
+		Status:           "online",
+		IPv4Address:      req.IpAddressV4,
+		IPv6Address:      req.IpAddressV6,
+		ConfiguredIP:     configuredIP,
+		IgnoreIPMismatch: server.IgnoreIPMismatch,
+		LastSeen:         now.Format(time.RFC3339),
 	})
 
 	return &pb.HeartbeatResponse{

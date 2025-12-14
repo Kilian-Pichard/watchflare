@@ -44,6 +44,8 @@
 					status: update.status,
 					ip_address_v4: update.ip_address_v4,
 					ip_address_v6: update.ip_address_v6,
+					configured_ip: update.configured_ip,
+					ignore_ip_mismatch: update.ignore_ip_mismatch,
 					last_seen: update.last_seen
 				};
 				servers = [...servers]; // Trigger reactivity
@@ -103,6 +105,16 @@
 	function formatDate(dateString) {
 		if (!dateString) return '-';
 		return new Date(dateString).toLocaleString('fr-FR');
+	}
+
+	function hasIPMismatch(server) {
+		// Check if both IPs exist and are different, and user hasn't chosen to ignore
+		return (
+			server.configured_ip &&
+			server.ip_address_v4 &&
+			server.configured_ip !== server.ip_address_v4 &&
+			!server.ignore_ip_mismatch
+		);
 	}
 
 	function openDeleteModal(server, e) {
@@ -195,9 +207,14 @@
 									{/if}
 								</td>
 								<td>
-									<span class="status-badge {getStatusClass(server.status)}">
-										{server.status}
-									</span>
+									<div class="status-cell">
+										<span class="status-badge {getStatusClass(server.status)}">
+											{server.status}
+										</span>
+										{#if hasIPMismatch(server)}
+											<span class="warning-badge" title="IP mismatch detected">⚠️</span>
+										{/if}
+									</div>
 								</td>
 								<td>{server.ip_address_v4 || server.configured_ip || '-'}</td>
 								<td>{formatDate(server.last_seen)}</td>
@@ -485,6 +502,28 @@
 	.status-unknown {
 		background: #e2e8f0;
 		color: #718096;
+	}
+
+	.status-cell {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.warning-badge {
+		font-size: 1.2rem;
+		cursor: help;
+		animation: pulse 2s infinite;
+	}
+
+	@keyframes pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
 	}
 
 	.link-btn {

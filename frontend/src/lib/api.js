@@ -1,5 +1,18 @@
 const API_BASE_URL = 'http://localhost:8080';
 
+// Check if initial setup is required (no users exist)
+async function checkSetupRequired() {
+	try {
+		const response = await fetch(`${API_BASE_URL}/auth/setup-required`, {
+			credentials: 'include'
+		});
+		const data = await response.json();
+		return data.setup_required;
+	} catch (err) {
+		return false;
+	}
+}
+
 // Make API request with credentials (cookies sent automatically)
 async function apiRequest(endpoint, options = {}) {
 	const headers = {
@@ -16,6 +29,19 @@ async function apiRequest(endpoint, options = {}) {
 	const data = await response.json();
 
 	if (!response.ok) {
+		// If 401 Unauthorized, check if setup is required
+		if (response.status === 401) {
+			const setupRequired = await checkSetupRequired();
+			if (setupRequired) {
+				// No users exist, redirect to registration
+				window.location.href = '/register';
+				return; // Don't throw error, just redirect
+			} else {
+				// Users exist but not authenticated, redirect to login
+				window.location.href = '/login';
+				return; // Don't throw error, just redirect
+			}
+		}
 		throw new Error(data.error || 'API request failed');
 	}
 
@@ -96,5 +122,11 @@ export async function updateConfiguredIP(id, newIP) {
 	return apiRequest(`/servers/${id}/change-ip`, {
 		method: 'PUT',
 		body: JSON.stringify({ new_ip: newIP })
+	});
+}
+
+export async function ignoreIPMismatch(id) {
+	return apiRequest(`/servers/${id}/ignore-ip-mismatch`, {
+		method: 'PUT'
 	});
 }
