@@ -22,7 +22,7 @@ func main() {
 	config.Load()
 
 	// Connect to database
-	if err := database.Connect(config.AppConfig.DBPath); err != nil {
+	if err := database.Connect(); err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
