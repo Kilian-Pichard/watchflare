@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"watchflare/backend/database"
@@ -164,6 +165,47 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	return &pb.HeartbeatResponse{
 		Success: true,
 		Message: "Heartbeat acknowledged",
+	}, nil
+}
+
+// SendMetrics handles incoming system metrics from agents
+func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (*pb.MetricsResponse, error) {
+	// Find server by agent ID and verify agent key
+	var server models.Server
+	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return &pb.MetricsResponse{
+				Success: false,
+				Message: "Invalid agent credentials",
+			}, nil
+		}
+		return nil, result.Error
+	}
+
+	// Create metric record
+	metric := &models.Metric{
+		ServerID:             server.ID,
+		Timestamp:            time.Unix(req.Metrics.Timestamp, 0),
+		CPUUsagePercent:      req.Metrics.CpuUsagePercent,
+		MemoryTotalBytes:     req.Metrics.MemoryTotalBytes,
+		MemoryUsedBytes:      req.Metrics.MemoryUsedBytes,
+		MemoryAvailableBytes: req.Metrics.MemoryAvailableBytes,
+		LoadAvg1Min:          req.Metrics.LoadAvg_1Min,
+		LoadAvg5Min:          req.Metrics.LoadAvg_5Min,
+		LoadAvg15Min:         req.Metrics.LoadAvg_15Min,
+		DiskTotalBytes:       req.Metrics.DiskTotalBytes,
+		DiskUsedBytes:        req.Metrics.DiskUsedBytes,
+		UptimeSeconds:        req.Metrics.UptimeSeconds,
+	}
+
+	if err := database.DB.Create(metric).Error; err != nil {
+		return nil, fmt.Errorf("failed to save metrics: %w", err)
+	}
+
+	return &pb.MetricsResponse{
+		Success: true,
+		Message: "Metrics received successfully",
 	}, nil
 }
 

@@ -11,14 +11,13 @@ import (
 
 	"watchflare/agent/client"
 	"watchflare/agent/config"
+	"watchflare/agent/metrics"
 	"watchflare/agent/sysinfo"
 )
 
 const (
-	DefaultServerHost   = "localhost"
-	DefaultServerPort   = "50051"
-	HeartbeatInterval   = 30 * time.Second
-	HeartbeatMaxRetries = 3
+	DefaultServerHost = "localhost"
+	DefaultServerPort = "50051"
 )
 
 func main() {
@@ -116,14 +115,21 @@ func register(token, serverHost, serverPort string) (*config.Config, error) {
 	return cfg, nil
 }
 
-// runHeartbeatLoop sends periodic heartbeats to the backend
+// runHeartbeatLoop sends periodic heartbeats and metrics to the backend
 func runHeartbeatLoop(cfg *config.Config) error {
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	ticker := time.NewTicker(HeartbeatInterval)
-	defer ticker.Stop()
+	// Create tickers with configured intervals
+	heartbeatInterval := time.Duration(cfg.HeartbeatInterval) * time.Second
+	metricsInterval := time.Duration(cfg.MetricsInterval) * time.Second
+
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	defer heartbeatTicker.Stop()
+
+	metricsTicker := time.NewTicker(metricsInterval)
+	defer metricsTicker.Stop()
 
 	// Connect to backend
 	grpcClient, err := client.New(cfg.ServerHost, cfg.ServerPort)
@@ -132,18 +138,27 @@ func runHeartbeatLoop(cfg *config.Config) error {
 	}
 	defer grpcClient.Close()
 
-	// Send initial heartbeat immediately
+	// Send initial heartbeat and metrics immediately
 	if err := sendHeartbeat(grpcClient, cfg); err != nil {
 		log.Printf("Warning: Initial heartbeat failed: %v", err)
 	}
+	if err := sendMetrics(grpcClient, cfg); err != nil {
+		log.Printf("Warning: Initial metrics send failed: %v", err)
+	}
 
-	log.Printf("Heartbeat interval: %v", HeartbeatInterval)
+	log.Printf("Heartbeat interval: %v", heartbeatInterval)
+	log.Printf("Metrics interval: %v", metricsInterval)
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-heartbeatTicker.C:
 			if err := sendHeartbeat(grpcClient, cfg); err != nil {
 				log.Printf("Warning: Heartbeat failed: %v", err)
+			}
+
+		case <-metricsTicker.C:
+			if err := sendMetrics(grpcClient, cfg); err != nil {
+				log.Printf("Warning: Metrics send failed: %v", err)
 			}
 
 		case sig := <-sigChan:
@@ -171,5 +186,24 @@ func sendHeartbeat(grpcClient *client.Client, cfg *config.Config) error {
 	}
 
 	log.Println("✓ Heartbeat sent successfully")
+	return nil
+}
+
+// sendMetrics collects and sends system metrics to the backend
+func sendMetrics(grpcClient *client.Client, cfg *config.Config) error {
+	// Collect system metrics
+	m, err := metrics.Collect()
+	if err != nil {
+		return fmt.Errorf("failed to collect metrics: %w", err)
+	}
+
+	if err := grpcClient.SendMetrics(cfg.AgentID, cfg.AgentKey, m); err != nil {
+		return err
+	}
+
+	log.Printf("✓ Metrics sent successfully (CPU: %.1f%%, Mem: %dMB/%dMB)",
+		m.CPUUsagePercent,
+		m.MemoryUsedBytes/1024/1024,
+		m.MemoryTotalBytes/1024/1024)
 	return nil
 }

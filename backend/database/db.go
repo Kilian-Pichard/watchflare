@@ -48,12 +48,44 @@ func Connect() error {
 	err = DB.AutoMigrate(
 		&models.User{},
 		&models.Server{},
+		&models.Metric{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	log.Println("Database migrations completed")
+
+	// Convert metrics table to TimescaleDB hypertable
+	// This should only be done once, TimescaleDB will handle it gracefully if already a hypertable
+	err = DB.Exec(`
+		SELECT create_hypertable(
+			'metrics',
+			'timestamp',
+			if_not_exists => TRUE,
+			migrate_data => TRUE
+		);
+	`).Error
+	if err != nil {
+		log.Printf("Warning: Failed to create hypertable (may already exist): %v", err)
+	} else {
+		log.Println("TimescaleDB hypertable 'metrics' created/verified")
+	}
+
+	// Add retention policy: keep metrics for 30 days
+	err = DB.Exec(`
+		SELECT add_retention_policy(
+			'metrics',
+			INTERVAL '30 days',
+			if_not_exists => TRUE
+		);
+	`).Error
+	if err != nil {
+		log.Printf("Warning: Failed to add retention policy: %v", err)
+	} else {
+		log.Println("TimescaleDB retention policy added (30 days)")
+	}
+
 	return nil
 }
 
