@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"watchflare/backend/config"
 	"watchflare/backend/sse"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,16 @@ import (
 
 // ServerEvents handles SSE connections for real-time server updates
 func ServerEvents(c *gin.Context) {
+	// Set CORS headers explicitly for SSE
+	// EventSource requires explicit origin when using credentials
+	origin := "http://localhost:5173" // default
+	if len(config.AppConfig.CORSOrigins) > 0 {
+		origin = config.AppConfig.CORSOrigins[0]
+	}
+	c.Header("Access-Control-Allow-Origin", origin)
+	c.Header("Access-Control-Allow-Credentials", "true")
+	c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
 	// Set SSE headers
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")

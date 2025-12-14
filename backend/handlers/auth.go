@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"watchflare/backend/database"
+	"watchflare/backend/models"
 	"watchflare/backend/services"
 
 	"github.com/gin-gonic/gin"
@@ -116,5 +118,15 @@ func ChangePassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Password changed successfully",
+	})
+}
+
+// SetupRequired checks if initial setup is required (no users exist)
+func SetupRequired(c *gin.Context) {
+	var count int64
+	database.DB.Model(&models.User{}).Count(&count)
+
+	c.JSON(http.StatusOK, gin.H{
+		"setup_required": count == 0,
 	})
 }

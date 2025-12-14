@@ -83,6 +83,7 @@ func setupRouter() *gin.Engine {
 	// Auth routes (public)
 	authGroup := router.Group("/auth")
 	{
+		authGroup.GET("/setup-required", handlers.SetupRequired)
 		authGroup.POST("/register", handlers.Register)
 		authGroup.POST("/login", handlers.Login)
 		authGroup.POST("/logout", handlers.Logout)
