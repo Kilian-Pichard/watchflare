@@ -93,6 +93,8 @@ func setupRouter() *gin.Engine {
 	protectedGroup := router.Group("/auth")
 	protectedGroup.Use(middleware.AuthMiddleware())
 	{
+		protectedGroup.GET("/user", handlers.GetCurrentUser)
+		protectedGroup.PUT("/preferences", handlers.UpdatePreferences)
 		protectedGroup.PUT("/change-password", handlers.ChangePassword)
 	}
 

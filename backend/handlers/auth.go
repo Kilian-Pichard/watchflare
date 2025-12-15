@@ -27,6 +27,12 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" binding:"required,min=8"`
 }
 
+// UpdatePreferencesRequest represents the update preferences request body
+type UpdatePreferencesRequest struct {
+	DefaultTimeRange string `json:"default_time_range"`
+	Theme            string `json:"theme"`
+}
+
 // Register creates the first admin user and automatically logs them in
 func Register(c *gin.Context) {
 	var req RegisterRequest
@@ -140,5 +146,86 @@ func SetupRequired(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"setup_required": count == 0,
+	})
+}
+
+// GetCurrentUser returns the authenticated user's information including preferences
+func GetCurrentUser(c *gin.Context) {
+	// Get user ID from context (set by JWT middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.Where("id = ?", userID.(string)).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": user,
+	})
+}
+
+// UpdatePreferences updates the authenticated user's preferences
+func UpdatePreferences(c *gin.Context) {
+	var req UpdatePreferencesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get user ID from context (set by JWT middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Validate time range
+	validTimeRanges := []string{"1h", "6h", "24h", "7d", "30d"}
+	if req.DefaultTimeRange != "" {
+		valid := false
+		for _, tr := range validTimeRanges {
+			if req.DefaultTimeRange == tr {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time range. Valid values: 1h, 6h, 24h, 7d, 30d"})
+			return
+		}
+	}
+
+	// Validate theme
+	if req.Theme != "" && req.Theme != "light" && req.Theme != "dark" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid theme. Valid values: light, dark"})
+		return
+	}
+
+	// Update user preferences
+	updates := make(map[string]interface{})
+	if req.DefaultTimeRange != "" {
+		updates["default_time_range"] = req.DefaultTimeRange
+	}
+	if req.Theme != "" {
+		updates["theme"] = req.Theme
+	}
+
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID.(string)).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update preferences"})
+		return
+	}
+
+	// Fetch updated user
+	var user models.User
+	database.DB.Where("id = ?", userID.(string)).First(&user)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Preferences updated successfully",
+		"user":    user,
 	})
 }
