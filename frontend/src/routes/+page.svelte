@@ -1,6 +1,86 @@
 <script>
-	import { logout } from '$lib/api';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { logout, getCurrentUser, listServers, getServerMetrics } from '$lib/api';
+	import { connectSSE } from '$lib/sse';
+	import { getTimeRangeTimestamps, getIntervalForTimeRange, formatBytes, formatPercent } from '$lib/utils';
+	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
+	import StatCard from '$lib/components/StatCard.svelte';
+	import CPUChart from '$lib/components/CPUChart.svelte';
+	import MemoryChart from '$lib/components/MemoryChart.svelte';
+	import DiskChart from '$lib/components/DiskChart.svelte';
+
+	// State
+	let user = $state(null);
+	let servers = $state([]);
+	let timeRange = $state('24h');
+	let loading = $state(true);
+	let metricsData = $state({});
+	let sseDisconnect = null;
+
+	// Computed aggregates
+	let stats = $derived({
+		totalServers: servers.length,
+		onlineServers: servers.filter((s) => s.server.status === 'online').length,
+		offlineServers: servers.filter((s) => s.server.status === 'offline').length,
+
+		// Aggregate CPU (average across all servers)
+		avgCPU: servers.length > 0
+			? servers.reduce((sum, s) => sum + (s.lastMetrics?.cpu_usage_percent || 0), 0) / servers.length
+			: 0,
+
+		// Aggregate Memory (sum of all servers)
+		totalMemory: servers.reduce((sum, s) => sum + (s.lastMetrics?.memory_total_bytes || 0), 0),
+		usedMemory: servers.reduce((sum, s) => sum + (s.lastMetrics?.memory_used_bytes || 0), 0),
+
+		// Aggregate Disk (sum of all servers)
+		totalDisk: servers.reduce((sum, s) => sum + (s.lastMetrics?.disk_total_bytes || 0), 0),
+		usedDisk: servers.reduce((sum, s) => sum + (s.lastMetrics?.disk_used_bytes || 0), 0)
+	});
+
+	// Aggregate chart data from all servers
+	let aggregatedChartData = $derived.by(() => {
+		// Get all unique timestamps
+		const timestampMap = new Map();
+
+		servers.forEach((server) => {
+			server.metrics.forEach((metric) => {
+				const timestamp = metric.timestamp;
+				if (!timestampMap.has(timestamp)) {
+					timestampMap.set(timestamp, {
+						timestamp,
+						cpuSum: 0,
+						cpuCount: 0,
+						memoryTotal: 0,
+						memoryUsed: 0,
+						diskTotal: 0,
+						diskUsed: 0
+					});
+				}
+
+				const entry = timestampMap.get(timestamp);
+				entry.cpuSum += metric.cpu_usage_percent || 0;
+				entry.cpuCount += 1;
+				entry.memoryTotal += metric.memory_total_bytes || 0;
+				entry.memoryUsed += metric.memory_used_bytes || 0;
+				entry.diskTotal += metric.disk_total_bytes || 0;
+				entry.diskUsed += metric.disk_used_bytes || 0;
+			});
+		});
+
+		// Convert to array and calculate averages
+		return Array.from(timestampMap.values())
+			.map((entry) => ({
+				timestamp: entry.timestamp,
+				cpu_usage_percent: entry.cpuCount > 0 ? entry.cpuSum / entry.cpuCount : 0,
+				memory_total_bytes: entry.memoryTotal,
+				memory_used_bytes: entry.memoryUsed,
+				memory_available_bytes: entry.memoryTotal - entry.memoryUsed,
+				disk_total_bytes: entry.diskTotal,
+				disk_used_bytes: entry.diskUsed
+			}))
+			.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+	});
 
 	async function handleLogout() {
 		try {
@@ -8,195 +88,214 @@
 			goto('/login');
 		} catch (err) {
 			console.error('Logout failed:', err);
-			// Force redirect to login anyway
 			goto('/login');
 		}
 	}
+
+	async function loadData() {
+		try {
+			loading = true;
+
+			// Load user preferences
+			const userData = await getCurrentUser();
+			user = userData.user;
+			timeRange = user.default_time_range || '24h';
+
+			// Load servers
+			const serversData = await listServers();
+			servers = serversData.servers.map((server) => ({
+				server,
+				lastMetrics: null,
+				metrics: []
+			}));
+
+			// Load metrics for each server
+			await loadMetrics();
+		} catch (err) {
+			console.error('Failed to load data:', err);
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function loadMetrics() {
+		const { start, end } = getTimeRangeTimestamps(timeRange);
+		const interval = getIntervalForTimeRange(timeRange);
+
+		for (let i = 0; i < servers.length; i++) {
+			const server = servers[i];
+			if (server.server.status !== 'online') continue;
+
+			try {
+				const data = await getServerMetrics(server.server.id, { start, end, interval });
+				servers[i].metrics = data.metrics || [];
+
+				// Set last metrics (most recent point)
+				if (servers[i].metrics.length > 0) {
+					servers[i].lastMetrics = servers[i].metrics[servers[i].metrics.length - 1];
+				}
+			} catch (err) {
+				console.error(`Failed to load metrics for server ${server.server.id}:`, err);
+			}
+		}
+	}
+
+	function handleTimeRangeChange() {
+		loadMetrics();
+	}
+
+	function handleSSEMessage(event) {
+		if (event.type === 'metrics_update') {
+			const { server_id, ...metrics } = event.data;
+
+			// Find server and update last metrics
+			const serverIndex = servers.findIndex((s) => s.server.id === server_id);
+			if (serverIndex !== -1) {
+				servers[serverIndex].lastMetrics = metrics;
+
+				// Add to metrics array for real-time chart update
+				servers[serverIndex].metrics = [...servers[serverIndex].metrics, metrics];
+
+				// Keep only last 100 points to avoid memory issues
+				if (servers[serverIndex].metrics.length > 100) {
+					servers[serverIndex].metrics = servers[serverIndex].metrics.slice(-100);
+				}
+			}
+		} else if (event.type === 'server_update') {
+			// Update server status
+			const serverIndex = servers.findIndex((s) => s.server.id === event.data.id);
+			if (serverIndex !== -1) {
+				servers[serverIndex].server.status = event.data.status;
+				servers[serverIndex].server.last_seen = event.data.last_seen;
+			}
+		}
+	}
+
+	onMount(() => {
+		loadData();
+
+		// Connect to SSE for real-time updates
+		sseDisconnect = connectSSE(handleSSEMessage, (error) => {
+			console.error('SSE error:', error);
+		});
+	});
+
+	onDestroy(() => {
+		if (sseDisconnect) {
+			sseDisconnect();
+		}
+	});
 </script>
 
 <svelte:head>
 	<title>Dashboard - Watchflare</title>
 </svelte:head>
 
-<div class="container">
-	<nav class="navbar">
-		<div class="nav-content">
-			<h1>Watchflare</h1>
-			<div class="nav-actions">
-				<a href="/servers" class="nav-link">Servers</a>
-				<a href="/settings" class="nav-link">Settings</a>
-				<button on:click={handleLogout} class="logout-btn">Logout</button>
+<div class="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+	<!-- Navbar -->
+	<nav class="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-lg">
+		<div class="mx-auto max-w-7xl px-6 py-4">
+			<div class="flex items-center justify-between">
+				<h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+					Watchflare
+				</h1>
+				<div class="flex items-center gap-6">
+					<a
+						href="/servers"
+						class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+					>
+						Servers
+					</a>
+					<a
+						href="/settings"
+						class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+					>
+						Settings
+					</a>
+					<button
+						onclick={handleLogout}
+						class="text-sm font-medium text-destructive hover:text-destructive/90 transition-colors"
+					>
+						Logout
+					</button>
+				</div>
 			</div>
 		</div>
 	</nav>
 
-	<main class="main">
-		<div class="welcome-card">
-			<h2>Welcome to Watchflare</h2>
-			<p>Your server monitoring dashboard</p>
-
-			<div class="info-box">
-				<h3>Get Started</h3>
-				<p>Monitor your servers and receive real-time status updates.</p>
-				<p class="muted">Add your first server to start monitoring its health and performance.</p>
+	<!-- Main Content -->
+	<main class="mx-auto max-w-7xl px-6 py-10">
+		{#if loading}
+			<div class="flex items-center justify-center py-20">
+				<p class="text-muted-foreground">Loading dashboard...</p>
+			</div>
+		{:else}
+			<!-- Header with Time Range Selector -->
+			<div class="mb-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+				<div>
+					<h2 class="text-4xl font-bold tracking-tight">Dashboard</h2>
+					<p class="text-muted-foreground mt-2">
+						Overview of {stats.totalServers} {stats.totalServers === 1 ? 'server' : 'servers'}
+					</p>
+				</div>
+				<TimeRangeSelector bind:value={timeRange} onValueChange={handleTimeRangeChange} />
 			</div>
 
-			<div class="actions">
-				<a href="/servers" class="btn btn-primary">Manage Servers</a>
-				<a href="/settings" class="btn btn-secondary">Settings</a>
+			<!-- Bento Grid -->
+			<div class="grid gap-5 md:grid-cols-2 lg:grid-cols-4 mb-8">
+				<!-- Servers Status -->
+				<StatCard
+					title="Servers"
+					value={stats.totalServers}
+					subtitle="{stats.onlineServers} online, {stats.offlineServers} offline"
+					icon="🖥️"
+				/>
+
+				<!-- Average CPU -->
+				<StatCard
+					title="Average CPU"
+					value={formatPercent(stats.avgCPU)}
+					subtitle="Across all servers"
+					icon="💻"
+				/>
+
+				<!-- Total Memory -->
+				<StatCard
+					title="Total RAM"
+					value={formatBytes(stats.usedMemory)}
+					subtitle="of {formatBytes(stats.totalMemory)}"
+					icon="💾"
+				/>
+
+				<!-- Total Disk -->
+				<StatCard
+					title="Total Disk"
+					value={formatBytes(stats.usedDisk)}
+					subtitle="of {formatBytes(stats.totalDisk)}"
+					icon="💿"
+				/>
 			</div>
-		</div>
+
+			<!-- Charts Section -->
+			<div class="grid gap-6 lg:grid-cols-2">
+				<!-- CPU Chart -->
+				<div class="rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
+					<h3 class="text-lg font-semibold mb-4">CPU Usage (Average)</h3>
+					<CPUChart data={aggregatedChartData} />
+				</div>
+
+				<!-- Memory Chart -->
+				<div class="rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
+					<h3 class="text-lg font-semibold mb-4">Memory Usage (Total)</h3>
+					<MemoryChart data={aggregatedChartData} />
+				</div>
+
+				<!-- Disk Chart -->
+				<div class="rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-shadow lg:col-span-2">
+					<h3 class="text-lg font-semibold mb-4">Disk Usage (Total)</h3>
+					<DiskChart data={aggregatedChartData} />
+				</div>
+			</div>
+		{/if}
 	</main>
 </div>
-
-<style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-		background: #f7fafc;
-	}
-
-	.container {
-		min-height: 100vh;
-	}
-
-	.navbar {
-		background: white;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		padding: 1rem 0;
-	}
-
-	.nav-content {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 0 2rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.navbar h1 {
-		margin: 0;
-		font-size: 1.5rem;
-		color: #667eea;
-	}
-
-	.nav-actions {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.nav-link {
-		color: #4a5568;
-		text-decoration: none;
-		font-weight: 500;
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		transition: background-color 0.2s;
-	}
-
-	.nav-link:hover {
-		background-color: #edf2f7;
-	}
-
-	.logout-btn {
-		padding: 0.5rem 1rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.logout-btn:hover {
-		background: #c53030;
-	}
-
-	.main {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 3rem 2rem;
-	}
-
-	.welcome-card {
-		background: white;
-		padding: 2.5rem;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-	}
-
-	h2 {
-		margin: 0 0 0.5rem 0;
-		font-size: 2rem;
-		color: #1a202c;
-	}
-
-	.welcome-card > p {
-		margin: 0 0 2rem 0;
-		color: #718096;
-		font-size: 1.125rem;
-	}
-
-	.info-box {
-		background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-		border-left: 4px solid #667eea;
-		padding: 1.5rem;
-		border-radius: 6px;
-		margin-bottom: 2rem;
-	}
-
-	.info-box h3 {
-		margin: 0 0 0.5rem 0;
-		color: #1a202c;
-		font-size: 1.25rem;
-	}
-
-	.info-box p {
-		margin: 0.5rem 0;
-		color: #4a5568;
-	}
-
-	.muted {
-		color: #a0aec0 !important;
-		font-size: 0.875rem;
-	}
-
-	.actions {
-		display: flex;
-		gap: 1rem;
-	}
-
-	.btn {
-		padding: 0.75rem 1.5rem;
-		border-radius: 6px;
-		font-weight: 500;
-		text-decoration: none;
-		cursor: pointer;
-		transition: transform 0.2s;
-		display: inline-block;
-	}
-
-	.btn:hover {
-		transform: translateY(-1px);
-	}
-
-	.btn-primary {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-	}
-
-	.btn-secondary {
-		background: white;
-		color: #4a5568;
-		border: 2px solid #e2e8f0;
-	}
-
-	.btn-secondary:hover {
-		background: #f7fafc;
-	}
-</style>

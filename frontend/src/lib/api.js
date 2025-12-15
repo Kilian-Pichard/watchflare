@@ -130,3 +130,29 @@ export async function ignoreIPMismatch(id) {
 		method: 'PUT'
 	});
 }
+
+// User preferences API calls
+export async function getCurrentUser() {
+	return apiRequest('/auth/user');
+}
+
+export async function updatePreferences(defaultTimeRange, theme) {
+	return apiRequest('/auth/preferences', {
+		method: 'PUT',
+		body: JSON.stringify({
+			default_time_range: defaultTimeRange,
+			theme: theme
+		})
+	});
+}
+
+// Metrics API calls
+export async function getServerMetrics(serverId, params = {}) {
+	const queryParams = new URLSearchParams();
+	if (params.start) queryParams.append('start', params.start);
+	if (params.end) queryParams.append('end', params.end);
+	if (params.interval) queryParams.append('interval', params.interval);
+
+	const query = queryParams.toString();
+	return apiRequest(`/servers/${serverId}/metrics${query ? '?' + query : ''}`);
+}
