@@ -16,28 +16,57 @@ func GetMetrics(c *gin.Context) {
 	startStr := c.DefaultQuery("start", "")
 	endStr := c.DefaultQuery("end", "")
 	interval := c.DefaultQuery("interval", "")
+	timeRange := c.DefaultQuery("time_range", "")
 
 	// Default to last hour if no time range specified
 	var start, end time.Time
 	var err error
 
-	if endStr == "" {
+	// If time_range is provided, calculate start/end and map to interval
+	if timeRange != "" {
 		end = time.Now()
-	} else {
-		end, err = parseTime(endStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end time format. Use RFC3339 or Unix timestamp"})
+
+		// Map time_range to duration and interval
+		switch timeRange {
+		case "1h":
+			start = end.Add(-1 * time.Hour)
+			interval = "" // Raw data (every 30s) - 120 points
+		case "12h":
+			start = end.Add(-12 * time.Hour)
+			interval = "10m" // Continuous aggregate 10min - 72 points
+		case "24h":
+			start = end.Add(-24 * time.Hour)
+			interval = "15m" // Continuous aggregate 15min - 96 points
+		case "7d":
+			start = end.Add(-7 * 24 * time.Hour)
+			interval = "2h" // Continuous aggregate 2h - 84 points
+		case "30d":
+			start = end.Add(-30 * 24 * time.Hour)
+			interval = "8h" // Continuous aggregate 8h - 90 points
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time_range. Valid values: 1h, 12h, 24h, 7d, 30d"})
 			return
 		}
-	}
-
-	if startStr == "" {
-		start = end.Add(-1 * time.Hour) // Default: last hour
 	} else {
-		start, err = parseTime(startStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start time format. Use RFC3339 or Unix timestamp"})
-			return
+		// Legacy behavior: use start/end directly
+		if endStr == "" {
+			end = time.Now()
+		} else {
+			end, err = parseTime(endStr)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end time format. Use RFC3339 or Unix timestamp"})
+				return
+			}
+		}
+
+		if startStr == "" {
+			start = end.Add(-1 * time.Hour) // Default: last hour
+		} else {
+			start, err = parseTime(startStr)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start time format. Use RFC3339 or Unix timestamp"})
+				return
+			}
 		}
 	}
 
@@ -66,12 +95,13 @@ func GetMetrics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"server_id": serverID,
-		"start":     start.Format(time.RFC3339),
-		"end":       end.Format(time.RFC3339),
-		"interval":  interval,
-		"count":     len(metrics),
-		"metrics":   metrics,
+		"server_id":  serverID,
+		"start":      start.Format(time.RFC3339),
+		"end":        end.Format(time.RFC3339),
+		"time_range": timeRange,
+		"interval":   interval,
+		"count":      len(metrics),
+		"metrics":    metrics,
 	})
 }
 

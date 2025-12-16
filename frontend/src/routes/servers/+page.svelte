@@ -29,12 +29,11 @@
 
 		eventSource.addEventListener('connected', (e) => {
 			const data = JSON.parse(e.data);
-			console.log('SSE connected:', data);
+			// SSE connection established
 		});
 
 		eventSource.addEventListener('server_update', (e) => {
 			const update = JSON.parse(e.data);
-			console.log('Server update received:', update);
 
 			// Find and update the server in the list
 			const serverIndex = servers.findIndex((s) => s.id === update.id);
@@ -49,7 +48,6 @@
 					last_seen: update.last_seen
 				};
 				servers = [...servers]; // Trigger reactivity
-				console.log('Server updated in UI:', servers[serverIndex]);
 			}
 		});
 

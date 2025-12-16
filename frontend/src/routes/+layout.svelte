@@ -1,7 +1,10 @@
 <script lang="ts">
-	import './layout.css';
+	import '../app.css';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 
 	const { children } = $props();
 </script>
 
-{@render children()}
+<Tooltip.Provider>
+	{@render children()}
+</Tooltip.Provider>

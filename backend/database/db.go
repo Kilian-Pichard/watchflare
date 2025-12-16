@@ -44,17 +44,42 @@ func Connect() error {
 		log.Println("TimescaleDB extension enabled")
 	}
 
-	// Auto-migrate models
+	// Auto-migrate models (excluding Metric - managed by TimescaleDB migrations)
 	err = DB.AutoMigrate(
 		&models.User{},
 		&models.Server{},
-		&models.Metric{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	log.Println("Database migrations completed")
+
+	// Create metrics table manually (since it's excluded from AutoMigrate due to TimescaleDB compression)
+	err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS metrics (
+			id SERIAL PRIMARY KEY,
+			server_id CHAR(36) NOT NULL,
+			timestamp TIMESTAMPTZ NOT NULL,
+			cpu_usage_percent DOUBLE PRECISION,
+			memory_total_bytes BIGINT,
+			memory_used_bytes BIGINT,
+			memory_available_bytes BIGINT,
+			load_avg1_min DOUBLE PRECISION,
+			load_avg5_min DOUBLE PRECISION,
+			load_avg15_min DOUBLE PRECISION,
+			disk_total_bytes BIGINT,
+			disk_used_bytes BIGINT,
+			uptime_seconds BIGINT,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`).Error
+	if err != nil {
+		log.Printf("Warning: Failed to create metrics table (may already exist): %v", err)
+	} else {
+		log.Println("Metrics table created/verified")
+	}
 
 	// Convert metrics table to TimescaleDB hypertable
 	// This should only be done once, TimescaleDB will handle it gracefully if already a hypertable
@@ -86,6 +111,30 @@ func Connect() error {
 		log.Println("TimescaleDB retention policy added (30 days)")
 	}
 
+	// Run continuous aggregates migration
+	if err := RunContinuousAggregatesMigration(); err != nil {
+		log.Printf("Warning: Failed to run continuous aggregates migration: %v", err)
+	}
+
+	return nil
+}
+
+// RunContinuousAggregatesMigration runs the continuous aggregates migration
+func RunContinuousAggregatesMigration() error {
+	log.Println("Running continuous aggregates migration...")
+
+	// Read migration file
+	migrationSQL, err := os.ReadFile("database/migrations/001_continuous_aggregates.sql")
+	if err != nil {
+		return fmt.Errorf("failed to read migration file: %w", err)
+	}
+
+	// Execute migration
+	if err := DB.Exec(string(migrationSQL)).Error; err != nil {
+		return fmt.Errorf("failed to execute migration: %w", err)
+	}
+
+	log.Println("✓ Continuous aggregates migration completed successfully")
 	return nil
 }
 

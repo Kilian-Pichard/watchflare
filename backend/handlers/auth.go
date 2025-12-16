@@ -48,14 +48,15 @@ func Register(c *gin.Context) {
 	}
 
 	// Set JWT token in HttpOnly cookie (auto-login after registration)
-	c.SetSameSite(http.SameSiteLaxMode)
+	// For localhost development, use default SameSite (browser will use Lax)
+	// This works because localhost ports are treated specially by browsers
 	c.SetCookie(
 		"jwt_token",           // name
 		token,                 // value
 		60*60*24*7,           // maxAge (7 days in seconds)
 		"/",                   // path
-		"",                    // domain (empty = current domain)
-		false,                 // secure (set to true in production with HTTPS)
+		"localhost",           // domain (localhost for cross-port cookies)
+		false,                 // secure (false for development)
 		true,                  // httpOnly
 	)
 
@@ -80,14 +81,15 @@ func Login(c *gin.Context) {
 	}
 
 	// Set JWT token in HttpOnly cookie
-	c.SetSameSite(http.SameSiteLaxMode)
+	// For localhost development, use default SameSite (browser will use Lax)
+	// This works because localhost ports are treated specially by browsers
 	c.SetCookie(
 		"jwt_token",           // name
 		token,                 // value
 		60*60*24*7,           // maxAge (7 days in seconds)
 		"/",                   // path
-		"",                    // domain (empty = current domain)
-		false,                 // secure (set to true in production with HTTPS)
+		"localhost",           // domain (localhost for cross-port cookies)
+		false,                 // secure (false for development)
 		true,                  // httpOnly
 	)
 
@@ -185,7 +187,7 @@ func UpdatePreferences(c *gin.Context) {
 	}
 
 	// Validate time range
-	validTimeRanges := []string{"1h", "6h", "24h", "7d", "30d"}
+	validTimeRanges := []string{"1h", "12h", "24h", "7d", "30d"}
 	if req.DefaultTimeRange != "" {
 		valid := false
 		for _, tr := range validTimeRanges {
@@ -195,7 +197,7 @@ func UpdatePreferences(c *gin.Context) {
 			}
 		}
 		if !valid {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time range. Valid values: 1h, 6h, 24h, 7d, 30d"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time range. Valid values: 1h, 12h, 24h, 7d, 30d"})
 			return
 		}
 	}

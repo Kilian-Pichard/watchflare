@@ -35,11 +35,11 @@ async function apiRequest(endpoint, options = {}) {
 			if (setupRequired) {
 				// No users exist, redirect to registration
 				window.location.href = '/register';
-				return; // Don't throw error, just redirect
+				throw new Error('Redirecting to registration');
 			} else {
 				// Users exist but not authenticated, redirect to login
 				window.location.href = '/login';
-				return; // Don't throw error, just redirect
+				throw new Error('Redirecting to login');
 			}
 		}
 		throw new Error(data.error || 'API request failed');
@@ -149,9 +149,17 @@ export async function updatePreferences(defaultTimeRange, theme) {
 // Metrics API calls
 export async function getServerMetrics(serverId, params = {}) {
 	const queryParams = new URLSearchParams();
-	if (params.start) queryParams.append('start', params.start);
-	if (params.end) queryParams.append('end', params.end);
-	if (params.interval) queryParams.append('interval', params.interval);
+
+	// Support new time_range parameter (1h, 12h, 24h, 7d, 30d)
+	// Backend handles start/end/interval calculation automatically
+	if (params.time_range) {
+		queryParams.append('time_range', params.time_range);
+	} else {
+		// Legacy support: manual start/end/interval
+		if (params.start) queryParams.append('start', params.start);
+		if (params.end) queryParams.append('end', params.end);
+		if (params.interval) queryParams.append('interval', params.interval);
+	}
 
 	const query = queryParams.toString();
 	return apiRequest(`/servers/${serverId}/metrics${query ? '?' + query : ''}`);

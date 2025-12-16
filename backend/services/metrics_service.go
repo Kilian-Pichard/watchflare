@@ -77,32 +77,32 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 		return results, nil
 	}
 
-	// Use TimescaleDB time_bucket for aggregation
-	bucketInterval, err := parseInterval(params.Interval)
+	// Use pre-calculated continuous aggregates for better performance
+	tableName, err := getContinuousAggregateTable(params.Interval)
 	if err != nil {
 		return nil, err
 	}
 
-	query := `
+	// Query from the appropriate continuous aggregate view
+	query := fmt.Sprintf(`
 		SELECT
-			time_bucket($1, timestamp) AS timestamp,
-			AVG(cpu_usage_percent) AS cpu_usage_percent,
-			CAST(AVG(memory_total_bytes) AS BIGINT) AS memory_total_bytes,
-			CAST(AVG(memory_used_bytes) AS BIGINT) AS memory_used_bytes,
-			CAST(AVG(memory_available_bytes) AS BIGINT) AS memory_available_bytes,
-			AVG(load_avg1_min) AS load_avg_1min,
-			AVG(load_avg5_min) AS load_avg_5min,
-			AVG(load_avg15_min) AS load_avg_15min,
-			CAST(AVG(disk_total_bytes) AS BIGINT) AS disk_total_bytes,
-			CAST(AVG(disk_used_bytes) AS BIGINT) AS disk_used_bytes,
-			CAST(AVG(uptime_seconds) AS BIGINT) AS uptime_seconds
-		FROM metrics
-		WHERE server_id = $2 AND timestamp >= $3 AND timestamp <= $4
-		GROUP BY time_bucket($1, timestamp)
-		ORDER BY timestamp ASC
-	`
+			bucket AS timestamp,
+			cpu_usage_percent,
+			CAST(memory_total_bytes AS BIGINT) AS memory_total_bytes,
+			CAST(memory_used_bytes AS BIGINT) AS memory_used_bytes,
+			CAST(memory_available_bytes AS BIGINT) AS memory_available_bytes,
+			load_avg1_min AS load_avg_1min,
+			load_avg5_min AS load_avg_5min,
+			load_avg15_min AS load_avg_15min,
+			CAST(disk_total_bytes AS BIGINT) AS disk_total_bytes,
+			CAST(disk_used_bytes AS BIGINT) AS disk_used_bytes,
+			CAST(uptime_seconds AS BIGINT) AS uptime_seconds
+		FROM %s
+		WHERE server_id = $1 AND bucket >= $2 AND bucket <= $3
+		ORDER BY bucket ASC
+	`, tableName)
 
-	if err := database.DB.Raw(query, bucketInterval, params.ServerID, params.Start, params.End).
+	if err := database.DB.Raw(query, params.ServerID, params.Start, params.End).
 		Scan(&results).Error; err != nil {
 		return nil, err
 	}
@@ -110,23 +110,21 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 	return results, nil
 }
 
-// parseInterval converts interval string (e.g., "1m", "5m", "1h") to PostgreSQL interval format
-func parseInterval(interval string) (string, error) {
-	validIntervals := map[string]string{
-		"1m":  "1 minute",
-		"5m":  "5 minutes",
-		"15m": "15 minutes",
-		"30m": "30 minutes",
-		"1h":  "1 hour",
-		"6h":  "6 hours",
-		"12h": "12 hours",
-		"1d":  "1 day",
+// getContinuousAggregateTable returns the appropriate continuous aggregate table for the given interval
+func getContinuousAggregateTable(interval string) (string, error) {
+	// Map intervals to their continuous aggregate views
+	aggregateTables := map[string]string{
+		"10m": "metrics_10min", // Vue 12h
+		"15m": "metrics_15min", // Vue 24h
+		"2h":  "metrics_2h",    // Vue 7j
+		"8h":  "metrics_8h",    // Vue 30j
 	}
 
-	pgInterval, ok := validIntervals[interval]
+	tableName, ok := aggregateTables[interval]
 	if !ok {
-		return "", fmt.Errorf("invalid interval: %s. Valid intervals: 1m, 5m, 15m, 30m, 1h, 6h, 12h, 1d", interval)
+		return "", fmt.Errorf("invalid interval: %s. Valid intervals: 10m, 15m, 2h, 8h", interval)
 	}
 
-	return pgInterval, nil
+	return tableName, nil
 }
+

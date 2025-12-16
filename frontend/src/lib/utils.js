@@ -8,7 +8,7 @@ export function cn(...inputs) {
 // Time range utilities
 export const TIME_RANGES = [
 	{ value: '1h', label: '1 Hour', seconds: 3600 },
-	{ value: '6h', label: '6 Hours', seconds: 21600 },
+	{ value: '12h', label: '12 Hours', seconds: 43200 },
 	{ value: '24h', label: '24 Hours', seconds: 86400 },
 	{ value: '7d', label: '7 Days', seconds: 604800 },
 	{ value: '30d', label: '30 Days', seconds: 2592000 }
@@ -29,11 +29,11 @@ export function getTimeRangeTimestamps(timeRange) {
 
 export function getIntervalForTimeRange(timeRange) {
 	const intervals = {
-		'1h': '', // No aggregation - raw data
-		'6h': '5m',
-		'24h': '15m',
-		'7d': '1h',
-		'30d': '6h'
+		'1h': '',      // Raw data (every 30s) - 120 points
+		'12h': '10m',  // Continuous aggregate 10min - 72 points
+		'24h': '15m',  // Continuous aggregate 15min - 96 points
+		'7d': '2h',    // Continuous aggregate 2h - 84 points
+		'30d': '8h'    // Continuous aggregate 8h - 90 points
 	};
 	return intervals[timeRange] || '';
 }

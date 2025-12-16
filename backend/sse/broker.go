@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 // Event represents a server event
@@ -38,6 +39,23 @@ type MetricsUpdate struct {
 	DiskTotalBytes       uint64  `json:"disk_total_bytes"`
 	DiskUsedBytes        uint64  `json:"disk_used_bytes"`
 	UptimeSeconds        uint64  `json:"uptime_seconds"`
+}
+
+// MetricsUpdateMinified represents a minified metrics update for SSE (reduces bandwidth)
+// Format: {"s":"srv1","t":1702741200,"c":22.5,"mu":4294967296,"mt":8589934592,...}
+type MetricsUpdateMinified struct {
+	ServerID         string  `json:"s"`  // server_id
+	Timestamp        int64   `json:"t"`  // Unix timestamp
+	CPU              float64 `json:"c"`  // cpu_usage_percent
+	MemoryUsed       uint64  `json:"mu"` // memory_used_bytes
+	MemoryTotal      uint64  `json:"mt"` // memory_total_bytes
+	MemoryAvailable  uint64  `json:"ma"` // memory_available_bytes
+	DiskUsed         uint64  `json:"du"` // disk_used_bytes
+	DiskTotal        uint64  `json:"dt"` // disk_total_bytes
+	LoadAvg1         float64 `json:"l1"` // load_avg_1min
+	LoadAvg5         float64 `json:"l5"` // load_avg_5min
+	LoadAvg15        float64 `json:"l15"` // load_avg_15min
+	Uptime           uint64  `json:"u"`  // uptime_seconds
 }
 
 // Client represents an SSE client connection
@@ -122,13 +140,40 @@ func (b *Broker) BroadcastServerUpdate(update ServerUpdate) {
 	b.Broadcast(event)
 }
 
-// BroadcastMetricsUpdate sends a metrics update event to all clients
+// BroadcastMetricsUpdate sends a metrics update event to all clients (minified format)
 func (b *Broker) BroadcastMetricsUpdate(update MetricsUpdate) {
+	// Convert to minified format for bandwidth optimization
+	minified := toMinifiedMetrics(update)
+
 	event := Event{
 		Type: "metrics_update",
-		Data: update,
+		Data: minified,
 	}
 	b.Broadcast(event)
+}
+
+// toMinifiedMetrics converts MetricsUpdate to minified format
+func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
+	// Parse timestamp string to Unix timestamp
+	var timestamp int64
+	if t, err := time.Parse(time.RFC3339, update.Timestamp); err == nil {
+		timestamp = t.Unix()
+	}
+
+	return MetricsUpdateMinified{
+		ServerID:        update.ServerID,
+		Timestamp:       timestamp,
+		CPU:             update.CPUUsagePercent,
+		MemoryUsed:      update.MemoryUsedBytes,
+		MemoryTotal:     update.MemoryTotalBytes,
+		MemoryAvailable: update.MemoryAvailableBytes,
+		DiskUsed:        update.DiskUsedBytes,
+		DiskTotal:       update.DiskTotalBytes,
+		LoadAvg1:        update.LoadAvg1Min,
+		LoadAvg5:        update.LoadAvg5Min,
+		LoadAvg15:       update.LoadAvg15Min,
+		Uptime:          update.UptimeSeconds,
+	}
 }
 
 // FormatSSE formats an event as SSE protocol message

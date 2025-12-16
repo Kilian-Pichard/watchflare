@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { logout, getCurrentUser, listServers, getServerMetrics } from '$lib/api';
 	import { connectSSE } from '$lib/sse';
-	import { getTimeRangeTimestamps, getIntervalForTimeRange, formatBytes, formatPercent } from '$lib/utils';
+	import { formatBytes, formatPercent } from '$lib/utils';
 	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import CPUChart from '$lib/components/CPUChart.svelte';
@@ -69,6 +69,7 @@
 		});
 
 		// Convert to array and calculate averages
+		// Backend already aggregates the data based on the interval parameter
 		return Array.from(timestampMap.values())
 			.map((entry) => ({
 				timestamp: entry.timestamp,
@@ -98,8 +99,14 @@
 
 			// Load user preferences
 			const userData = await getCurrentUser();
+			if (!userData || !userData.user) {
+				console.error('No user data received');
+				return;
+			}
 			user = userData.user;
-			timeRange = user.default_time_range || '24h';
+			// Migrate old 6h preference to 12h
+			const userTimeRange = user.default_time_range || '24h';
+			timeRange = userTimeRange === '6h' ? '12h' : userTimeRange;
 
 			// Load servers
 			const serversData = await listServers();
@@ -113,21 +120,20 @@
 			await loadMetrics();
 		} catch (err) {
 			console.error('Failed to load data:', err);
+			// Error will trigger redirect in apiRequest
 		} finally {
 			loading = false;
 		}
 	}
 
 	async function loadMetrics() {
-		const { start, end } = getTimeRangeTimestamps(timeRange);
-		const interval = getIntervalForTimeRange(timeRange);
-
+		// Use time_range parameter - backend handles start/end/interval automatically
 		for (let i = 0; i < servers.length; i++) {
 			const server = servers[i];
 			if (server.server.status !== 'online') continue;
 
 			try {
-				const data = await getServerMetrics(server.server.id, { start, end, interval });
+				const data = await getServerMetrics(server.server.id, { time_range: timeRange });
 				servers[i].metrics = data.metrics || [];
 
 				// Set last metrics (most recent point)
@@ -249,6 +255,9 @@
 					value={stats.totalServers}
 					subtitle="{stats.onlineServers} online, {stats.offlineServers} offline"
 					icon="🖥️"
+					status={stats.offlineServers > 0
+						? { label: 'Issues', color: 'bg-[var(--warning)] text-white', dot: 'bg-[var(--warning)]' }
+						: { label: 'All Online', color: 'bg-[var(--success)] text-white', dot: 'bg-[var(--success)]' }}
 				/>
 
 				<!-- Average CPU -->
@@ -257,6 +266,7 @@
 					value={formatPercent(stats.avgCPU)}
 					subtitle="Across all servers"
 					icon="💻"
+					percentage={stats.avgCPU}
 				/>
 
 				<!-- Total Memory -->
@@ -265,6 +275,7 @@
 					value={formatBytes(stats.usedMemory)}
 					subtitle="of {formatBytes(stats.totalMemory)}"
 					icon="💾"
+					percentage={stats.totalMemory > 0 ? (stats.usedMemory / stats.totalMemory) * 100 : 0}
 				/>
 
 				<!-- Total Disk -->
@@ -273,26 +284,57 @@
 					value={formatBytes(stats.usedDisk)}
 					subtitle="of {formatBytes(stats.totalDisk)}"
 					icon="💿"
+					percentage={stats.totalDisk > 0 ? (stats.usedDisk / stats.totalDisk) * 100 : 0}
 				/>
 			</div>
 
 			<!-- Charts Section -->
 			<div class="grid gap-6 lg:grid-cols-2">
 				<!-- CPU Chart -->
-				<div class="rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
-					<h3 class="text-lg font-semibold mb-4">CPU Usage (Average)</h3>
+				<div
+					class="group rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-card to-card/80"
+				>
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-lg font-semibold flex items-center gap-2">
+							<div class="h-3 w-3 rounded-full bg-[var(--chart-1)]"></div>
+							CPU Usage (Average)
+						</h3>
+						<span class="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted">
+							{formatPercent(stats.avgCPU)}
+						</span>
+					</div>
 					<CPUChart data={aggregatedChartData} />
 				</div>
 
 				<!-- Memory Chart -->
-				<div class="rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
-					<h3 class="text-lg font-semibold mb-4">Memory Usage (Total)</h3>
+				<div
+					class="group rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-card to-card/80"
+				>
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-lg font-semibold flex items-center gap-2">
+							<div class="h-3 w-3 rounded-full bg-[var(--chart-2)]"></div>
+							Memory Usage (Total)
+						</h3>
+						<span class="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted">
+							{formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)}
+						</span>
+					</div>
 					<MemoryChart data={aggregatedChartData} />
 				</div>
 
 				<!-- Disk Chart -->
-				<div class="rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-shadow lg:col-span-2">
-					<h3 class="text-lg font-semibold mb-4">Disk Usage (Total)</h3>
+				<div
+					class="group rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-card to-card/80 lg:col-span-2"
+				>
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-lg font-semibold flex items-center gap-2">
+							<div class="h-3 w-3 rounded-full bg-[var(--chart-3)]"></div>
+							Disk Usage (Total)
+						</h3>
+						<span class="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted">
+							{formatBytes(stats.usedDisk)} / {formatBytes(stats.totalDisk)}
+						</span>
+					</div>
 					<DiskChart data={aggregatedChartData} />
 				</div>
 			</div>
