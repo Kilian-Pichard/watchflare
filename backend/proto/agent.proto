@@ -27,6 +27,7 @@ message RegisterRequest {
   string platform_family = 7;       // "darwin", "linux", "windows"
   string architecture = 8;          // "arm64", "amd64"
   string kernel = 9;                // "24.6.0", "5.15.0-97-generic"
+  int64 timestamp = 10;             // Unix timestamp in seconds (for anti-replay)
 }
 
 // RegisterResponse is sent back after successful registration
@@ -43,6 +44,7 @@ message HeartbeatRequest {
   string agent_key = 2;     // Authentication key
   string ip_address_v4 = 3; // Current IPv4 (may change)
   string ip_address_v6 = 4; // Current IPv6 (may change)
+  int64 timestamp = 5;      // Unix timestamp in seconds (for anti-replay)
 }
 
 // HeartbeatResponse acknowledges the heartbeat
@@ -71,6 +73,7 @@ message MetricsRequest {
   string agent_id = 1;   // UUID of the server
   string agent_key = 2;  // Authentication key
   Metrics metrics = 3;   // System metrics
+  int64 timestamp = 4;   // Unix timestamp in seconds (for anti-replay)
 }
 
 // MetricsResponse acknowledges metric reception

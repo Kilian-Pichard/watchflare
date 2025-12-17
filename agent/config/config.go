@@ -55,6 +55,10 @@ type Config struct {
 	AgentKey         string `toml:"agent_key"`
 	HeartbeatInterval int   `toml:"heartbeat_interval"` // in seconds, default 30
 	MetricsInterval   int   `toml:"metrics_interval"`   // in seconds, default 30
+
+	// TLS Configuration
+	CACertFile string `toml:"ca_cert_file"` // Path to CA certificate for TLS
+	ServerName string `toml:"server_name"`   // Server name for certificate validation
 }
 
 // SetDefaults sets default values for optional configuration fields

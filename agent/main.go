@@ -77,8 +77,9 @@ func register(token, serverHost, serverPort string) (*config.Config, error) {
 		return nil, fmt.Errorf("failed to collect system info: %w", err)
 	}
 
-	// Connect to backend
-	grpcClient, err := client.New(serverHost, serverPort)
+	// Connect to backend (no TLS during registration, use defaults)
+	// TLS config can be added manually to agent.conf after registration
+	grpcClient, err := client.New(serverHost, serverPort, "", "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to backend: %w", err)
 	}
@@ -100,7 +101,7 @@ func register(token, serverHost, serverPort string) (*config.Config, error) {
 		return nil, err
 	}
 
-	// Save configuration
+	// Save configuration (TLS fields will be empty initially)
 	cfg := &config.Config{
 		ServerHost: serverHost,
 		ServerPort: serverPort,
@@ -131,12 +132,21 @@ func runHeartbeatLoop(cfg *config.Config) error {
 	metricsTicker := time.NewTicker(metricsInterval)
 	defer metricsTicker.Stop()
 
-	// Connect to backend
-	grpcClient, err := client.New(cfg.ServerHost, cfg.ServerPort)
+	// Connect to backend with TLS if configured
+	grpcClient, err := client.New(cfg.ServerHost, cfg.ServerPort, cfg.CACertFile, cfg.ServerName)
 	if err != nil {
 		return fmt.Errorf("failed to connect to backend: %w", err)
 	}
 	defer grpcClient.Close()
+
+	// Log security configuration
+	if cfg.CACertFile != "" {
+		log.Printf("gRPC TLS enabled with CA cert: %s", cfg.CACertFile)
+		log.Printf("gRPC server name for cert validation: %s", cfg.ServerName)
+	} else {
+		log.Printf("Warning: gRPC TLS is disabled (insecure mode)")
+	}
+	log.Printf("gRPC HMAC authentication enabled (auto)")
 
 	// Send initial heartbeat and metrics immediately
 	if err := sendHeartbeat(grpcClient, cfg); err != nil {

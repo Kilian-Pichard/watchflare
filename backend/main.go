@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"log"
 	"net"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 func main() {
@@ -46,7 +48,7 @@ func main() {
 	// Start gRPC server
 	go func() {
 		defer wg.Done()
-		if err := startGRPCServer(config.AppConfig.GRPCPort); err != nil {
+		if err := startGRPCServer(config.AppConfig.GRPCPort, config.AppConfig); err != nil {
 			log.Fatalf("Failed to start gRPC server: %v", err)
 		}
 	}()
@@ -118,13 +120,45 @@ func setupRouter() *gin.Engine {
 }
 
 // startGRPCServer initializes and starts the gRPC server
-func startGRPCServer(port string) error {
+func startGRPCServer(port string, cfg *config.Config) error {
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		return err
 	}
 
-	grpcServer := grpc.NewServer()
+	var opts []grpc.ServerOption
+
+	// TLS configuration
+	if cfg.GRPCEnableTLS {
+		cert, err := tls.LoadX509KeyPair(cfg.GRPCCertFile, cfg.GRPCKeyFile)
+		if err != nil {
+			return err
+		}
+
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			ClientAuth:   tls.NoClientCert, // No mTLS, only server cert
+		}
+
+		creds := credentials.NewTLS(tlsConfig)
+		opts = append(opts, grpc.Creds(creds))
+		log.Printf("gRPC TLS enabled with cert: %s", cfg.GRPCCertFile)
+	} else {
+		log.Printf("Warning: gRPC TLS is disabled (insecure mode)")
+	}
+
+	// Authentication interceptor
+	opts = append(opts, grpc.UnaryInterceptor(
+		grpcservice.AuthInterceptor(cfg.GRPCRequireHMAC, cfg.GRPCTimestampWindow),
+	))
+
+	if cfg.GRPCRequireHMAC {
+		log.Printf("gRPC HMAC validation enabled (timestamp window: %ds)", cfg.GRPCTimestampWindow)
+	} else {
+		log.Printf("Warning: gRPC HMAC validation is optional (backward compatibility mode)")
+	}
+
+	grpcServer := grpc.NewServer(opts...)
 	agentService := grpcservice.NewAgentServer()
 	pb.RegisterAgentServiceServer(grpcServer, agentService)
 
