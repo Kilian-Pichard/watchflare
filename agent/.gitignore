@@ -1,7 +1,19 @@
-# Binaries
-watchflare-agent
-watchflare-agent-*
-agent
+# Go builds
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
 
-# Config (generated at runtime)
-/etc/watchflare/
+# Compiled binaries
+watchflare
+watchflare-agent
+
+# Test coverage
+*.out
+coverage.txt
+
+# Temporary files
+/tmp/
+/temp/

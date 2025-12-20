@@ -5,6 +5,8 @@
 *.so
 *.dylib
 *.test
+backend
+watchflare-backend
 
 # Database
 *.db

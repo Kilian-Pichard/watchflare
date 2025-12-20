@@ -20,15 +20,35 @@ func ComputeHMAC(agentKey string, timestamp int64, agentID string, message proto
 		return "", fmt.Errorf("failed to marshal message: %w", err)
 	}
 
-	// Build the data to sign: timestamp + agent_id + message
-	data := fmt.Sprintf("%d%s", timestamp, agentID)
-	data += string(messageBytes)
-
-	// Compute HMAC-SHA256
+	// Build the data to sign with proper delimiters to prevent collision attacks
+	// Format: timestamp (8 bytes binary) + "|" + agentID + "|" + message
 	h := hmac.New(sha256.New, []byte(agentKey))
-	h.Write([]byte(data))
-	signature := h.Sum(nil)
 
+	// Write timestamp as binary (8 bytes, big-endian)
+	timestampBytes := make([]byte, 8)
+	timestampBytes[0] = byte(timestamp >> 56)
+	timestampBytes[1] = byte(timestamp >> 48)
+	timestampBytes[2] = byte(timestamp >> 40)
+	timestampBytes[3] = byte(timestamp >> 32)
+	timestampBytes[4] = byte(timestamp >> 24)
+	timestampBytes[5] = byte(timestamp >> 16)
+	timestampBytes[6] = byte(timestamp >> 8)
+	timestampBytes[7] = byte(timestamp)
+	h.Write(timestampBytes)
+
+	// Write delimiter
+	h.Write([]byte("|"))
+
+	// Write agentID
+	h.Write([]byte(agentID))
+
+	// Write delimiter
+	h.Write([]byte("|"))
+
+	// Write message
+	h.Write(messageBytes)
+
+	signature := h.Sum(nil)
 	return hex.EncodeToString(signature), nil
 }
 

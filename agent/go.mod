@@ -1,12 +1,13 @@
-module watchflare/agent
+module watchflare
 
 go 1.25.0
 
 require (
-	github.com/BurntSushi/toml v1.5.0
+	github.com/BurntSushi/toml v1.6.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.11
+	watchflare/shared v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -22,3 +23,5 @@ require (
 	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
 )
+
+replace watchflare/shared => ../shared

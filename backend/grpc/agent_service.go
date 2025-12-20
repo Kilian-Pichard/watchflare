@@ -6,11 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
+	"watchflare/backend/cache"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
-	pb "watchflare/backend/proto"
+	"watchflare/backend/pki"
+	pb "watchflare/shared/proto"
 	"watchflare/backend/sse"
 
 	"gorm.io/gorm"
@@ -19,6 +22,14 @@ import (
 // AgentServer implements the AgentService gRPC server
 type AgentServer struct {
 	pb.UnimplementedAgentServiceServer
+}
+
+// Global PKI instance (set during startup)
+var pkiInstance *pki.PKI
+
+// SetPKI stores the PKI instance for use in gRPC handlers
+func SetPKI(p *pki.PKI) {
+	pkiInstance = p
 }
 
 // NewAgentServer creates a new AgentServer instance
@@ -110,17 +121,25 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		LastSeen:         now.Format(time.RFC3339),
 	})
 
+	// Get CA certificate for agent TLS verification
+	caCertPEM, err := pkiInstance.GetCACertPEM()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CA certificate: %w", err)
+	}
+
 	return &pb.RegisterResponse{
-		Success:  true,
-		Message:  "Server registered successfully",
-		AgentId:  server.AgentID,
-		AgentKey: server.AgentKey,
+		Success:    true,
+		Message:    "Server registered successfully",
+		AgentId:    server.AgentID,
+		AgentKey:   server.AgentKey,
+		CaCert:     string(caCertPEM),
+		ServerName: "watchflare",
 	}, nil
 }
 
 // Heartbeat handles periodic heartbeats from agents
 func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
-	// Find server by agent ID and verify agent key
+	// Verify agent credentials (read-only DB query)
 	var server models.Server
 	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
 	if result.Error != nil {
@@ -133,20 +152,11 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 		return nil, result.Error
 	}
 
-	// Update last seen and status
-	now := time.Now()
-	updates := map[string]interface{}{
-		"last_seen":     &now,
-		"status":        "online",
-		"ip_address_v4": req.IpAddressV4,
-		"ip_address_v6": req.IpAddressV6,
-	}
+	// Update heartbeat cache (in-memory, no DB write)
+	heartbeatCache := cache.GetCache()
+	heartbeatCache.Update(req.AgentId, req.IpAddressV4, req.IpAddressV6)
 
-	if err := database.DB.Model(&server).Updates(updates).Error; err != nil {
-		return nil, err
-	}
-
-	// Broadcast SSE event for heartbeat
+	// Broadcast SSE event for real-time dashboard
 	broker := sse.GetBroker()
 	configuredIP := ""
 	if server.ConfiguredIP != nil {
@@ -159,7 +169,7 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 		IPv6Address:      req.IpAddressV6,
 		ConfiguredIP:     configuredIP,
 		IgnoreIPMismatch: server.IgnoreIPMismatch,
-		LastSeen:         now.Format(time.RFC3339),
+		LastSeen:         time.Now().Format(time.RFC3339),
 	})
 
 	return &pb.HeartbeatResponse{
@@ -223,6 +233,56 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 	return &pb.MetricsResponse{
 		Success: true,
 		Message: "Metrics received successfully",
+	}, nil
+}
+
+// ReportDroppedMetrics handles reports of metrics that were dropped by agents
+func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.DroppedMetricsReport) (*pb.DroppedMetricsResponse, error) {
+	// Verify agent credentials
+	var server models.Server
+	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return &pb.DroppedMetricsResponse{
+				Success: false,
+				Message: "Invalid agent credentials",
+			}, nil
+		}
+		return nil, result.Error
+	}
+
+	// Insert dropped metrics report into database
+	err := database.DB.Exec(`
+		INSERT INTO dropped_metrics
+		(agent_id, count, first_dropped_at, last_dropped_at, reason)
+		VALUES ($1, $2, $3, $4, $5)
+	`,
+		server.ID,
+		req.Count,
+		time.Unix(req.FirstDroppedAt, 0),
+		time.Unix(req.LastDroppedAt, 0),
+		req.Reason,
+	).Error
+
+	if err != nil {
+		log.Printf("Error: Failed to insert dropped metrics report: %v", err)
+		return nil, fmt.Errorf("failed to save dropped metrics report: %w", err)
+	}
+
+	// Calculate downtime duration for logging
+	downtimeDuration := time.Unix(req.LastDroppedAt, 0).Sub(time.Unix(req.FirstDroppedAt, 0))
+
+	log.Printf("⚠️  Agent %s (%s) reported %d dropped metrics (downtime: %v, reason: %s)",
+		server.Name,
+		req.AgentId,
+		req.Count,
+		downtimeDuration.Round(time.Second),
+		req.Reason,
+	)
+
+	return &pb.DroppedMetricsResponse{
+		Success: true,
+		Message: "Dropped metrics report received",
 	}, nil
 }
 

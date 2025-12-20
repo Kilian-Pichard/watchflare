@@ -164,3 +164,8 @@ export async function getServerMetrics(serverId, params = {}) {
 	const query = queryParams.toString();
 	return apiRequest(`/servers/${serverId}/metrics${query ? '?' + query : ''}`);
 }
+
+// Get dropped metrics summary for the last 24 hours
+export async function getDroppedMetrics() {
+	return apiRequest('/servers/dropped-metrics');
+}

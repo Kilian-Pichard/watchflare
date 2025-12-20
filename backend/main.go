@@ -1,17 +1,18 @@
 package main
 
 import (
-	"crypto/tls"
 	"log"
 	"net"
 	"sync"
+	"time"
+	"watchflare/backend/cache"
 	"watchflare/backend/config"
 	"watchflare/backend/database"
 	grpcservice "watchflare/backend/grpc"
 	"watchflare/backend/handlers"
 	"watchflare/backend/middleware"
-	pb "watchflare/backend/proto"
-	"watchflare/backend/scheduler"
+	"watchflare/backend/pki"
+	pb "watchflare/shared/proto"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -28,8 +29,37 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	// Start offline checker
-	scheduler.StartOfflineChecker()
+	// Initialize PKI (auto-generate or validate custom certs)
+	pkiConfig := &pki.Config{
+		Mode:   pki.Mode(config.AppConfig.TLSMode),
+		PKIDir: config.AppConfig.TLSPKIDir,
+
+		// Custom mode fields
+		CertFile: config.AppConfig.TLSCertFile,
+		KeyFile:  config.AppConfig.TLSKeyFile,
+		CAFile:   config.AppConfig.TLSCAFile,
+	}
+
+	pkiInstance, err := pki.New(pkiConfig)
+	if err != nil {
+		log.Fatalf("Failed to initialize PKI: %v", err)
+	}
+
+	if err := pkiInstance.Initialize(); err != nil {
+		log.Fatalf("Failed to initialize PKI: %v", err)
+	}
+
+	// Store PKI instance in context for gRPC server and handlers
+	grpcservice.SetPKI(pkiInstance)
+
+	// Start heartbeat cache workers
+	// Sync worker: writes cache to DB every 5 minutes
+	syncWorker := cache.NewSyncWorker(5 * time.Minute)
+	go syncWorker.Start()
+
+	// Stale checker: marks agents offline if no heartbeat for 15s (3x 5s interval)
+	staleChecker := cache.NewStaleChecker(10*time.Second, 15*time.Second)
+	go staleChecker.Start()
 
 	// Use WaitGroup to run both servers concurrently
 	var wg sync.WaitGroup
@@ -48,7 +78,7 @@ func main() {
 	// Start gRPC server
 	go func() {
 		defer wg.Done()
-		if err := startGRPCServer(config.AppConfig.GRPCPort, config.AppConfig); err != nil {
+		if err := startGRPCServer(config.AppConfig.GRPCPort, config.AppConfig, pkiInstance); err != nil {
 			log.Fatalf("Failed to start gRPC server: %v", err)
 		}
 	}()
@@ -114,13 +144,14 @@ func setupRouter() *gin.Engine {
 		serverGroup.POST("/:id/regenerate-token", handlers.RegenerateToken)
 		serverGroup.DELETE("/:id", handlers.DeleteServer)
 		serverGroup.GET("/events", handlers.ServerEvents)
+		serverGroup.GET("/dropped-metrics", handlers.GetDroppedMetrics)
 	}
 
 	return router
 }
 
 // startGRPCServer initializes and starts the gRPC server
-func startGRPCServer(port string, cfg *config.Config) error {
+func startGRPCServer(port string, cfg *config.Config, pkiInstance *pki.PKI) error {
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		return err
@@ -128,35 +159,22 @@ func startGRPCServer(port string, cfg *config.Config) error {
 
 	var opts []grpc.ServerOption
 
-	// TLS configuration
-	if cfg.GRPCEnableTLS {
-		cert, err := tls.LoadX509KeyPair(cfg.GRPCCertFile, cfg.GRPCKeyFile)
-		if err != nil {
-			return err
-		}
-
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			ClientAuth:   tls.NoClientCert, // No mTLS, only server cert
-		}
-
-		creds := credentials.NewTLS(tlsConfig)
-		opts = append(opts, grpc.Creds(creds))
-		log.Printf("gRPC TLS enabled with cert: %s", cfg.GRPCCertFile)
-	} else {
-		log.Printf("Warning: gRPC TLS is disabled (insecure mode)")
+	// TLS configuration (mandatory)
+	tlsConfig, err := pkiInstance.GetTLSConfig()
+	if err != nil {
+		return err
 	}
 
-	// Authentication interceptor
+	creds := credentials.NewTLS(tlsConfig)
+	opts = append(opts, grpc.Creds(creds))
+	log.Printf("gRPC TLS enabled (TLS 1.3, mode: %s)", cfg.TLSMode)
+
+	// Authentication interceptor (HMAC mandatory)
 	opts = append(opts, grpc.UnaryInterceptor(
-		grpcservice.AuthInterceptor(cfg.GRPCRequireHMAC, cfg.GRPCTimestampWindow),
+		grpcservice.AuthInterceptor(cfg.GRPCTimestampWindow),
 	))
 
-	if cfg.GRPCRequireHMAC {
-		log.Printf("gRPC HMAC validation enabled (timestamp window: %ds)", cfg.GRPCTimestampWindow)
-	} else {
-		log.Printf("Warning: gRPC HMAC validation is optional (backward compatibility mode)")
-	}
+	log.Printf("gRPC HMAC validation enabled (timestamp window: %ds)", cfg.GRPCTimestampWindow)
 
 	grpcServer := grpc.NewServer(opts...)
 	agentService := grpcservice.NewAgentServer()

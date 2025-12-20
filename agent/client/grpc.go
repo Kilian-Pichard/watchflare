@@ -8,13 +8,12 @@ import (
 	"os"
 	"time"
 
-	"watchflare/agent/metrics"
-	pb "watchflare/agent/proto"
-	"watchflare/agent/security"
+	"watchflare/metrics"
+	"watchflare/security"
+	pb "watchflare/shared/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Client handles gRPC communication with the backend
@@ -25,38 +24,63 @@ type Client struct {
 	port   string
 }
 
-// New creates a new gRPC client with optional TLS support
+// New creates a new gRPC client with strict TLS verification
+// Requires a valid CA certificate file for TLS verification
 func New(host, port, caCertFile, serverName string) (*Client, error) {
 	addr := fmt.Sprintf("%s:%s", host, port)
 	var opts []grpc.DialOption
 
-	// TLS configuration if CA cert file is provided
-	if caCertFile != "" {
-		// Load CA certificate
-		caCert, err := os.ReadFile(caCertFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read CA certificate: %w", err)
-		}
-
-		// Create cert pool and add CA cert
-		certPool := x509.NewCertPool()
-		if !certPool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("failed to append CA certificate")
-		}
-
-		// Create TLS config
-		tlsConfig := &tls.Config{
-			RootCAs:    certPool,
-			ServerName: serverName, // For certificate verification
-		}
-
-		// Create TLS credentials
-		creds := credentials.NewTLS(tlsConfig)
-		opts = append(opts, grpc.WithTransportCredentials(creds))
-	} else {
-		// Fallback to insecure connection (backward compatibility)
-		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Load CA certificate (mandatory for TLS)
+	caCert, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA certificate: %w", err)
 	}
+
+	// Create cert pool and add CA cert
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to append CA certificate")
+	}
+
+	// Create TLS config with strict verification
+	tlsConfig := &tls.Config{
+		RootCAs:    certPool,
+		ServerName: serverName, // For SNI and certificate verification
+		MinVersion: tls.VersionTLS13,
+	}
+
+	// Create TLS credentials
+	creds := credentials.NewTLS(tlsConfig)
+	opts = append(opts, grpc.WithTransportCredentials(creds))
+
+	conn, err := grpc.Dial(addr, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to server: %w", err)
+	}
+
+	return &Client{
+		conn:   conn,
+		client: pb.NewAgentServiceClient(conn),
+		host:   host,
+		port:   port,
+	}, nil
+}
+
+// NewForRegistration creates a gRPC client for initial registration with permissive TLS
+// This allows the agent to connect without prior knowledge of the CA certificate
+// The CA cert will be received during registration and used for strict verification afterward
+func NewForRegistration(host, port string) (*Client, error) {
+	addr := fmt.Sprintf("%s:%s", host, port)
+
+	// Use permissive TLS for bootstrap (accepts any certificate)
+	// This is safe because registration requires a secret token as root of trust
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true, // Only for initial registration
+		MinVersion:         tls.VersionTLS13,
+	}
+
+	creds := credentials.NewTLS(tlsConfig)
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
 
 	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
@@ -76,8 +100,17 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
+// RegistrationResponse contains the result of a successful registration
+type RegistrationResponse struct {
+	AgentID    string
+	AgentKey   string
+	CACert     string // CA certificate in PEM format
+	ServerName string // Server name for TLS verification
+}
+
 // Register attempts to register the agent with the backend
-func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel string) (string, string, error) {
+// Returns registration credentials and TLS information
+func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel string) (*RegistrationResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -99,14 +132,41 @@ func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion
 
 	resp, err := c.client.RegisterServer(ctx, req)
 	if err != nil {
-		return "", "", fmt.Errorf("registration failed: %w", err)
+		return nil, fmt.Errorf("registration failed: %w", err)
 	}
 
 	if !resp.Success {
-		return "", "", fmt.Errorf("registration rejected: %s", resp.Message)
+		return nil, fmt.Errorf("registration rejected: %s", resp.Message)
 	}
 
-	return resp.AgentId, resp.AgentKey, nil
+	return &RegistrationResponse{
+		AgentID:    resp.AgentId,
+		AgentKey:   resp.AgentKey,
+		CACert:     resp.CaCert,
+		ServerName: resp.ServerName,
+	}, nil
+}
+
+// SaveCACertificate saves the CA certificate to disk
+// The directory will be created if it doesn't exist
+func SaveCACertificate(caCertPEM, filepath string) error {
+	// Create directory if it doesn't exist
+	dir := filepath[:len(filepath)-len("/ca.pem")]
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create PKI directory: %w", err)
+	}
+
+	// Write CA certificate with restricted permissions
+	if err := os.WriteFile(filepath, []byte(caCertPEM), 0644); err != nil {
+		return fmt.Errorf("failed to write CA certificate: %w", err)
+	}
+
+	return nil
+}
+
+// Heartbeat sends a simple heartbeat (wrapper for SendHeartbeat with empty IPs)
+func (c *Client) Heartbeat(agentID, agentKey string) error {
+	return c.SendHeartbeat(agentID, agentKey, "", "")
 }
 
 // SendHeartbeat sends a heartbeat to the backend
@@ -183,6 +243,42 @@ func (c *Client) SendMetrics(agentID, agentKey string, m *metrics.SystemMetrics)
 
 	if !resp.Success {
 		return fmt.Errorf("metrics rejected: %s", resp.Message)
+	}
+
+	return nil
+}
+
+// ReportDroppedMetrics reports metrics that were dropped after max retries
+func (c *Client) ReportDroppedMetrics(agentID, agentKey string, count int32, firstDroppedAt, lastDroppedAt int64, reason string) error {
+	timestamp := time.Now().Unix()
+
+	req := &pb.DroppedMetricsReport{
+		AgentId:        agentID,
+		AgentKey:       agentKey,
+		Timestamp:      timestamp,
+		Count:          count,
+		FirstDroppedAt: firstDroppedAt,
+		LastDroppedAt:  lastDroppedAt,
+		Reason:         reason,
+	}
+
+	// Attach HMAC authentication metadata
+	ctx := context.Background()
+	ctx, err := security.AttachAuthMetadata(ctx, agentID, agentKey, timestamp, req)
+	if err != nil {
+		return fmt.Errorf("failed to attach auth metadata: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	resp, err := c.client.ReportDroppedMetrics(ctx, req)
+	if err != nil {
+		return fmt.Errorf("report dropped metrics failed: %w", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("dropped metrics report rejected: %s", resp.Message)
 	}
 
 	return nil

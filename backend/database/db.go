@@ -1,6 +1,7 @@
 package database
 
 import (
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+//go:embed migrations/001_continuous_aggregates.sql
+var continuousAggregatesSQL string
+
+//go:embed migrations/002_dropped_metrics.sql
+var droppedMetricsSQL string
 
 var DB *gorm.DB
 
@@ -116,6 +123,11 @@ func Connect() error {
 		log.Printf("Warning: Failed to run continuous aggregates migration: %v", err)
 	}
 
+	// Run dropped metrics migration
+	if err := RunDroppedMetricsMigration(); err != nil {
+		log.Printf("Warning: Failed to run dropped metrics migration: %v", err)
+	}
+
 	return nil
 }
 
@@ -123,18 +135,25 @@ func Connect() error {
 func RunContinuousAggregatesMigration() error {
 	log.Println("Running continuous aggregates migration...")
 
-	// Read migration file
-	migrationSQL, err := os.ReadFile("database/migrations/001_continuous_aggregates.sql")
-	if err != nil {
-		return fmt.Errorf("failed to read migration file: %w", err)
-	}
-
-	// Execute migration
-	if err := DB.Exec(string(migrationSQL)).Error; err != nil {
+	// Execute migration (SQL embedded at compile time)
+	if err := DB.Exec(continuousAggregatesSQL).Error; err != nil {
 		return fmt.Errorf("failed to execute migration: %w", err)
 	}
 
 	log.Println("✓ Continuous aggregates migration completed successfully")
+	return nil
+}
+
+// RunDroppedMetricsMigration runs the dropped metrics migration
+func RunDroppedMetricsMigration() error {
+	log.Println("Running dropped metrics migration...")
+
+	// Execute migration (SQL embedded at compile time)
+	if err := DB.Exec(droppedMetricsSQL).Error; err != nil {
+		return fmt.Errorf("failed to execute migration: %w", err)
+	}
+
+	log.Println("✓ Dropped metrics migration completed successfully")
 	return nil
 }
 

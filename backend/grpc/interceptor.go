@@ -15,7 +15,8 @@ import (
 )
 
 // AuthInterceptor creates a gRPC unary interceptor for authentication and validation
-func AuthInterceptor(requireHMAC bool, timestampWindow int) grpc.UnaryServerInterceptor {
+// HMAC authentication is mandatory for all requests (except RegisterServer)
+func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
@@ -31,16 +32,10 @@ func AuthInterceptor(requireHMAC bool, timestampWindow int) grpc.UnaryServerInte
 		md, ok := metadata.FromIncomingContext(ctx)
 		hasHMAC := ok && len(md.Get("x-watchflare-hmac")) > 0
 
-		// If HMAC is required but not present, reject
-		if requireHMAC && !hasHMAC {
-			log.Printf("HMAC required but not present in request to %s", info.FullMethod)
-			return nil, status.Error(codes.Unauthenticated, "HMAC authentication required")
-		}
-
-		// If HMAC is not required and not present, allow through (backward compatibility)
+		// HMAC is mandatory
 		if !hasHMAC {
-			log.Printf("Warning: Request to %s without HMAC (backward compatibility mode)", info.FullMethod)
-			return handler(ctx, req)
+			log.Printf("HMAC authentication required but not present in request to %s", info.FullMethod)
+			return nil, status.Error(codes.Unauthenticated, "HMAC authentication required")
 		}
 
 		// HMAC is present, validate it

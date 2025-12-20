@@ -1,7 +1,7 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -9,84 +9,204 @@ import (
 	"syscall"
 	"time"
 
-	"watchflare/agent/client"
-	"watchflare/agent/config"
-	"watchflare/agent/metrics"
-	"watchflare/agent/sysinfo"
-)
-
-const (
-	DefaultServerHost = "localhost"
-	DefaultServerPort = "50051"
+	"watchflare/client"
+	"watchflare/config"
+	"watchflare/sysinfo"
+	"watchflare/wal"
 )
 
 func main() {
-	// Parse command line flags
-	token := flag.String("token", "", "Registration token")
-	serverHost := flag.String("host", DefaultServerHost, "Backend server host")
-	serverPort := flag.String("port", DefaultServerPort, "Backend server port")
-	registerOnly := flag.Bool("register-only", false, "Register agent and exit (don't start heartbeat loop)")
-	flag.Parse()
+	log.SetFlags(log.Ldate | log.Ltime)
 
-	log.Println("Watchflare Agent starting...")
+	// Check for subcommands
+	if len(os.Args) > 1 && os.Args[1] == "register" {
+		runRegister()
+		return
+	}
 
-	// Check if already registered
-	var cfg *config.Config
-	var err error
+	log.Println("Watchflare Agent V1 starting...")
 
-	if config.Exists() {
-		log.Println("Loading existing configuration...")
-		cfg, err = config.Load()
+	// Load configuration
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatalf("Configuration error: %v", err)
+	}
+
+	// Ensure directories exist
+	if err := config.EnsureDirectories(); err != nil {
+		log.Fatalf("Failed to create directories: %v", err)
+	}
+
+	// Create gRPC client
+	grpcClient, err := client.New(cfg.ServerHost, cfg.ServerPort, cfg.CACertFile, cfg.ServerName)
+	if err != nil {
+		log.Fatalf("Failed to create gRPC client: %v", err)
+	}
+	defer grpcClient.Close()
+
+	log.Printf("Connected to backend: %s:%s", cfg.ServerHost, cfg.ServerPort)
+	if cfg.CACertFile != "" {
+		log.Printf("TLS enabled with CA cert: %s", cfg.CACertFile)
+	}
+
+	// Initialize WAL
+	var walInstance *wal.WAL
+	if cfg.WALEnabled {
+		walInstance, err = wal.New(cfg.WALPath, cfg.WALMaxSizeMB)
 		if err != nil {
-			log.Fatalf("Failed to load config: %v", err)
+			log.Fatalf("Failed to initialize WAL: %v", err)
 		}
+		defer walInstance.Close()
+
+		log.Printf("WAL enabled: %s (max: %d MB)", cfg.WALPath, cfg.WALMaxSizeMB)
 	} else {
-		// Registration required
-		if *token == "" {
-			log.Fatal("Registration token is required for first-time setup. Use --token flag")
+		log.Println("WAL disabled (metrics will be lost if send fails)")
+	}
+
+	// Create sender
+	sender := wal.NewSender(walInstance, grpcClient, cfg.AgentID, cfg.AgentKey, cfg.MetricsInterval, cfg.WALMaxSizeMB)
+
+	// Setup context with cancellation
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Setup signal handler
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	// Start heartbeat in background
+	go runHeartbeat(ctx, grpcClient, cfg)
+
+	// Start sender in background
+	go func() {
+		if err := sender.Run(ctx); err != nil {
+			log.Printf("Sender error: %v", err)
 		}
+	}()
 
-		log.Println("Registering agent with backend...")
-		cfg, err = register(*token, *serverHost, *serverPort)
-		if err != nil {
-			log.Fatalf("Registration failed: %v", err)
-		}
+	// Wait for signal
+	sig := <-sigCh
+	log.Printf("Received signal %v, shutting down gracefully...", sig)
 
-		log.Println("✅ Registration successful!")
-		log.Printf("Agent ID: %s", cfg.AgentID)
+	// Cancel context (triggers shutdown in sender and heartbeat)
+	cancel()
 
-		// If register-only mode, exit here
-		if *registerOnly {
-			log.Println("Registration complete. Exiting (--register-only mode)")
+	// Give sender time to flush (handled internally with 5s timeout)
+	time.Sleep(100 * time.Millisecond)
+
+	log.Println("Shutdown complete")
+}
+
+// loadConfig loads and validates configuration
+func loadConfig() (*config.Config, error) {
+	if !config.Exists() {
+		return nil, fmt.Errorf("config file not found, run 'watchflare-agent register' first")
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate required fields
+	if cfg.ServerHost == "" {
+		return nil, fmt.Errorf("server_host is required")
+	}
+	if cfg.ServerPort == "" {
+		return nil, fmt.Errorf("server_port is required")
+	}
+	if cfg.AgentID == "" {
+		return nil, fmt.Errorf("agent_id is required")
+	}
+	if cfg.AgentKey == "" {
+		return nil, fmt.Errorf("agent_key is required")
+	}
+
+	return cfg, nil
+}
+
+// runHeartbeat sends periodic heartbeats to the backend
+func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Config) {
+	ticker := time.NewTicker(time.Duration(cfg.HeartbeatInterval) * time.Second)
+	defer ticker.Stop()
+
+	log.Printf("Heartbeat started (interval: %ds)", cfg.HeartbeatInterval)
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := grpcClient.Heartbeat(cfg.AgentID, cfg.AgentKey); err != nil {
+				log.Printf("Heartbeat failed: %v", err)
+			} else {
+				log.Println("✓ Heartbeat sent")
+			}
+
+		case <-ctx.Done():
+			log.Println("Heartbeat stopped")
 			return
 		}
 	}
-
-	// Start heartbeat loop
-	log.Println("Starting heartbeat loop...")
-	if err := runHeartbeatLoop(cfg); err != nil {
-		log.Fatalf("Heartbeat loop failed: %v", err)
-	}
 }
 
-// register performs initial agent registration
-func register(token, serverHost, serverPort string) (*config.Config, error) {
-	// Collect system information
-	info, err := sysinfo.Collect()
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect system info: %w", err)
+// runRegister handles agent registration
+func runRegister() {
+	log.Println("Watchflare Agent Registration")
+	log.Println("==============================")
+
+	// Parse command line arguments
+	var token, host, port string
+	for i := 2; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if len(arg) > 8 && arg[:8] == "--token=" {
+			token = arg[8:]
+		} else if len(arg) > 7 && arg[:7] == "--host=" {
+			host = arg[7:]
+		} else if len(arg) > 7 && arg[:7] == "--port=" {
+			port = arg[7:]
+		}
 	}
 
-	// Connect to backend (no TLS during registration, use defaults)
-	// TLS config can be added manually to agent.conf after registration
-	grpcClient, err := client.New(serverHost, serverPort, "", "")
+	// Validate required arguments
+	if token == "" {
+		log.Fatal("Error: --token is required\nUsage: watchflare-agent register --token=TOKEN [--host=HOST] [--port=PORT]")
+	}
+
+	// Set defaults
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		port = "50051"
+	}
+
+	log.Printf("Backend: %s:%s", host, port)
+
+	// Collect system information
+	log.Println("Collecting system information...")
+	info, err := sysinfo.Collect()
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to backend: %w", err)
+		log.Fatalf("Failed to collect system info: %v", err)
+	}
+
+	log.Printf("  Hostname: %s", info.Hostname)
+	log.Printf("  Platform: %s %s", info.Platform, info.PlatformVersion)
+	log.Printf("  Architecture: %s", info.Architecture)
+	log.Printf("  IPv4: %s", info.IPv4Address)
+	if info.IPv6Address != "" {
+		log.Printf("  IPv6: %s", info.IPv6Address)
+	}
+
+	// Connect to backend with permissive TLS for bootstrap
+	log.Println("\nConnecting to backend...")
+	grpcClient, err := client.NewForRegistration(host, port)
+	if err != nil {
+		log.Fatalf("Failed to connect to backend: %v", err)
 	}
 	defer grpcClient.Close()
 
 	// Register with backend
-	agentID, agentKey, err := grpcClient.Register(
+	log.Println("Registering agent...")
+	regResp, err := grpcClient.Register(
 		token,
 		info.Hostname,
 		info.IPv4Address,
@@ -98,122 +218,36 @@ func register(token, serverHost, serverPort string) (*config.Config, error) {
 		info.Kernel,
 	)
 	if err != nil {
-		return nil, err
+		log.Fatalf("Registration failed: %v", err)
 	}
 
-	// Save configuration (TLS fields will be empty initially)
+	// Save CA certificate to disk
+	caCertPath := config.GetConfigDir() + "/ca.pem"
+	log.Printf("Saving CA certificate to %s...", caCertPath)
+	if err := client.SaveCACertificate(regResp.CACert, caCertPath); err != nil {
+		log.Fatalf("Failed to save CA certificate: %v", err)
+	}
+
+	// Create configuration
 	cfg := &config.Config{
-		ServerHost: serverHost,
-		ServerPort: serverPort,
-		AgentID:    agentID,
-		AgentKey:   agentKey,
+		ServerHost: host,
+		ServerPort: port,
+		AgentID:    regResp.AgentID,
+		AgentKey:   regResp.AgentKey,
+		CACertFile: caCertPath,
+		ServerName: regResp.ServerName,
 	}
+	cfg.SetDefaults()
 
+	// Save configuration
+	log.Println("Saving configuration...")
 	if err := config.Save(cfg); err != nil {
-		return nil, fmt.Errorf("failed to save config: %w", err)
+		log.Fatalf("Failed to save config: %v", err)
 	}
 
-	return cfg, nil
-}
-
-// runHeartbeatLoop sends periodic heartbeats and metrics to the backend
-func runHeartbeatLoop(cfg *config.Config) error {
-	// Setup signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Create tickers with configured intervals
-	heartbeatInterval := time.Duration(cfg.HeartbeatInterval) * time.Second
-	metricsInterval := time.Duration(cfg.MetricsInterval) * time.Second
-
-	heartbeatTicker := time.NewTicker(heartbeatInterval)
-	defer heartbeatTicker.Stop()
-
-	metricsTicker := time.NewTicker(metricsInterval)
-	defer metricsTicker.Stop()
-
-	// Connect to backend with TLS if configured
-	grpcClient, err := client.New(cfg.ServerHost, cfg.ServerPort, cfg.CACertFile, cfg.ServerName)
-	if err != nil {
-		return fmt.Errorf("failed to connect to backend: %w", err)
-	}
-	defer grpcClient.Close()
-
-	// Log security configuration
-	if cfg.CACertFile != "" {
-		log.Printf("gRPC TLS enabled with CA cert: %s", cfg.CACertFile)
-		log.Printf("gRPC server name for cert validation: %s", cfg.ServerName)
-	} else {
-		log.Printf("Warning: gRPC TLS is disabled (insecure mode)")
-	}
-	log.Printf("gRPC HMAC authentication enabled (auto)")
-
-	// Send initial heartbeat and metrics immediately
-	if err := sendHeartbeat(grpcClient, cfg); err != nil {
-		log.Printf("Warning: Initial heartbeat failed: %v", err)
-	}
-	if err := sendMetrics(grpcClient, cfg); err != nil {
-		log.Printf("Warning: Initial metrics send failed: %v", err)
-	}
-
-	log.Printf("Heartbeat interval: %v", heartbeatInterval)
-	log.Printf("Metrics interval: %v", metricsInterval)
-
-	for {
-		select {
-		case <-heartbeatTicker.C:
-			if err := sendHeartbeat(grpcClient, cfg); err != nil {
-				log.Printf("Warning: Heartbeat failed: %v", err)
-			}
-
-		case <-metricsTicker.C:
-			if err := sendMetrics(grpcClient, cfg); err != nil {
-				log.Printf("Warning: Metrics send failed: %v", err)
-			}
-
-		case sig := <-sigChan:
-			log.Printf("Received signal %v, shutting down gracefully...", sig)
-			return nil
-		}
-	}
-}
-
-// sendHeartbeat sends a single heartbeat to the backend
-func sendHeartbeat(grpcClient *client.Client, cfg *config.Config) error {
-	// Get current IP addresses
-	info, err := sysinfo.Collect()
-	if err != nil {
-		return fmt.Errorf("failed to collect system info: %w", err)
-	}
-
-	if err := grpcClient.SendHeartbeat(
-		cfg.AgentID,
-		cfg.AgentKey,
-		info.IPv4Address,
-		info.IPv6Address,
-	); err != nil {
-		return err
-	}
-
-	log.Println("✓ Heartbeat sent successfully")
-	return nil
-}
-
-// sendMetrics collects and sends system metrics to the backend
-func sendMetrics(grpcClient *client.Client, cfg *config.Config) error {
-	// Collect system metrics
-	m, err := metrics.Collect()
-	if err != nil {
-		return fmt.Errorf("failed to collect metrics: %w", err)
-	}
-
-	if err := grpcClient.SendMetrics(cfg.AgentID, cfg.AgentKey, m); err != nil {
-		return err
-	}
-
-	log.Printf("✓ Metrics sent successfully (CPU: %.1f%%, Mem: %dMB/%dMB)",
-		m.CPUUsagePercent,
-		m.MemoryUsedBytes/1024/1024,
-		m.MemoryTotalBytes/1024/1024)
-	return nil
+	log.Println("\n✅ Registration successful!")
+	log.Printf("Agent ID: %s", regResp.AgentID)
+	log.Printf("Config saved to: %s", config.GetConfigDir()+"/"+config.ConfigFile)
+	log.Printf("TLS enabled with server: %s", regResp.ServerName)
+	log.Println("\nYou can now start the agent with: ./watchflare-agent")
 }

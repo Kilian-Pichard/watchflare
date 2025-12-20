@@ -17,12 +17,17 @@ type Config struct {
 	CORSOrigins []string
 	Environment string
 
+	// TLS Configuration
+	TLSMode   string // "auto" or "custom"
+	TLSPKIDir string // For auto mode
+
+	// Custom TLS (user-provided certificates)
+	TLSCertFile string
+	TLSKeyFile  string
+	TLSCAFile   string
+
 	// gRPC Security
-	GRPCEnableTLS       bool
-	GRPCCertFile        string
-	GRPCKeyFile         string
-	GRPCRequireHMAC     bool
-	GRPCTimestampWindow int
+	GRPCTimestampWindow int // HMAC is always required
 }
 
 var AppConfig *Config
@@ -40,11 +45,16 @@ func Load() {
 		CORSOrigins: parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
 		Environment: getEnv("ENV", "development"),
 
-		// gRPC Security
-		GRPCEnableTLS:       getBoolEnv("GRPC_ENABLE_TLS", false),
-		GRPCCertFile:        getEnv("GRPC_CERT_FILE", "/etc/watchflare/certs/server-cert.pem"),
-		GRPCKeyFile:         getEnv("GRPC_KEY_FILE", "/etc/watchflare/certs/server-key.pem"),
-		GRPCRequireHMAC:     getBoolEnv("GRPC_REQUIRE_HMAC", false),
+		// TLS Configuration
+		TLSMode:   getEnv("TLS_MODE", "auto"),
+		TLSPKIDir: getEnv("TLS_PKI_DIR", "/etc/watchflare/pki"),
+
+		// Custom TLS
+		TLSCertFile: getEnv("TLS_CERT_FILE", ""),
+		TLSKeyFile:  getEnv("TLS_KEY_FILE", ""),
+		TLSCAFile:   getEnv("TLS_CA_FILE", ""),
+
+		// gRPC Security (HMAC always required)
 		GRPCTimestampWindow: getIntEnv("GRPC_TIMESTAMP_WINDOW", 300),
 	}
 
