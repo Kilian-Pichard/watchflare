@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	Port        string
-	GRPCPort    string
-	DBPath      string
-	JWTSecret   string
-	CORSOrigins []string
-	Environment string
+	Port         string
+	GRPCPort     string
+	DBPath       string
+	JWTSecret    string
+	CORSOrigins  []string
+	Environment  string
+	CookieDomain string // Domain for JWT cookie (empty = localhost, set in production)
 
 	// TLS Configuration
 	TLSMode   string // "auto" or "custom"
@@ -38,12 +39,13 @@ func Load() {
 	_ = godotenv.Load()
 
 	AppConfig = &Config{
-		Port:        getEnv("PORT", "8080"),
-		GRPCPort:    getEnv("GRPC_PORT", "50051"),
-		DBPath:      getEnv("DB_PATH", "./watchflare.db"),
-		JWTSecret:   getEnv("JWT_SECRET", ""),
-		CORSOrigins: parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
-		Environment: getEnv("ENV", "development"),
+		Port:         getEnv("PORT", "8080"),
+		GRPCPort:     getEnv("GRPC_PORT", "50051"),
+		DBPath:       getEnv("DB_PATH", "./watchflare.db"),
+		JWTSecret:    getEnv("JWT_SECRET", ""),
+		CORSOrigins:  parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
+		Environment:  getEnv("ENV", "development"),
+		CookieDomain: getEnv("COOKIE_DOMAIN", ""), // Empty for dev (localhost), set in production
 
 		// TLS Configuration
 		TLSMode:   getEnv("TLS_MODE", "auto"),
@@ -61,6 +63,22 @@ func Load() {
 	// Validate required fields
 	if AppConfig.JWTSecret == "" {
 		log.Fatal("JWT_SECRET is required in environment variables")
+	}
+
+	// Validate JWT secret strength (minimum 32 characters for 256-bit security)
+	if len(AppConfig.JWTSecret) < 32 {
+		log.Fatalf("JWT_SECRET must be at least 32 characters (current: %d chars)\n"+
+			"Generate a secure secret: openssl rand -base64 32", len(AppConfig.JWTSecret))
+	}
+
+	// Warn if JWT secret looks weak (common patterns)
+	weakSecrets := []string{"secret", "password", "admin", "test", "dev", "change", "please"}
+	secretLower := strings.ToLower(AppConfig.JWTSecret)
+	for _, weak := range weakSecrets {
+		if strings.Contains(secretLower, weak) {
+			log.Printf("⚠️  WARNING: JWT_SECRET contains common word '%s' - use cryptographically random string", weak)
+			break
+		}
 	}
 
 	log.Printf("Configuration loaded: Port=%s, GRPCPort=%s, DB=%s, Environment=%s",

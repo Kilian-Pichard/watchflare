@@ -2,14 +2,34 @@ import { redirect } from '@sveltejs/kit';
 
 const PUBLIC_ROUTES = ['/login', '/register'];
 
+// Cache setup status (it rarely changes)
+let setupStatusCache = {
+	value: null,
+	timestamp: 0,
+	ttl: 60000 // 1 minute cache
+};
+
 async function checkSetupRequired() {
+	const now = Date.now();
+
+	// Return cached value if still valid
+	if (setupStatusCache.value !== null && (now - setupStatusCache.timestamp) < setupStatusCache.ttl) {
+		return setupStatusCache.value;
+	}
+
 	try {
 		const response = await fetch('http://localhost:8080/auth/setup-required');
 		const data = await response.json();
+
+		// Update cache
+		setupStatusCache.value = data.setup_required;
+		setupStatusCache.timestamp = now;
+
 		return data.setup_required;
 	} catch (error) {
 		console.error('Failed to check setup status:', error);
-		return false;
+		// Return cached value if available, otherwise false
+		return setupStatusCache.value !== null ? setupStatusCache.value : false;
 	}
 }
 

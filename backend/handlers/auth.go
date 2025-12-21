@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"watchflare/backend/config"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 	"watchflare/backend/services"
@@ -48,15 +49,19 @@ func Register(c *gin.Context) {
 	}
 
 	// Set JWT token in HttpOnly cookie (auto-login after registration)
-	// For localhost development, use default SameSite (browser will use Lax)
-	// This works because localhost ports are treated specially by browsers
+	isProd := config.AppConfig.Environment == "production"
+	domain := config.AppConfig.CookieDomain
+	if domain == "" {
+		domain = "localhost" // Default for development
+	}
+
 	c.SetCookie(
 		"jwt_token",           // name
 		token,                 // value
 		60*60*24*7,           // maxAge (7 days in seconds)
 		"/",                   // path
-		"localhost",           // domain (localhost for cross-port cookies)
-		false,                 // secure (false for development)
+		domain,                // domain (from config)
+		isProd,                // secure (true in production)
 		true,                  // httpOnly
 	)
 
@@ -81,15 +86,19 @@ func Login(c *gin.Context) {
 	}
 
 	// Set JWT token in HttpOnly cookie
-	// For localhost development, use default SameSite (browser will use Lax)
-	// This works because localhost ports are treated specially by browsers
+	isProd := config.AppConfig.Environment == "production"
+	domain := config.AppConfig.CookieDomain
+	if domain == "" {
+		domain = "localhost" // Default for development
+	}
+
 	c.SetCookie(
 		"jwt_token",           // name
 		token,                 // value
 		60*60*24*7,           // maxAge (7 days in seconds)
 		"/",                   // path
-		"localhost",           // domain (localhost for cross-port cookies)
-		false,                 // secure (false for development)
+		domain,                // domain (from config)
+		isProd,                // secure (true in production)
 		true,                  // httpOnly
 	)
 

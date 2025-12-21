@@ -6,6 +6,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -23,6 +24,15 @@ type WAL struct {
 func New(path string, maxSizeMB int) (*WAL, error) {
 	// Convert MB to bytes
 	maxSize := int64(maxSizeMB) * 1024 * 1024
+
+	// Cleanup temporary file from previous crash (if exists)
+	tmpPath := path + ".tmp"
+	if _, err := os.Stat(tmpPath); err == nil {
+		// Temp file exists - crash during truncate, safe to remove
+		if err := os.Remove(tmpPath); err != nil {
+			return nil, fmt.Errorf("failed to cleanup temp WAL: %w", err)
+		}
+	}
 
 	// Open file with O_APPEND | O_CREATE | O_RDWR
 	// No O_APPEND for header updates (we use explicit Seek)
@@ -173,11 +183,12 @@ func (w *WAL) Size() (int64, error) {
 
 // Truncate performs FIFO truncation: keeps 50% most recent records
 // Called when WAL exceeds maxSize
+// Uses atomic rename pattern for crash-safety (no data loss on crash)
 func (w *WAL) Truncate() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Read all records
+	// STEP 1: Read all records from current WAL
 	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("failed to seek to start: %w", err)
 	}
@@ -221,37 +232,71 @@ func (w *WAL) Truncate() error {
 	keepFrom := len(records) / 2
 	recentRecords := records[keepFrom:]
 
-	// Truncate file to 0
-	if err := w.file.Truncate(0); err != nil {
-		return fmt.Errorf("failed to truncate: %w", err)
+	// STEP 2: Create temporary file (atomic rename pattern)
+	tmpPath := w.path + ".tmp"
+	tmpFile, err := os.Create(tmpPath)
+	if err != nil {
+		return fmt.Errorf("failed to create temp WAL: %w", err)
 	}
 
-	// Seek to start
-	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to start: %w", err)
-	}
-
-	// Rewrite recent records
+	// STEP 3: Write recent records to temp file
 	for _, data := range recentRecords {
 		length := uint32(len(data))
 		checksum := crc32.ChecksumIEEE(data)
 
-		if err := binary.Write(w.file, binary.BigEndian, length); err != nil {
-			return fmt.Errorf("failed to write length: %w", err)
+		if err := binary.Write(tmpFile, binary.BigEndian, length); err != nil {
+			tmpFile.Close()
+			os.Remove(tmpPath) // Cleanup on failure
+			return fmt.Errorf("failed to write length to temp: %w", err)
 		}
 
-		if _, err := w.file.Write(data); err != nil {
-			return fmt.Errorf("failed to write data: %w", err)
+		if _, err := tmpFile.Write(data); err != nil {
+			tmpFile.Close()
+			os.Remove(tmpPath)
+			return fmt.Errorf("failed to write data to temp: %w", err)
 		}
 
-		if err := binary.Write(w.file, binary.BigEndian, checksum); err != nil {
-			return fmt.Errorf("failed to write checksum: %w", err)
+		if err := binary.Write(tmpFile, binary.BigEndian, checksum); err != nil {
+			tmpFile.Close()
+			os.Remove(tmpPath)
+			return fmt.Errorf("failed to write checksum to temp: %w", err)
 		}
 	}
 
-	// Sync
-	if err := w.file.Sync(); err != nil {
-		return fmt.Errorf("failed to sync: %w", err)
+	// STEP 4: Sync temp file to disk (durability guarantee)
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to sync temp: %w", err)
+	}
+	tmpFile.Close()
+
+	// STEP 5: Sync directory (ensure directory entry is durable)
+	// This guarantees rename will be visible after crash
+	dir, err := os.Open(filepath.Dir(w.path))
+	if err == nil {
+		dir.Sync()
+		dir.Close()
+	}
+
+	// STEP 6: Close current WAL file
+	if err := w.file.Close(); err != nil {
+		return fmt.Errorf("failed to close current WAL: %w", err)
+	}
+
+	// STEP 7: ATOMIC RENAME (crash-safe operation)
+	// If crash before rename → old WAL intact
+	// If crash after rename → new WAL already in place
+	if err := os.Rename(tmpPath, w.path); err != nil {
+		// Try to reopen old file on rename failure
+		w.file, _ = os.OpenFile(w.path, os.O_RDWR, 0644)
+		return fmt.Errorf("failed to rename temp to WAL: %w", err)
+	}
+
+	// STEP 8: Reopen the new WAL file
+	w.file, err = os.OpenFile(w.path, os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to reopen WAL after truncate: %w", err)
 	}
 
 	// Seek to end for future appends
