@@ -286,6 +286,289 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.DroppedM
 	}, nil
 }
 
+// SendPackageInventory handles package inventory updates from agents
+func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.PackageInventoryRequest) (*pb.PackageInventoryResponse, error) {
+	// Verify agent credentials
+	var server models.Server
+	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return &pb.PackageInventoryResponse{
+				Success: false,
+				Message: "Invalid agent credentials",
+			}, nil
+		}
+		return nil, result.Error
+	}
+
+	// Process package inventory
+	packagesProcessed, changesDetected, err := processPackageInventory(server.ID, req)
+	if err != nil {
+		log.Printf("Error: Failed to process package inventory for server %s: %v", server.ID, err)
+		return &pb.PackageInventoryResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to process package inventory: %v", err),
+		}, nil
+	}
+
+	// Log successful processing
+	log.Printf("✓ Package inventory processed for %s (%s): %d packages, %d changes (%s, %dms)",
+		server.Name,
+		server.ID,
+		packagesProcessed,
+		changesDetected,
+		req.InventoryType,
+		req.CollectionDurationMs,
+	)
+
+	return &pb.PackageInventoryResponse{
+		Success:           true,
+		Message:           "Package inventory received successfully",
+		PackagesProcessed: int32(packagesProcessed),
+		ChangesDetected:   int32(changesDetected),
+	}, nil
+}
+
+// processPackageInventory handles the business logic for package inventory updates
+func processPackageInventory(serverID string, req *pb.PackageInventoryRequest) (int, int, error) {
+	tx := database.DB.Begin()
+	if tx.Error != nil {
+		return 0, 0, tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	now := time.Now()
+	packagesProcessed := 0
+	changesDetected := 0
+
+	// Handle full inventory
+	if req.InventoryType == "full" {
+		// Process all packages (first run)
+		for _, pkg := range req.AllPackages {
+			// Upsert package (insert or update if exists)
+			installedAt := convertTimestamp(pkg.InstalledAt)
+
+			packageModel := models.Package{
+				ServerID:       serverID,
+				Name:           pkg.Name,
+				Version:        pkg.Version,
+				Architecture:   pkg.Architecture,
+				PackageManager: pkg.PackageManager,
+				Source:         pkg.Source,
+				InstalledAt:    installedAt,
+				PackageSize:    pkg.PackageSize,
+				Description:    pkg.Description,
+				FirstSeen:      now,
+				LastSeen:       now,
+			}
+
+			// Try to update existing package, or insert if not exists
+			result := tx.Where("server_id = ? AND name = ? AND package_manager = ?",
+				serverID, pkg.Name, pkg.PackageManager).
+				Assign(map[string]interface{}{
+					"version":      pkg.Version,
+					"architecture": pkg.Architecture,
+					"source":       pkg.Source,
+					"installed_at": installedAt,
+					"package_size": pkg.PackageSize,
+					"description":  pkg.Description,
+					"last_seen":    now,
+				}).
+				FirstOrCreate(&packageModel)
+
+			if result.Error != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to upsert package %s: %w", pkg.Name, result.Error)
+			}
+
+			// Create history record for initial state
+			historyRecord := models.PackageHistory{
+				Timestamp:      now,
+				ServerID:       serverID,
+				Name:           pkg.Name,
+				Version:        pkg.Version,
+				Architecture:   pkg.Architecture,
+				PackageManager: pkg.PackageManager,
+				Source:         pkg.Source,
+				PackageSize:    pkg.PackageSize,
+				Description:    pkg.Description,
+				ChangeType:     "initial",
+			}
+
+			if err := tx.Create(&historyRecord).Error; err != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to create history record for %s: %w", pkg.Name, err)
+			}
+
+			packagesProcessed++
+		}
+
+		changesDetected = packagesProcessed
+
+	} else if req.InventoryType == "delta" {
+		// Process added packages
+		for _, pkg := range req.AddedPackages {
+			installedAt := convertTimestamp(pkg.InstalledAt)
+
+			packageModel := models.Package{
+				ServerID:       serverID,
+				Name:           pkg.Name,
+				Version:        pkg.Version,
+				Architecture:   pkg.Architecture,
+				PackageManager: pkg.PackageManager,
+				Source:         pkg.Source,
+				InstalledAt:    installedAt,
+				PackageSize:    pkg.PackageSize,
+				Description:    pkg.Description,
+				FirstSeen:      now,
+				LastSeen:       now,
+			}
+
+			if err := tx.Create(&packageModel).Error; err != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to insert added package %s: %w", pkg.Name, err)
+			}
+
+			// History record
+			historyRecord := models.PackageHistory{
+				Timestamp:      now,
+				ServerID:       serverID,
+				Name:           pkg.Name,
+				Version:        pkg.Version,
+				Architecture:   pkg.Architecture,
+				PackageManager: pkg.PackageManager,
+				Source:         pkg.Source,
+				PackageSize:    pkg.PackageSize,
+				Description:    pkg.Description,
+				ChangeType:     "added",
+			}
+
+			if err := tx.Create(&historyRecord).Error; err != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to create history for added package %s: %w", pkg.Name, err)
+			}
+
+			changesDetected++
+		}
+
+		// Process removed packages
+		for _, pkg := range req.RemovedPackages {
+			// Delete from packages table
+			result := tx.Where("server_id = ? AND name = ? AND package_manager = ?",
+				serverID, pkg.Name, pkg.PackageManager).
+				Delete(&models.Package{})
+
+			if result.Error != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to delete removed package %s: %w", pkg.Name, result.Error)
+			}
+
+			// History record
+			historyRecord := models.PackageHistory{
+				Timestamp:      now,
+				ServerID:       serverID,
+				Name:           pkg.Name,
+				Version:        pkg.Version,
+				Architecture:   pkg.Architecture,
+				PackageManager: pkg.PackageManager,
+				Source:         pkg.Source,
+				PackageSize:    pkg.PackageSize,
+				Description:    pkg.Description,
+				ChangeType:     "removed",
+			}
+
+			if err := tx.Create(&historyRecord).Error; err != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to create history for removed package %s: %w", pkg.Name, err)
+			}
+
+			changesDetected++
+		}
+
+		// Process updated packages
+		for _, pkg := range req.UpdatedPackages {
+			installedAt := convertTimestamp(pkg.InstalledAt)
+
+			// Update existing package
+			result := tx.Model(&models.Package{}).
+				Where("server_id = ? AND name = ? AND package_manager = ?",
+					serverID, pkg.Name, pkg.PackageManager).
+				Updates(map[string]interface{}{
+					"version":      pkg.Version,
+					"architecture": pkg.Architecture,
+					"source":       pkg.Source,
+					"installed_at": installedAt,
+					"package_size": pkg.PackageSize,
+					"description":  pkg.Description,
+					"last_seen":    now,
+				})
+
+			if result.Error != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to update package %s: %w", pkg.Name, result.Error)
+			}
+
+			// History record
+			historyRecord := models.PackageHistory{
+				Timestamp:      now,
+				ServerID:       serverID,
+				Name:           pkg.Name,
+				Version:        pkg.Version,
+				Architecture:   pkg.Architecture,
+				PackageManager: pkg.PackageManager,
+				Source:         pkg.Source,
+				PackageSize:    pkg.PackageSize,
+				Description:    pkg.Description,
+				ChangeType:     "updated",
+			}
+
+			if err := tx.Create(&historyRecord).Error; err != nil {
+				tx.Rollback()
+				return 0, 0, fmt.Errorf("failed to create history for updated package %s: %w", pkg.Name, err)
+			}
+
+			changesDetected++
+		}
+
+		packagesProcessed = int(req.TotalPackageCount)
+	}
+
+	// Create package collection metadata record
+	collectionRecord := models.PackageCollection{
+		ServerID:       serverID,
+		Timestamp:      now,
+		CollectionType: req.InventoryType,
+		PackageCount:   int(req.TotalPackageCount),
+		ChangesCount:   changesDetected,
+		DurationMs:     int(req.CollectionDurationMs),
+		Status:         "success",
+	}
+
+	if err := tx.Create(&collectionRecord).Error; err != nil {
+		tx.Rollback()
+		return 0, 0, fmt.Errorf("failed to create collection record: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 0, 0, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return packagesProcessed, changesDetected, nil
+}
+
+// convertTimestamp converts Unix timestamp to *time.Time (nil if 0)
+func convertTimestamp(ts int64) *time.Time {
+	if ts == 0 {
+		return nil
+	}
+	t := time.Unix(ts, 0)
+	return &t
+}
+
 // hashToken creates a SHA-256 hash of a token
 func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))

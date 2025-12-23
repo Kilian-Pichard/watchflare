@@ -15,6 +15,7 @@
 	let regeneratedToken = '';
 	let regeneratedCommand = '';
 	let eventSource = null;
+	let packageStats = null;
 
 	$: serverId = $page.params.id;
 
@@ -80,6 +81,16 @@
 		try {
 			const response = await api.getServer(serverId);
 			server = response.server;
+
+			// Load package stats if server is online
+			if (server.status === 'online') {
+				try {
+					packageStats = await api.getPackageStats(serverId);
+				} catch (err) {
+					// Package stats are optional, don't fail if they error
+					console.error('Failed to load package stats:', err);
+				}
+			}
 		} catch (err) {
 			error = err.message || 'Failed to load server';
 		} finally {
@@ -339,6 +350,37 @@
 							</div>
 						{/if}
 					</div>
+				</div>
+			{/if}
+
+			<!-- Packages Card (only if registered and has stats) -->
+			{#if packageStats}
+				<div class="card">
+					<div class="card-header-with-link">
+						<h3>Installed Packages</h3>
+						<a href="/servers/{serverId}/packages" class="view-all-link">View All →</a>
+					</div>
+					<div class="package-stats-grid">
+						<div class="package-stat">
+							<div class="package-stat-value">{packageStats.total_packages}</div>
+							<div class="package-stat-label">Total Packages</div>
+						</div>
+						{#each packageStats.by_package_manager || [] as pm}
+							<div class="package-stat">
+								<div class="package-stat-value">{pm.count}</div>
+								<div class="package-stat-label">{pm.package_manager}</div>
+							</div>
+						{/each}
+					</div>
+					{#if packageStats.last_collection}
+						<div class="package-last-collection">
+							<p>
+								Last scan: {formatDate(packageStats.last_collection.timestamp)} ({packageStats
+									.last_collection.collection_type}, {packageStats.last_collection
+									.package_count} packages)
+							</p>
+						</div>
+					{/if}
 				</div>
 			{/if}
 
@@ -1034,5 +1076,64 @@
 
 	.modal-actions button:hover {
 		transform: translateY(-1px);
+	}
+
+	/* Package Stats Styles */
+	.card-header-with-link {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1.5rem;
+	}
+
+	.view-all-link {
+		color: #667eea;
+		text-decoration: none;
+		font-weight: 500;
+		font-size: 0.875rem;
+		transition: color 0.2s;
+	}
+
+	.view-all-link:hover {
+		color: #5a67d8;
+	}
+
+	.package-stats-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 1rem;
+	}
+
+	.package-stat {
+		background: #f7fafc;
+		padding: 1.5rem;
+		border-radius: 8px;
+		text-align: center;
+	}
+
+	.package-stat-value {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #667eea;
+		margin-bottom: 0.5rem;
+	}
+
+	.package-stat-label {
+		font-size: 0.875rem;
+		color: #718096;
+		font-weight: 500;
+		text-transform: capitalize;
+	}
+
+	.package-last-collection {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid #e2e8f0;
+	}
+
+	.package-last-collection p {
+		margin: 0;
+		color: #718096;
+		font-size: 0.875rem;
 	}
 </style>

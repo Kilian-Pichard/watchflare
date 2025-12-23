@@ -169,3 +169,37 @@ export async function getServerMetrics(serverId, params = {}) {
 export async function getDroppedMetrics() {
 	return apiRequest('/servers/dropped-metrics');
 }
+
+// Package API calls
+export async function getServerPackages(serverId, params = {}) {
+	const queryParams = new URLSearchParams();
+	if (params.limit) queryParams.append('limit', params.limit);
+	if (params.offset) queryParams.append('offset', params.offset);
+	if (params.package_manager) queryParams.append('package_manager', params.package_manager);
+	if (params.search) queryParams.append('search', params.search);
+
+	const query = queryParams.toString();
+	return apiRequest(`/servers/${serverId}/packages${query ? '?' + query : ''}`);
+}
+
+export async function getPackageStats(serverId) {
+	return apiRequest(`/servers/${serverId}/packages/stats`);
+}
+
+export async function getPackageCollections(serverId, params = {}) {
+	const queryParams = new URLSearchParams();
+	if (params.limit) queryParams.append('limit', params.limit);
+	if (params.offset) queryParams.append('offset', params.offset);
+
+	const query = queryParams.toString();
+	return apiRequest(`/servers/${serverId}/packages/collections${query ? '?' + query : ''}`);
+}
+
+export async function getPackageHistory(serverId, params = {}) {
+	const queryParams = new URLSearchParams();
+	if (params.limit) queryParams.append('limit', params.limit);
+	if (params.offset) queryParams.append('offset', params.offset);
+
+	const query = queryParams.toString();
+	return apiRequest(`/servers/${serverId}/packages/history${query ? '?' + query : ''}`);
+}

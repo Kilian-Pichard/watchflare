@@ -145,6 +145,12 @@ func setupRouter() *gin.Engine {
 		serverGroup.DELETE("/:id", handlers.DeleteServer)
 		serverGroup.GET("/events", handlers.ServerEvents)
 		serverGroup.GET("/dropped-metrics", handlers.GetDroppedMetrics)
+
+		// Package inventory routes
+		serverGroup.GET("/:id/packages", handlers.GetServerPackages)
+		serverGroup.GET("/:id/packages/history", handlers.GetServerPackageHistory)
+		serverGroup.GET("/:id/packages/collections", handlers.GetServerPackageCollections)
+		serverGroup.GET("/:id/packages/stats", handlers.GetPackageStats)
 	}
 
 	return router

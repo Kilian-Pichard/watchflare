@@ -18,6 +18,9 @@ var continuousAggregatesSQL string
 //go:embed migrations/002_dropped_metrics.sql
 var droppedMetricsSQL string
 
+//go:embed migrations/003_packages.sql
+var packagesSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -128,6 +131,11 @@ func Connect() error {
 		log.Printf("Warning: Failed to run dropped metrics migration: %v", err)
 	}
 
+	// Run packages migration
+	if err := RunPackagesMigration(); err != nil {
+		log.Printf("Warning: Failed to run packages migration: %v", err)
+	}
+
 	return nil
 }
 
@@ -154,6 +162,19 @@ func RunDroppedMetricsMigration() error {
 	}
 
 	log.Println("✓ Dropped metrics migration completed successfully")
+	return nil
+}
+
+// RunPackagesMigration runs the packages migration
+func RunPackagesMigration() error {
+	log.Println("Running packages migration...")
+
+	// Execute migration (SQL embedded at compile time)
+	if err := DB.Exec(packagesSQL).Error; err != nil {
+		return fmt.Errorf("failed to execute migration: %w", err)
+	}
+
+	log.Println("✓ Packages migration completed successfully")
 	return nil
 }
 

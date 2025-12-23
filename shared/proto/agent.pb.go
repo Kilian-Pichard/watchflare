@@ -824,6 +824,299 @@ func (x *DroppedMetricsResponse) GetMessage() string {
 	return ""
 }
 
+// Package represents a single installed package
+type Package struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`                                           // Package name (e.g., "nginx", "postgresql-15")
+	Version        string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`                                     // Version string (e.g., "1.24.0-1", "15.4-1")
+	Architecture   string                 `protobuf:"bytes,3,opt,name=architecture,proto3" json:"architecture,omitempty"`                           // Architecture (e.g., "amd64", "arm64", "all")
+	PackageManager string                 `protobuf:"bytes,4,opt,name=package_manager,json=packageManager,proto3" json:"package_manager,omitempty"` // Package manager type (e.g., "dpkg", "rpm", "brew")
+	Source         string                 `protobuf:"bytes,5,opt,name=source,proto3" json:"source,omitempty"`                                       // Repository or source URL
+	InstalledAt    int64                  `protobuf:"varint,6,opt,name=installed_at,json=installedAt,proto3" json:"installed_at,omitempty"`         // Unix timestamp of installation (0 if unknown)
+	PackageSize    int64                  `protobuf:"varint,7,opt,name=package_size,json=packageSize,proto3" json:"package_size,omitempty"`         // Package size in bytes
+	Description    string                 `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`                             // Short description (max 100 chars)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Package) Reset() {
+	*x = Package{}
+	mi := &file_proto_agent_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Package) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Package) ProtoMessage() {}
+
+func (x *Package) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Package.ProtoReflect.Descriptor instead.
+func (*Package) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *Package) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Package) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *Package) GetArchitecture() string {
+	if x != nil {
+		return x.Architecture
+	}
+	return ""
+}
+
+func (x *Package) GetPackageManager() string {
+	if x != nil {
+		return x.PackageManager
+	}
+	return ""
+}
+
+func (x *Package) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *Package) GetInstalledAt() int64 {
+	if x != nil {
+		return x.InstalledAt
+	}
+	return 0
+}
+
+func (x *Package) GetPackageSize() int64 {
+	if x != nil {
+		return x.PackageSize
+	}
+	return 0
+}
+
+func (x *Package) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+// PackageInventoryRequest sends package inventory (delta or full) to backend
+type PackageInventoryRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	AgentId   string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`    // UUID of the server
+	AgentKey  string                 `protobuf:"bytes,2,opt,name=agent_key,json=agentKey,proto3" json:"agent_key,omitempty"` // Authentication key
+	Timestamp int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`              // Request timestamp (for anti-replay)
+	// Inventory type: "delta" or "full"
+	// - "delta": Only sends changes (added/removed/updated)
+	// - "full": Sends complete package list (used on first run or if state corrupted)
+	InventoryType string `protobuf:"bytes,4,opt,name=inventory_type,json=inventoryType,proto3" json:"inventory_type,omitempty"`
+	// Delta inventory (only populated if inventory_type = "delta")
+	AddedPackages   []*Package `protobuf:"bytes,5,rep,name=added_packages,json=addedPackages,proto3" json:"added_packages,omitempty"`       // Newly installed packages
+	RemovedPackages []*Package `protobuf:"bytes,6,rep,name=removed_packages,json=removedPackages,proto3" json:"removed_packages,omitempty"` // Uninstalled packages
+	UpdatedPackages []*Package `protobuf:"bytes,7,rep,name=updated_packages,json=updatedPackages,proto3" json:"updated_packages,omitempty"` // Packages with version changes
+	// Full inventory (only populated if inventory_type = "full")
+	AllPackages []*Package `protobuf:"bytes,8,rep,name=all_packages,json=allPackages,proto3" json:"all_packages,omitempty"` // Complete package list
+	// Collection metadata
+	CollectionDurationMs int64 `protobuf:"varint,9,opt,name=collection_duration_ms,json=collectionDurationMs,proto3" json:"collection_duration_ms,omitempty"` // Time taken to collect packages (milliseconds)
+	TotalPackageCount    int32 `protobuf:"varint,10,opt,name=total_package_count,json=totalPackageCount,proto3" json:"total_package_count,omitempty"`         // Total number of packages on system
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *PackageInventoryRequest) Reset() {
+	*x = PackageInventoryRequest{}
+	mi := &file_proto_agent_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PackageInventoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PackageInventoryRequest) ProtoMessage() {}
+
+func (x *PackageInventoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PackageInventoryRequest.ProtoReflect.Descriptor instead.
+func (*PackageInventoryRequest) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *PackageInventoryRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *PackageInventoryRequest) GetAgentKey() string {
+	if x != nil {
+		return x.AgentKey
+	}
+	return ""
+}
+
+func (x *PackageInventoryRequest) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *PackageInventoryRequest) GetInventoryType() string {
+	if x != nil {
+		return x.InventoryType
+	}
+	return ""
+}
+
+func (x *PackageInventoryRequest) GetAddedPackages() []*Package {
+	if x != nil {
+		return x.AddedPackages
+	}
+	return nil
+}
+
+func (x *PackageInventoryRequest) GetRemovedPackages() []*Package {
+	if x != nil {
+		return x.RemovedPackages
+	}
+	return nil
+}
+
+func (x *PackageInventoryRequest) GetUpdatedPackages() []*Package {
+	if x != nil {
+		return x.UpdatedPackages
+	}
+	return nil
+}
+
+func (x *PackageInventoryRequest) GetAllPackages() []*Package {
+	if x != nil {
+		return x.AllPackages
+	}
+	return nil
+}
+
+func (x *PackageInventoryRequest) GetCollectionDurationMs() int64 {
+	if x != nil {
+		return x.CollectionDurationMs
+	}
+	return 0
+}
+
+func (x *PackageInventoryRequest) GetTotalPackageCount() int32 {
+	if x != nil {
+		return x.TotalPackageCount
+	}
+	return 0
+}
+
+// PackageInventoryResponse acknowledges inventory reception
+type PackageInventoryResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Success           bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message           string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	PackagesProcessed int32                  `protobuf:"varint,3,opt,name=packages_processed,json=packagesProcessed,proto3" json:"packages_processed,omitempty"` // Number of packages processed
+	ChangesDetected   int32                  `protobuf:"varint,4,opt,name=changes_detected,json=changesDetected,proto3" json:"changes_detected,omitempty"`       // Number of changes detected (added+removed+updated)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PackageInventoryResponse) Reset() {
+	*x = PackageInventoryResponse{}
+	mi := &file_proto_agent_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PackageInventoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PackageInventoryResponse) ProtoMessage() {}
+
+func (x *PackageInventoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PackageInventoryResponse.ProtoReflect.Descriptor instead.
+func (*PackageInventoryResponse) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *PackageInventoryResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *PackageInventoryResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *PackageInventoryResponse) GetPackagesProcessed() int32 {
+	if x != nil {
+		return x.PackagesProcessed
+	}
+	return 0
+}
+
+func (x *PackageInventoryResponse) GetChangesDetected() int32 {
+	if x != nil {
+		return x.ChangesDetected
+	}
+	return 0
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
@@ -896,12 +1189,39 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x06reason\x18\a \x01(\tR\x06reason\"L\n" +
 	"\x16DroppedMetricsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\xa3\x02\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x84\x02\n" +
+	"\aPackage\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\"\n" +
+	"\farchitecture\x18\x03 \x01(\tR\farchitecture\x12'\n" +
+	"\x0fpackage_manager\x18\x04 \x01(\tR\x0epackageManager\x12\x16\n" +
+	"\x06source\x18\x05 \x01(\tR\x06source\x12!\n" +
+	"\finstalled_at\x18\x06 \x01(\x03R\vinstalledAt\x12!\n" +
+	"\fpackage_size\x18\a \x01(\x03R\vpackageSize\x12 \n" +
+	"\vdescription\x18\b \x01(\tR\vdescription\"\xdc\x03\n" +
+	"\x17PackageInventoryRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1b\n" +
+	"\tagent_key\x18\x02 \x01(\tR\bagentKey\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12%\n" +
+	"\x0einventory_type\x18\x04 \x01(\tR\rinventoryType\x125\n" +
+	"\x0eadded_packages\x18\x05 \x03(\v2\x0e.agent.PackageR\raddedPackages\x129\n" +
+	"\x10removed_packages\x18\x06 \x03(\v2\x0e.agent.PackageR\x0fremovedPackages\x129\n" +
+	"\x10updated_packages\x18\a \x03(\v2\x0e.agent.PackageR\x0fupdatedPackages\x121\n" +
+	"\fall_packages\x18\b \x03(\v2\x0e.agent.PackageR\vallPackages\x124\n" +
+	"\x16collection_duration_ms\x18\t \x01(\x03R\x14collectionDurationMs\x12.\n" +
+	"\x13total_package_count\x18\n" +
+	" \x01(\x05R\x11totalPackageCount\"\xa8\x01\n" +
+	"\x18PackageInventoryResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12-\n" +
+	"\x12packages_processed\x18\x03 \x01(\x05R\x11packagesProcessed\x12)\n" +
+	"\x10changes_detected\x18\x04 \x01(\x05R\x0fchangesDetected2\xfc\x02\n" +
 	"\fAgentService\x12A\n" +
 	"\x0eRegisterServer\x12\x16.agent.RegisterRequest\x1a\x17.agent.RegisterResponse\x12>\n" +
 	"\tHeartbeat\x12\x17.agent.HeartbeatRequest\x1a\x18.agent.HeartbeatResponse\x12<\n" +
 	"\vSendMetrics\x12\x15.agent.MetricsRequest\x1a\x16.agent.MetricsResponse\x12R\n" +
-	"\x14ReportDroppedMetrics\x12\x1b.agent.DroppedMetricsReport\x1a\x1d.agent.DroppedMetricsResponseB\x19Z\x17watchflare/shared/protob\x06proto3"
+	"\x14ReportDroppedMetrics\x12\x1b.agent.DroppedMetricsReport\x1a\x1d.agent.DroppedMetricsResponse\x12W\n" +
+	"\x14SendPackageInventory\x12\x1e.agent.PackageInventoryRequest\x1a\x1f.agent.PackageInventoryResponseB\x19Z\x17watchflare/shared/protob\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -915,35 +1235,44 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 	return file_proto_agent_proto_rawDescData
 }
 
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_proto_agent_proto_goTypes = []any{
-	(*RegisterRequest)(nil),        // 0: agent.RegisterRequest
-	(*RegisterResponse)(nil),       // 1: agent.RegisterResponse
-	(*HeartbeatRequest)(nil),       // 2: agent.HeartbeatRequest
-	(*HeartbeatResponse)(nil),      // 3: agent.HeartbeatResponse
-	(*Metrics)(nil),                // 4: agent.Metrics
-	(*MetricsRequest)(nil),         // 5: agent.MetricsRequest
-	(*MetricsResponse)(nil),        // 6: agent.MetricsResponse
-	(*BufferedMetric)(nil),         // 7: agent.BufferedMetric
-	(*DroppedMetricsReport)(nil),   // 8: agent.DroppedMetricsReport
-	(*DroppedMetricsResponse)(nil), // 9: agent.DroppedMetricsResponse
+	(*RegisterRequest)(nil),          // 0: agent.RegisterRequest
+	(*RegisterResponse)(nil),         // 1: agent.RegisterResponse
+	(*HeartbeatRequest)(nil),         // 2: agent.HeartbeatRequest
+	(*HeartbeatResponse)(nil),        // 3: agent.HeartbeatResponse
+	(*Metrics)(nil),                  // 4: agent.Metrics
+	(*MetricsRequest)(nil),           // 5: agent.MetricsRequest
+	(*MetricsResponse)(nil),          // 6: agent.MetricsResponse
+	(*BufferedMetric)(nil),           // 7: agent.BufferedMetric
+	(*DroppedMetricsReport)(nil),     // 8: agent.DroppedMetricsReport
+	(*DroppedMetricsResponse)(nil),   // 9: agent.DroppedMetricsResponse
+	(*Package)(nil),                  // 10: agent.Package
+	(*PackageInventoryRequest)(nil),  // 11: agent.PackageInventoryRequest
+	(*PackageInventoryResponse)(nil), // 12: agent.PackageInventoryResponse
 }
 var file_proto_agent_proto_depIdxs = []int32{
-	4, // 0: agent.MetricsRequest.metrics:type_name -> agent.Metrics
-	4, // 1: agent.BufferedMetric.metrics:type_name -> agent.Metrics
-	0, // 2: agent.AgentService.RegisterServer:input_type -> agent.RegisterRequest
-	2, // 3: agent.AgentService.Heartbeat:input_type -> agent.HeartbeatRequest
-	5, // 4: agent.AgentService.SendMetrics:input_type -> agent.MetricsRequest
-	8, // 5: agent.AgentService.ReportDroppedMetrics:input_type -> agent.DroppedMetricsReport
-	1, // 6: agent.AgentService.RegisterServer:output_type -> agent.RegisterResponse
-	3, // 7: agent.AgentService.Heartbeat:output_type -> agent.HeartbeatResponse
-	6, // 8: agent.AgentService.SendMetrics:output_type -> agent.MetricsResponse
-	9, // 9: agent.AgentService.ReportDroppedMetrics:output_type -> agent.DroppedMetricsResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	4,  // 0: agent.MetricsRequest.metrics:type_name -> agent.Metrics
+	4,  // 1: agent.BufferedMetric.metrics:type_name -> agent.Metrics
+	10, // 2: agent.PackageInventoryRequest.added_packages:type_name -> agent.Package
+	10, // 3: agent.PackageInventoryRequest.removed_packages:type_name -> agent.Package
+	10, // 4: agent.PackageInventoryRequest.updated_packages:type_name -> agent.Package
+	10, // 5: agent.PackageInventoryRequest.all_packages:type_name -> agent.Package
+	0,  // 6: agent.AgentService.RegisterServer:input_type -> agent.RegisterRequest
+	2,  // 7: agent.AgentService.Heartbeat:input_type -> agent.HeartbeatRequest
+	5,  // 8: agent.AgentService.SendMetrics:input_type -> agent.MetricsRequest
+	8,  // 9: agent.AgentService.ReportDroppedMetrics:input_type -> agent.DroppedMetricsReport
+	11, // 10: agent.AgentService.SendPackageInventory:input_type -> agent.PackageInventoryRequest
+	1,  // 11: agent.AgentService.RegisterServer:output_type -> agent.RegisterResponse
+	3,  // 12: agent.AgentService.Heartbeat:output_type -> agent.HeartbeatResponse
+	6,  // 13: agent.AgentService.SendMetrics:output_type -> agent.MetricsResponse
+	9,  // 14: agent.AgentService.ReportDroppedMetrics:output_type -> agent.DroppedMetricsResponse
+	12, // 15: agent.AgentService.SendPackageInventory:output_type -> agent.PackageInventoryResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -957,7 +1286,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

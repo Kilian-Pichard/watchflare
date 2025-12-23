@@ -283,3 +283,53 @@ func (c *Client) ReportDroppedMetrics(agentID, agentKey string, count int32, fir
 
 	return nil
 }
+
+// PackageInventoryData contains the package inventory to send
+type PackageInventoryData struct {
+	InventoryType        string
+	AddedPackages        []*pb.Package
+	RemovedPackages      []*pb.Package
+	UpdatedPackages      []*pb.Package
+	AllPackages          []*pb.Package
+	CollectionDurationMs int64
+	TotalPackageCount    int32
+}
+
+// SendPackageInventory sends package inventory to the backend
+func (c *Client) SendPackageInventory(agentID, agentKey string, data *PackageInventoryData) error {
+	timestamp := time.Now().Unix()
+
+	req := &pb.PackageInventoryRequest{
+		AgentId:              agentID,
+		AgentKey:             agentKey,
+		Timestamp:            timestamp,
+		InventoryType:        data.InventoryType,
+		AddedPackages:        data.AddedPackages,
+		RemovedPackages:      data.RemovedPackages,
+		UpdatedPackages:      data.UpdatedPackages,
+		AllPackages:          data.AllPackages,
+		CollectionDurationMs: data.CollectionDurationMs,
+		TotalPackageCount:    data.TotalPackageCount,
+	}
+
+	// Attach HMAC authentication metadata
+	ctx := context.Background()
+	ctx, err := security.AttachAuthMetadata(ctx, agentID, agentKey, timestamp, req)
+	if err != nil {
+		return fmt.Errorf("failed to attach auth metadata: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second) // Longer timeout for package inventory
+	defer cancel()
+
+	resp, err := c.client.SendPackageInventory(ctx, req)
+	if err != nil {
+		return fmt.Errorf("send package inventory failed: %w", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("package inventory rejected: %s", resp.Message)
+	}
+
+	return nil
+}

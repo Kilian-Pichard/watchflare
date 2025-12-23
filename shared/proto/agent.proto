@@ -17,6 +17,9 @@ service AgentService {
 
   // ReportDroppedMetrics reports metrics that were dropped after max retries
   rpc ReportDroppedMetrics(DroppedMetricsReport) returns (DroppedMetricsResponse);
+
+  // SendPackageInventory sends package inventory to the backend
+  rpc SendPackageInventory(PackageInventoryRequest) returns (PackageInventoryResponse);
 }
 
 // RegisterRequest contains information sent during initial registration
@@ -112,4 +115,52 @@ message DroppedMetricsReport {
 message DroppedMetricsResponse {
   bool success = 1;
   string message = 2;
+}
+
+// =====================================================
+// Package Inventory Messages
+// =====================================================
+
+// Package represents a single installed package
+message Package {
+  string name = 1;                   // Package name (e.g., "nginx", "postgresql-15")
+  string version = 2;                // Version string (e.g., "1.24.0-1", "15.4-1")
+  string architecture = 3;           // Architecture (e.g., "amd64", "arm64", "all")
+  string package_manager = 4;        // Package manager type (e.g., "dpkg", "rpm", "brew")
+  string source = 5;                 // Repository or source URL
+  int64 installed_at = 6;            // Unix timestamp of installation (0 if unknown)
+  int64 package_size = 7;            // Package size in bytes
+  string description = 8;            // Short description (max 100 chars)
+}
+
+// PackageInventoryRequest sends package inventory (delta or full) to backend
+message PackageInventoryRequest {
+  string agent_id = 1;               // UUID of the server
+  string agent_key = 2;              // Authentication key
+  int64 timestamp = 3;               // Request timestamp (for anti-replay)
+
+  // Inventory type: "delta" or "full"
+  // - "delta": Only sends changes (added/removed/updated)
+  // - "full": Sends complete package list (used on first run or if state corrupted)
+  string inventory_type = 4;
+
+  // Delta inventory (only populated if inventory_type = "delta")
+  repeated Package added_packages = 5;    // Newly installed packages
+  repeated Package removed_packages = 6;  // Uninstalled packages
+  repeated Package updated_packages = 7;  // Packages with version changes
+
+  // Full inventory (only populated if inventory_type = "full")
+  repeated Package all_packages = 8;      // Complete package list
+
+  // Collection metadata
+  int64 collection_duration_ms = 9;  // Time taken to collect packages (milliseconds)
+  int32 total_package_count = 10;    // Total number of packages on system
+}
+
+// PackageInventoryResponse acknowledges inventory reception
+message PackageInventoryResponse {
+  bool success = 1;
+  string message = 2;
+  int32 packages_processed = 3;      // Number of packages processed
+  int32 changes_detected = 4;        // Number of changes detected (added+removed+updated)
 }

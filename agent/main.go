@@ -6,11 +6,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"watchflare/client"
 	"watchflare/config"
+	"watchflare/packages"
+	pb "watchflare/shared/proto"
 	"watchflare/sysinfo"
 	"watchflare/wal"
 )
@@ -84,6 +87,9 @@ func main() {
 		}
 	}()
 
+	// Start package collector in background
+	go runPackageCollector(ctx, grpcClient, cfg)
+
 	// Wait for signal
 	sig := <-sigCh
 	log.Printf("Received signal %v, shutting down gracefully...", sig)
@@ -145,6 +151,141 @@ func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Co
 			log.Println("Heartbeat stopped")
 			return
 		}
+	}
+}
+
+// runPackageCollector collects and sends package inventory
+func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *config.Config) {
+	statePath := filepath.Join(config.GetDataDir(), "packages.state.json")
+
+	log.Println("Package collector started")
+
+	// Wait 60 seconds before initial collection (let system stabilize)
+	log.Println("Waiting 60s before initial package collection...")
+	select {
+	case <-time.After(60 * time.Second):
+		// Initial collection
+		collectAndSendPackages(ctx, grpcClient, cfg, statePath)
+	case <-ctx.Done():
+		log.Println("Package collector stopped before initial collection")
+		return
+	}
+
+	// Setup daily ticker for 3 AM
+	// Calculate time until next 3 AM
+	now := time.Now()
+	next3AM := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, now.Location())
+	if now.Hour() >= 3 {
+		// If it's after 3 AM today, schedule for tomorrow
+		next3AM = next3AM.Add(24 * time.Hour)
+	}
+
+	timeUntil3AM := time.Until(next3AM)
+	log.Printf("Next package collection scheduled for: %s (in %v)", next3AM.Format("2006-01-02 15:04:05"), timeUntil3AM)
+
+	// Create ticker for daily collection
+	timer := time.NewTimer(timeUntil3AM)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			// Daily collection at 3 AM
+			collectAndSendPackages(ctx, grpcClient, cfg, statePath)
+
+			// Reset timer for next day at 3 AM
+			timer.Reset(24 * time.Hour)
+
+		case <-ctx.Done():
+			log.Println("Package collector stopped")
+			return
+		}
+	}
+}
+
+// collectAndSendPackages performs package collection, delta calculation, and sending
+func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg *config.Config, statePath string) {
+	startTime := time.Now()
+	log.Println("Starting package collection...")
+
+	// Collect all packages
+	allPackages, err := packages.CollectAll()
+	if err != nil {
+		log.Printf("Package collection failed: %v", err)
+		return
+	}
+
+	collectionDuration := time.Since(startTime).Milliseconds()
+	log.Printf("Collected %d packages in %dms", len(allPackages), collectionDuration)
+
+	// Load previous state
+	state, err := packages.LoadState(statePath)
+	if err != nil {
+		log.Printf("Warning: Failed to load package state: %v", err)
+		state = &packages.PackageState{Packages: make([]*packages.Package, 0)}
+	}
+
+	// Compute delta
+	added, removed, updated := state.ComputeDelta(allPackages)
+
+	// Check if we should send
+	isFirstRun := len(state.Packages) == 0
+	hasChanges := packages.HasChanges(added, removed, updated)
+
+	if !isFirstRun && !hasChanges {
+		log.Println("No package changes detected, skipping send")
+		return
+	}
+
+	// Determine inventory type
+	var inventoryType string
+	if isFirstRun {
+		inventoryType = "full"
+		log.Printf("First run detected, sending full inventory (%d packages)", len(allPackages))
+	} else {
+		inventoryType = "delta"
+		log.Printf("Changes detected: +%d added, -%d removed, ~%d updated", len(added), len(removed), len(updated))
+	}
+
+	// Convert packages to protobuf format
+	var addedProto, removedProto, updatedProto, allProto []*pb.Package
+
+	if inventoryType == "full" {
+		allProto = convertPackagesToProto(allPackages)
+	} else {
+		addedProto = convertPackagesToProto(added)
+		removedProto = convertPackagesToProto(removed)
+		updatedProto = convertPackagesToProto(updated)
+	}
+
+	// Send to backend
+	inventoryData := &client.PackageInventoryData{
+		InventoryType:        inventoryType,
+		AddedPackages:        addedProto,
+		RemovedPackages:      removedProto,
+		UpdatedPackages:      updatedProto,
+		AllPackages:          allProto,
+		CollectionDurationMs: collectionDuration,
+		TotalPackageCount:    int32(len(allPackages)),
+	}
+
+	if err := grpcClient.SendPackageInventory(cfg.AgentID, cfg.AgentKey, inventoryData); err != nil {
+		log.Printf("Failed to send package inventory: %v", err)
+		return
+	}
+
+	log.Printf("✓ Package inventory sent successfully (%s: +%d, -%d, ~%d)",
+		inventoryType, len(added), len(removed), len(updated))
+
+	// Update local state
+	state.Packages = allPackages
+	state.LastScan = time.Now()
+	state.PackageCount = len(allPackages)
+
+	if err := state.Save(statePath); err != nil {
+		log.Printf("Warning: Failed to save package state: %v", err)
+	} else {
+		log.Printf("✓ Package state saved to %s", statePath)
 	}
 }
 
@@ -250,4 +391,29 @@ func runRegister() {
 	log.Printf("Config saved to: %s", config.GetConfigDir()+"/"+config.ConfigFile)
 	log.Printf("TLS enabled with server: %s", regResp.ServerName)
 	log.Println("\nYou can now start the agent with: ./watchflare-agent")
+}
+
+// convertPackagesToProto converts agent Package structs to protobuf Package structs
+func convertPackagesToProto(packages []*packages.Package) []*pb.Package {
+	protoPackages := make([]*pb.Package, len(packages))
+
+	for i, pkg := range packages {
+		var installedAt int64
+		if !pkg.InstalledAt.IsZero() {
+			installedAt = pkg.InstalledAt.Unix()
+		}
+
+		protoPackages[i] = &pb.Package{
+			Name:           pkg.Name,
+			Version:        pkg.Version,
+			Architecture:   pkg.Architecture,
+			PackageManager: pkg.PackageManager,
+			Source:         pkg.Source,
+			InstalledAt:    installedAt,
+			PackageSize:    pkg.PackageSize,
+			Description:    pkg.Description,
+		}
+	}
+
+	return protoPackages
 }
