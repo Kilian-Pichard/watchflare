@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"watchflare/client"
-	"watchflare/metrics"
+	"watchflare-agent/client"
+	"watchflare-agent/metrics"
 	pb "watchflare/shared/proto"
 
 	"google.golang.org/protobuf/proto"

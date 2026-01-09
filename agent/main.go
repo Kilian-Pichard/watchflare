@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"watchflare/client"
-	"watchflare/config"
-	"watchflare/packages"
+	"watchflare-agent/client"
+	"watchflare-agent/config"
+	"watchflare-agent/packages"
 	pb "watchflare/shared/proto"
-	"watchflare/sysinfo"
-	"watchflare/wal"
+	"watchflare-agent/sysinfo"
+	"watchflare-agent/wal"
 )
 
 func main() {

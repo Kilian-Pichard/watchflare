@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"watchflare/metrics"
-	"watchflare/security"
+	"watchflare-agent/metrics"
+	"watchflare-agent/security"
 	pb "watchflare/shared/proto"
 
 	"google.golang.org/grpc"

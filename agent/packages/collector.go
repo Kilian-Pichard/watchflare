@@ -30,23 +30,16 @@ type Collector interface {
 	Collect() ([]*Package, error)
 }
 
-// CollectAll discovers and runs all available collectors
+// CollectAll discovers and runs all available collectors using the registry
 // Returns combined list of packages from all package managers
 func CollectAll() ([]*Package, error) {
-	collectors := []Collector{
-		&DpkgCollector{},
-		&RpmCollector{},
-		&BrewCollector{},
-	}
+	// Create registry and get available collectors
+	registry := NewRegistry()
+	collectors := registry.GetAvailableCollectors()
 
 	var allPackages []*Package
 
 	for _, collector := range collectors {
-		if !collector.IsAvailable() {
-			log.Printf("Package manager %s not available, skipping", collector.Name())
-			continue
-		}
-
 		log.Printf("Collecting packages from %s...", collector.Name())
 		packages, err := collector.Collect()
 		if err != nil {

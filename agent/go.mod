@@ -1,4 +1,4 @@
-module watchflare
+module watchflare-agent
 
 go 1.25.0
 
@@ -22,6 +22,7 @@ require (
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
+	howett.net/plist v1.0.1 // indirect
 )
 
 replace watchflare/shared => ../shared

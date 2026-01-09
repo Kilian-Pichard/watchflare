@@ -84,20 +84,24 @@ else
     echo "  → Data directory not found"
 fi
 
-# Step 5: Remove configuration directory
-echo -e "${YELLOW}[5/6]${NC} Removing configuration directory..."
-if [ -d "$CONFIG_DIR" ]; then
+# Step 5: Remove agent configuration (preserving backend PKI)
+echo -e "${YELLOW}[5/6]${NC} Removing agent configuration..."
+if [ -f "${CONFIG_DIR}/agent.conf" ]; then
     # Ask for confirmation before removing config
-    read -p "Remove configuration directory ${CONFIG_DIR}? (contains agent credentials) [y/N] " -n 1 -r
+    read -p "Remove agent configuration ${CONFIG_DIR}/agent.conf? (contains agent credentials) [y/N] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -rf "$CONFIG_DIR"
-        echo "  → Removed $CONFIG_DIR"
+        rm -f "${CONFIG_DIR}/agent.conf"
+        echo "  → Removed ${CONFIG_DIR}/agent.conf"
+        echo "  → Preserved ${CONFIG_DIR}/pki/ (backend certificates)"
     else
-        echo "  → Kept $CONFIG_DIR"
+        echo "  → Kept ${CONFIG_DIR}/agent.conf"
     fi
 else
-    echo "  → Configuration directory not found"
+    echo "  → Agent configuration not found"
+    if [ -d "${CONFIG_DIR}/pki" ]; then
+        echo "  → Backend PKI directory preserved"
+    fi
 fi
 
 # Step 6: Remove system user
@@ -135,8 +139,11 @@ echo ""
 echo -e "${GREEN}=== Uninstallation Complete ===${NC}"
 echo ""
 echo "The following items may still exist:"
-if [ -d "$CONFIG_DIR" ]; then
-    echo "  - Configuration: ${CONFIG_DIR}/"
+if [ -f "${CONFIG_DIR}/agent.conf" ]; then
+    echo "  - Agent configuration: ${CONFIG_DIR}/agent.conf"
+fi
+if [ -d "${CONFIG_DIR}/pki" ]; then
+    echo "  - Backend PKI (preserved): ${CONFIG_DIR}/pki/"
 fi
 if [ -d "$DATA_DIR" ]; then
     echo "  - Data: ${DATA_DIR}/"

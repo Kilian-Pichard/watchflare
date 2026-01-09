@@ -428,9 +428,23 @@ func processPackageInventory(serverID string, req *pb.PackageInventoryRequest) (
 				LastSeen:       now,
 			}
 
-			if err := tx.Create(&packageModel).Error; err != nil {
+			// Use FirstOrCreate to handle cases where package already exists (desync between agent and backend)
+			result := tx.Where("server_id = ? AND name = ? AND package_manager = ?",
+				serverID, pkg.Name, pkg.PackageManager).
+				Assign(map[string]interface{}{
+					"version":      pkg.Version,
+					"architecture": pkg.Architecture,
+					"source":       pkg.Source,
+					"installed_at": installedAt,
+					"package_size": pkg.PackageSize,
+					"description":  pkg.Description,
+					"last_seen":    now,
+				}).
+				FirstOrCreate(&packageModel)
+
+			if result.Error != nil {
 				tx.Rollback()
-				return 0, 0, fmt.Errorf("failed to insert added package %s: %w", pkg.Name, err)
+				return 0, 0, fmt.Errorf("failed to upsert added package %s: %w", pkg.Name, result.Error)
 			}
 
 			// History record
