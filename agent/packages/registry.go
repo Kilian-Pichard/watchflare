@@ -36,9 +36,18 @@ func (r *CollectorRegistry) registerPlatformCollectors() {
 		)
 	case "linux":
 		r.collectors = append(r.collectors,
-			&DpkgCollector{},
-			&RpmCollector{},
-			// Pacman, APK, Zypper will be added later
+			// Distribution package managers
+			&DpkgCollector{},   // Debian/Ubuntu (apt)
+			&RpmCollector{},    // RedHat/CentOS/Fedora (yum/dnf)
+			&PacmanCollector{}, // Arch Linux
+			&ApkCollector{},    // Alpine Linux
+			&ZypperCollector{}, // openSUSE
+			&BrewCollector{},   // Homebrew on Linux
+
+			// Universal package managers
+			&SnapCollector{},    // Snap packages (Ubuntu and others)
+			&FlatpakCollector{}, // Flatpak (cross-distribution)
+			&AppImageCollector{}, // AppImage portable apps
 		)
 	case "windows":
 		// Chocolatey, Scoop, Winget will be added later
@@ -50,11 +59,31 @@ func (r *CollectorRegistry) registerLanguageCollectors() {
 	// These collectors are cross-platform
 	// They self-disable if the binary doesn't exist
 	r.collectors = append(r.collectors,
+		// Primary package managers
 		&NpmCollector{},      // Node.js
 		&PipCollector{},      // Python
 		&GemCollector{},      // Ruby
 		&CargoCollector{},    // Rust
 		&ComposerCollector{}, // PHP
+
+		// Alternative Node.js package managers
+		&YarnCollector{}, // Yarn global packages
+		&PnpmCollector{}, // pnpm global packages
+
+		// Python environment managers
+		&PoetryCollector{}, // Poetry virtualenvs
+		&PipxCollector{},   // pipx isolated applications
+		&UvCollector{},     // uv (modern ultra-fast Python package manager)
+		&CondaCollector{},  // conda (data science packages)
+		&MambaCollector{},  // mamba (fast conda replacement)
+
+		// .NET and Java
+		&NuGetCollector{}, // .NET global tools
+		&MavenCollector{}, // Maven local repository
+
+		// Universal package managers
+		&NixCollector{},      // Nix package manager (multi-platform)
+		&CLIToolsCollector{}, // Important CLI tools (docker, kubectl, etc.)
 	)
 }
 

@@ -61,3 +61,21 @@ func TruncateDescription(desc string) string {
 	}
 	return desc[:97] + "..."
 }
+
+// splitLines splits a string by newlines
+func splitLines(s string) []string {
+	lines := []string{}
+	current := ""
+	for _, c := range s {
+		if c == '\n' {
+			lines = append(lines, current)
+			current = ""
+		} else if c != '\r' {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return lines
+}
