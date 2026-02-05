@@ -1,0 +1,402 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Watchflare is a self-hosted server monitoring platform with three components:
+- **Backend** (Go): Central server with gRPC (agents) and HTTP (web dashboard) endpoints
+- **Agent** (Go): Lightweight binary deployed on monitored servers
+- **Frontend** (SvelteKit 5): Real-time dashboard with SSE
+
+**Data flow**: Agents → gRPC/TLS 1.3 → Backend → PostgreSQL/TimescaleDB → SSE → Frontend
+
+---
+
+## Build & Run Commands
+
+### Backend
+```bash
+cd backend
+
+# Development (auto-reload requires external tool)
+go run .
+
+# Build
+go build -o watchflare-backend
+
+# Run tests
+go test ./...                           # All tests
+go test ./handlers -v                   # Specific package
+go test -run TestCreateAgent ./services # Single test
+```
+
+**Environment**: Copy `.env.example` to `.env` and configure. Required: `JWT_SECRET` (≥32 chars).
+
+### Agent
+```bash
+cd agent
+
+# Build
+go build -o watchflare-agent
+
+# Development run (requires existing config)
+./watchflare-agent
+
+# Register with backend
+./watchflare-agent register --token=wf_reg_... --host=localhost --port=50051
+
+# Install as system service (macOS)
+sudo ./install-macos.sh
+
+# Run tests
+go test ./...
+go test ./wal -v                        # WAL tests
+go test ./packages -run TestRegistry    # Package collector tests
+```
+
+**Service management (macOS)**:
+```bash
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist  # Start
+sudo launchctl bootout system/com.watchflare.agent                                 # Stop
+tail -f /var/log/watchflare-agent.log                                              # Logs
+```
+
+### Frontend
+```bash
+cd frontend
+
+npm install          # First time only
+npm run dev          # Development server (http://localhost:5173)
+npm run build        # Production build
+npm run preview      # Preview production build
+```
+
+### Database
+```bash
+docker compose up -d              # Start TimescaleDB
+docker compose down               # Stop
+docker compose logs -f postgres   # View logs
+
+# Connect to DB
+docker exec -it watchflare-postgres psql -U watchflare -d watchflare
+```
+
+**Default connection**: `postgresql://watchflare:watchflare_dev@localhost:5433/watchflare`
+
+### Protobuf (rare)
+```bash
+cd shared/proto
+protoc --go_out=. --go-grpc_out=. agent.proto
+```
+
+---
+
+## Architecture Patterns
+
+### Security Model
+
+**Three authentication layers:**
+1. **Agent registration** (one-time): Token-based (`wf_reg_...`), SHA-256 hashed in DB, 24h expiry
+2. **Agent RPCs** (ongoing): HMAC-SHA256 per request with timestamp anti-replay (±5min window)
+3. **Web users**: JWT in HttpOnly cookie (7 day expiry), validated against DB on every request
+
+**TLS 1.3 mandatory**: Auto-generated PKI in `./pki/` (CA + server cert) or custom certs. Agents pin CA cert during registration.
+
+**Critical**: `agent_key` stored plaintext in DB (required for HMAC validation). Database access = ability to impersonate agents.
+
+### WAL (Write-Ahead Log)
+
+**Purpose**: Durability for metrics when backend is unreachable.
+
+**Design**: Single file (`/var/lib/watchflare/metrics.wal`), append-only with `fsync()` after each write.
+- Format: `[Length:4 bytes][Protobuf data][CRC32:4 bytes]`
+- FIFO truncation: Keeps 50% most recent when exceeds `wal_max_size_mb` (default 10MB)
+- Atomic truncation: Temp file → sync → atomic rename (crash-safe)
+
+**Flow**: Collect → Append to WAL → Send → Clear WAL only if all sends succeed.
+
+**Code**: `agent/wal/wal.go` (file operations), `agent/wal/sender.go` (orchestration).
+
+### Package Inventory
+
+**Registry pattern** (`agent/packages/registry.go`):
+- 28 collectors registered at startup, filtered by OS and CLI availability
+- Each collector implements: `Name()`, `IsAvailable()`, `Collect() ([]*Package, error)`
+
+**Delta detection** (`agent/packages/state.go`):
+- State saved to `/var/lib/watchflare/packages.state.json`
+- First run: sends full inventory (`inventory_type: "full"`)
+- Subsequent: sends only changes (`inventory_type: "delta"` with `added`, `removed`, `updated` lists)
+
+**Collection schedule**:
+- Initial: 60s after agent startup
+- Recurring: Daily at 3:00 AM
+
+**Backend processing** (`backend/grpc/agent_service.go`):
+- Full mode: upserts all packages + creates initial history records
+- Delta mode: processes changes in a single transaction
+- Three tables: `packages` (current state), `package_history` (changelog), `package_collections` (metadata)
+
+### Heartbeat & Cache Layer
+
+**Three separate loops** (backend):
+1. **Heartbeat ingestion** (5s): Updates in-memory cache, broadcasts SSE. No DB write.
+2. **Stale checker** (10s): Scans cache, marks agents offline after 15s silence.
+3. **Sync worker** (5min): Flushes cache changes to DB (`last_seen`, `status`, IPs).
+
+**Code**: `backend/cache/heartbeat.go` (cache), `backend/cache/sync_worker.go` (workers).
+
+**Why**: Decouples network rate (5s) from DB write rate (5min). Heartbeats are cheap.
+
+### TimescaleDB Hypertables
+
+**Automatic partitioning** on `timestamp` with compression and 30-day retention.
+
+**Continuous aggregates** (precomputed views):
+- `hourly_10m` / `hourly_15m`: 10/15 minute buckets for 1h/12h/24h views
+- `daily_2h`: 2 hour buckets for 7-day view
+- `monthly_8h`: 8 hour buckets for 30-day view
+
+**Migrations** (`backend/database/migrations/`):
+- `001`: Continuous aggregates
+- `002`: Dropped metrics tracking
+- `003`: Package tables
+- `004`: Environment detection columns
+
+All embedded at compile time (`//go:embed`).
+
+### SSE (Server-Sent Events)
+
+**Four event types** (`backend/sse/broker.go`):
+- `server_update`: Status, IPs, last_seen (from heartbeat/stale detection)
+- `metrics_update`: Single-server metrics (minified: `s`, `t`, `c`, `mu`, etc.)
+- `aggregated_metrics_update`: Cross-server aggregates every 30s
+- `connected`: Client connection confirmation
+
+**Minification**: Field names compressed to 1-2 chars, timestamps as Unix epoch integers. Frontend decodes in `lib/sse.js`.
+
+**Backpressure**: Buffered channel (size 10) per client. Full channel = event dropped + warning logged.
+
+### Environment Detection
+
+**Hierarchy** (`agent/sysinfo/environment.go`):
+1. Container? (check `/.dockerenv`, `/proc/1/cgroup`, PID 1 process)
+2. VM? (DMI product name for hypervisor keywords)
+3. Docker on host? (`/var/run/docker.sock`)
+
+**Result** (`EnvironmentType`): `physical`, `physical_with_containers`, `vm`, `vm_with_containers`, `container`
+
+**Impact** (`agent/sysinfo/metrics_config.go`):
+- Containers: Skip disk metrics (shared with host, would double-count)
+- VMs: Skip swap and temperature (no physical access)
+
+---
+
+## Critical Entry Points
+
+**Backend lifecycle**:
+- `backend/main.go:main()` - Application bootstrap, starts HTTP + gRPC servers + 3 background workers
+- `backend/database/db.go:Connect()` - DB connection, TimescaleDB setup, runs embedded migrations
+
+**Agent lifecycle**:
+- `agent/main.go:main()` - Mode switch (`register` vs normal operation)
+- `agent/wal/sender.go:Run()` - Metrics collection loop (blocks until SIGINT/SIGTERM)
+
+**gRPC handlers** (see `backend/grpc/agent_service.go`):
+- `RegisterServer()` - Token validation, credential issuance, CA cert distribution
+- `Heartbeat()` - Cache update, SSE broadcast (no DB write)
+- `SendMetrics()` - Metrics ingestion, SSE broadcast
+- `SendPackageInventory()` - Full/delta processing in single transaction
+
+**HTTP handlers** (see `backend/handlers/`):
+- `handlers/auth.go:Login()` - JWT issuance
+- `handlers/auth.go:AuthMiddleware()` - JWT validation on every protected request
+- `handlers/servers.go:CreateAgent()` - Token generation (SHA-256 hash stored)
+- `handlers/sse.go:ServerEvents()` - SSE connection upgrade, client registration
+
+**Package collection**:
+- `agent/packages/registry.go:NewRegistry()` - Collector initialization (OS-specific + cross-platform)
+- `agent/packages/registry.go:GetAvailableCollectors()` - Filters by `IsAvailable()`
+- `agent/packages/state.go:ComputeDelta()` - Diff algorithm (composite key: `name|package_manager`)
+- `agent/main.go:runPackageCollector()` - Scheduler (60s initial + daily 3 AM)
+
+**Background workers** (launched in `backend/main.go`):
+- `cache/sync_worker.go:SyncWorker()` - Heartbeat cache → DB flush (5 min)
+- `cache/sync_worker.go:StaleChecker()` - Offline detection (10s scan, 15s threshold)
+- `services/aggregated_metrics_scheduler.go:Start()` - Cross-server metrics (30s)
+
+*For complete API surface, see `docs/internals.md`*
+
+---
+
+## Key File Locations
+
+### Agent (when installed as service)
+```
+/usr/local/bin/watchflare-agent       # Binary (root:wheel, 755)
+/etc/watchflare/agent.conf            # Config with credentials (root:staff, 640)
+/etc/watchflare/ca.pem                # Pinned CA cert (root:staff, 644)
+/var/lib/watchflare/                  # Data directory (watchflare:staff, 750)
+  ├── metrics.wal                     # WAL file
+  └── packages.state.json             # Package inventory state
+/var/log/watchflare-agent.log         # Logs (watchflare:staff, 644)
+```
+
+### Backend
+```
+backend/
+  ├── .env                            # Configuration (git-ignored)
+  ├── pki/                            # Auto-generated TLS certs
+  │   ├── ca.pem / ca-key.pem         # CA (10 year validity)
+  │   └── server.pem / server-key.pem # Server cert (5 year validity)
+  ├── database/migrations/            # SQL migrations (embedded)
+  ├── grpc/agent_service.go           # 5 RPC handlers
+  ├── handlers/                       # HTTP handlers (auth, servers, metrics, packages, sse)
+  └── services/                       # Business logic
+```
+
+### Shared
+```
+shared/proto/agent.proto              # gRPC service definition
+  ├── agent.pb.go                     # Generated protobuf code
+  └── agent_grpc.pb.go                # Generated gRPC stubs
+```
+
+---
+
+## Common Patterns & Gotchas
+
+### Adding a New Package Collector
+
+1. Create `agent/packages/{name}.go` implementing `Collector` interface
+2. Add to registry in `agent/packages/registry.go`:
+   - Platform-specific: `registerPlatformCollectors()` with OS switch
+   - Cross-platform: `registerLanguageCollectors()`
+3. Implement `IsAvailable()` to check if CLI exists: `exec.LookPath("binary-name")`
+4. Parse CLI output in `Collect()`, return `[]*Package` with `package_manager` set to collector name
+5. Test: `go test ./packages -run TestRegistry -v`
+
+**Example structure**:
+```go
+type FooCollector struct{}
+func (f *FooCollector) Name() string { return "foo" }
+func (f *FooCollector) IsAvailable() bool { _, err := exec.LookPath("foo"); return err == nil }
+func (f *FooCollector) Collect() ([]*Package, error) { /* ... */ }
+```
+
+### HMAC Interceptor
+
+**All RPCs except `RegisterServer` require HMAC authentication.**
+
+Agent-side (`agent/security/hmac.go`):
+- `AttachAuthMetadata()` computes HMAC and adds `x-watchflare-hmac` + `x-watchflare-timestamp` headers
+- Payload: `[8-byte timestamp]["|"][agent_id]["|"][marshaled protobuf]`
+
+Backend-side (`backend/grpc/interceptor.go`):
+- Uses reflection to extract `agent_id` and `timestamp` from any protobuf message
+- Looks up `agent_key` from DB, recomputes HMAC, constant-time comparison
+
+**When adding new RPCs**: Ensure protobuf message has `agent_id`, `agent_key`, and `timestamp` fields.
+
+### Database Migrations
+
+**Never modify existing migrations**. Create new numbered files in `backend/database/migrations/`.
+
+**Embedded at compile**: Changes require rebuild. Use `//go:embed migrations/*.sql` in `database/db.go`.
+
+**Schema changes**: Consider TimescaleDB constraints (hypertables cannot be altered like normal tables). Continuous aggregates require manual refresh policies.
+
+### Frontend SSE Decoding
+
+**Minified events** (`metrics_update`) must be decoded in `lib/sse.js`:
+```javascript
+const fieldMap = {
+  s: 'server_id', t: 'timestamp', c: 'cpu_usage_percent',
+  mt: 'memory_total_bytes', mu: 'memory_used_bytes', /* ... */
+};
+```
+
+**When adding new metric fields**: Update both `backend/sse/broker.go` (minification) and `frontend/src/lib/sse.js` (decoding).
+
+### Agent Runs as Unprivileged User
+
+**Security principle**: Agent runs as system user `watchflare` (not root).
+
+**Permissions**:
+- Read: `/etc/watchflare/` (config owned by root)
+- Write: `/var/lib/watchflare/` (owned by watchflare)
+
+**Impact**:
+- Cannot modify own binary or config
+- Package collectors must use unprivileged commands (e.g., `brew list` works, `apt` requires sudo)
+- Some system info may be unavailable (acceptable tradeoff)
+
+### gRPC Timestamp Window
+
+**Default: ±300 seconds (5 minutes)**. Configurable via `GRPC_TIMESTAMP_WINDOW` env var.
+
+**Clock skew**: If agent and backend clocks differ by >5min, all RPCs fail. Monitor for "timestamp out of window" errors in logs.
+
+**Time sync**: Agents should run NTP/timesyncd. Backend timestamp validation is defensive, not a replacement for proper time sync.
+
+---
+
+## Testing Notes
+
+**Backend**: Tests use in-memory SQLite (`:memory:`). TimescaleDB features disabled in tests. Run with `go test ./...`.
+
+**Agent WAL**: Tests create temp directories (`t.TempDir()`). Verify atomic truncation in `agent/wal/wal_test.go`.
+
+**Package collectors**: Most tests are smoke tests (check name, availability). Full collection tests require specific CLI tools installed.
+
+**Integration**: No automated integration tests yet. Manual testing uses local backend + agent in dev mode.
+
+---
+
+## Security Checklist for Code Changes
+
+- [ ] Agent RPCs include `agent_id`, `agent_key`, `timestamp` fields
+- [ ] Sensitive data (passwords, tokens, keys) never logged or returned in API responses
+- [ ] File writes use restrictive permissions (0600 for keys, 0640 for configs)
+- [ ] Database queries use parameterized statements (GORM handles this)
+- [ ] JWT tokens validated on every protected endpoint (middleware already does this)
+- [ ] TLS 1.3 enforced (check `MinVersion` and `MaxVersion` both set to `VersionTLS13`)
+- [ ] Registration tokens hashed before storage (SHA-256, never plaintext in DB)
+- [ ] HMAC comparisons use `hmac.Equal()` (constant-time, not `==`)
+
+---
+
+## Development Workflow
+
+**Typical session**:
+1. Start database: `docker compose up -d`
+2. Start backend: `cd backend && go run .`
+3. Start frontend: `cd frontend && npm run dev`
+4. Agent (dev mode): `cd agent && ./watchflare-agent` (requires prior registration)
+
+**Agent install/test cycle**:
+1. Build: `go build -o watchflare-agent`
+2. Stop service: `sudo launchctl bootout system/com.watchflare.agent`
+3. Copy new binary: `sudo cp watchflare-agent /usr/local/bin/`
+4. Start service: `sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist`
+5. Check logs: `tail -f /var/log/watchflare-agent.log`
+
+**Database inspection**:
+```bash
+docker exec -it watchflare-postgres psql -U watchflare -d watchflare
+\dt                                    # List tables
+SELECT * FROM servers;                 # View servers
+SELECT * FROM packages LIMIT 10;       # View packages
+\d+ metrics                            # Describe metrics table (hypertable)
+```
+
+---
+
+## Documentation
+
+- `docs/architecture.md`: System overview, data flows, deployment
+- `docs/internals.md`: Detailed component breakdown (every package/module)
+- `docs/security.md`: Security model (TLS, HMAC, JWT, key management)
+- `agent/INSTALL.md`: Agent installation guide (macOS focus)
+- `README.md`: (Currently minimal)
