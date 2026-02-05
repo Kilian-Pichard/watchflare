@@ -12,6 +12,7 @@ import (
 	"watchflare/backend/handlers"
 	"watchflare/backend/middleware"
 	"watchflare/backend/pki"
+	"watchflare/backend/services"
 	pb "watchflare/shared/proto"
 
 	"github.com/gin-contrib/cors"
@@ -60,6 +61,10 @@ func main() {
 	// Stale checker: marks agents offline if no heartbeat for 15s (3x 5s interval)
 	staleChecker := cache.NewStaleChecker(10*time.Second, 15*time.Second)
 	go staleChecker.Start()
+
+	// Start aggregated metrics scheduler (broadcasts via SSE every 30s)
+	aggregatedMetricsScheduler := services.NewAggregatedMetricsScheduler(30 * time.Second)
+	go aggregatedMetricsScheduler.Start()
 
 	// Use WaitGroup to run both servers concurrently
 	var wg sync.WaitGroup
@@ -138,6 +143,7 @@ func setupRouter() *gin.Engine {
 		serverGroup.GET("", handlers.ListServers)
 		serverGroup.GET("/:id", handlers.GetServer)
 		serverGroup.GET("/:id/metrics", handlers.GetMetrics)
+		serverGroup.GET("/metrics/aggregated", handlers.GetAggregatedMetrics)
 		serverGroup.PUT("/:id/validate-ip", handlers.ValidateIP)
 		serverGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
 		serverGroup.PUT("/:id/ignore-ip-mismatch", handlers.IgnoreIPMismatch)

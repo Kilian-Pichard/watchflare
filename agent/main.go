@@ -66,8 +66,13 @@ func main() {
 		log.Println("WAL disabled (metrics will be lost if send fails)")
 	}
 
-	// Create sender
-	sender := wal.NewSender(walInstance, grpcClient, cfg.AgentID, cfg.AgentKey, cfg.MetricsInterval, cfg.WALMaxSizeMB)
+	// Detect environment and create metrics config
+	env := sysinfo.DetectEnvironment()
+	metricsConfig := sysinfo.GetMetricsConfig(env)
+	log.Printf("Environment: %s", env.String())
+
+	// Create sender with metrics config
+	sender := wal.NewSender(walInstance, grpcClient, cfg.AgentID, cfg.AgentKey, cfg.MetricsInterval, cfg.WALMaxSizeMB, metricsConfig)
 
 	// Setup context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
@@ -345,6 +350,11 @@ func runRegister() {
 	}
 	defer grpcClient.Close()
 
+	// Detect environment type
+	log.Println("Detecting environment...")
+	env := sysinfo.DetectEnvironment()
+	log.Printf("Environment detected: %s", env.String())
+
 	// Register with backend
 	log.Println("Registering agent...")
 	regResp, err := grpcClient.Register(
@@ -357,6 +367,9 @@ func runRegister() {
 		info.PlatformFamily,
 		info.Architecture,
 		info.Kernel,
+		string(env.Type),
+		env.Hypervisor,
+		env.ContainerRuntime,
 	)
 	if err != nil {
 		log.Fatalf("Registration failed: %v", err)

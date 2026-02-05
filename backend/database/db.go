@@ -21,6 +21,9 @@ var droppedMetricsSQL string
 //go:embed migrations/003_packages.sql
 var packagesSQL string
 
+//go:embed migrations/004_environment_detection.sql
+var environmentDetectionSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -136,6 +139,11 @@ func Connect() error {
 		log.Printf("Warning: Failed to run packages migration: %v", err)
 	}
 
+	// Run environment detection migration
+	if err := RunEnvironmentDetectionMigration(); err != nil {
+		log.Printf("Warning: Failed to run environment detection migration: %v", err)
+	}
+
 	return nil
 }
 
@@ -175,6 +183,19 @@ func RunPackagesMigration() error {
 	}
 
 	log.Println("✓ Packages migration completed successfully")
+	return nil
+}
+
+// RunEnvironmentDetectionMigration runs the environment detection migration
+func RunEnvironmentDetectionMigration() error {
+	log.Println("Running environment detection migration...")
+
+	// Execute migration (SQL embedded at compile time)
+	if err := DB.Exec(environmentDetectionSQL).Error; err != nil {
+		return fmt.Errorf("failed to execute migration: %w", err)
+	}
+
+	log.Println("✓ Environment detection migration completed successfully")
 	return nil
 }
 

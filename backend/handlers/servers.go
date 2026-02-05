@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"time"
 	"watchflare/backend/database"
@@ -219,4 +220,132 @@ func GetDroppedMetrics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, alerts)
+}
+
+// GetAggregatedMetrics returns historical aggregated metrics with regular intervals
+func GetAggregatedMetrics(c *gin.Context) {
+	timeRange := c.Query("time_range")
+	if timeRange == "" {
+		timeRange = "1h" // Default to 1 hour
+	}
+
+	// Determine time range and interval
+	var duration time.Duration
+	var interval string
+	switch timeRange {
+	case "1h":
+		duration = 1 * time.Hour
+		interval = "30 seconds"
+	case "12h":
+		duration = 12 * time.Hour
+		interval = "10 minutes"
+	case "24h":
+		duration = 24 * time.Hour
+		interval = "20 minutes"
+	case "7d":
+		duration = 7 * 24 * time.Hour
+		interval = "2 hours"
+	case "30d":
+		duration = 30 * 24 * time.Hour
+		interval = "10 hours"
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time_range"})
+		return
+	}
+
+	endTime := time.Now()
+	startTime := endTime.Add(-duration)
+
+	// Query using time_bucket to create regular intervals
+	// For each bucket, we aggregate metrics with timestamp > bucket_start AND <= bucket_end
+	// Two-level aggregation:
+	// 1. First, average metrics per server per bucket (to avoid summing multiple metrics from same server)
+	// 2. Then, sum across servers (and average CPU)
+	query := `
+		WITH time_buckets AS (
+			SELECT time_bucket($1::interval, m.timestamp) as bucket,
+				   m.server_id,
+				   m.cpu_usage_percent,
+				   m.memory_total_bytes,
+				   m.memory_used_bytes,
+				   m.disk_total_bytes,
+				   m.disk_used_bytes,
+				   s.environment_type
+			FROM metrics m
+			JOIN servers s ON m.server_id = s.id
+			WHERE s.status = 'online'
+			  AND m.timestamp > $2
+			  AND m.timestamp <= $3
+		),
+		server_aggregates AS (
+			-- Average metrics per server per bucket (one row per server per bucket)
+			SELECT
+				bucket,
+				server_id,
+				COALESCE(AVG(cpu_usage_percent), 0) as cpu_usage_percent,
+				COALESCE(AVG(memory_total_bytes), 0) as memory_total_bytes,
+				COALESCE(AVG(memory_used_bytes), 0) as memory_used_bytes,
+				COALESCE(AVG(disk_total_bytes), 0) as disk_total_bytes,
+				COALESCE(AVG(disk_used_bytes), 0) as disk_used_bytes,
+				MAX(environment_type) as environment_type
+			FROM time_buckets
+			GROUP BY bucket, server_id
+		)
+		SELECT
+			bucket as timestamp,
+			COALESCE(AVG(cpu_usage_percent), 0) as cpu_usage_percent,
+			COALESCE(SUM(memory_total_bytes), 0)::BIGINT as memory_total_bytes,
+			COALESCE(SUM(memory_used_bytes), 0)::BIGINT as memory_used_bytes,
+			COALESCE(SUM(CASE WHEN environment_type != 'container' THEN disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
+			COALESCE(SUM(CASE WHEN environment_type != 'container' THEN disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
+		FROM server_aggregates
+		GROUP BY bucket
+		ORDER BY bucket ASC
+	`
+
+	rows, err := database.DB.Raw(query, interval, startTime, endTime).Rows()
+	if err != nil {
+		log.Printf("Error querying aggregated metrics: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query metrics"})
+		return
+	}
+	defer rows.Close()
+
+	type AggregatedPoint struct {
+		Timestamp         time.Time `json:"timestamp"`
+		CPUUsagePercent   float64   `json:"cpu_usage_percent"`
+		MemoryTotalBytes  uint64    `json:"memory_total_bytes"`
+		MemoryUsedBytes   uint64    `json:"memory_used_bytes"`
+		MemoryAvailableBytes uint64 `json:"memory_available_bytes"`
+		DiskTotalBytes    uint64    `json:"disk_total_bytes"`
+		DiskUsedBytes     uint64    `json:"disk_used_bytes"`
+	}
+
+	var points []AggregatedPoint
+	for rows.Next() {
+		var point AggregatedPoint
+		if err := rows.Scan(
+			&point.Timestamp,
+			&point.CPUUsagePercent,
+			&point.MemoryTotalBytes,
+			&point.MemoryUsedBytes,
+			&point.DiskTotalBytes,
+			&point.DiskUsedBytes,
+		); err != nil {
+			log.Printf("Error scanning aggregated metrics: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan metrics"})
+			return
+		}
+		// Calculate memory available
+		point.MemoryAvailableBytes = point.MemoryTotalBytes - point.MemoryUsedBytes
+		points = append(points, point)
+	}
+
+	if points == nil {
+		points = []AggregatedPoint{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"metrics": points,
+	})
 }

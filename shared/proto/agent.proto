@@ -34,6 +34,11 @@ message RegisterRequest {
   string architecture = 8;          // "arm64", "amd64"
   string kernel = 9;                // "24.6.0", "5.15.0-97-generic"
   int64 timestamp = 10;             // Unix timestamp in seconds (for anti-replay)
+
+  // Environment detection (added for smart metrics collection)
+  string environment_type = 11;     // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
+  string hypervisor = 12;           // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
+  string container_runtime = 13;    // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
 }
 
 // RegisterResponse is sent back after successful registration

@@ -325,6 +325,35 @@
 								</span>
 							</div>
 						{/if}
+						{#if server.environment_type}
+							<div class="info-item">
+								<span class="info-label">Environment</span>
+								<span class="info-value environment-badge">
+									{#if server.environment_type === 'physical'}
+										🖥️ Physical Server
+									{:else if server.environment_type === 'physical_with_containers'}
+										🖥️ Physical + 🐳 Containers
+									{:else if server.environment_type === 'vm'}
+										☁️ Virtual Machine
+										{#if server.hypervisor && server.hypervisor !== 'unknown'}
+											({server.hypervisor})
+										{/if}
+									{:else if server.environment_type === 'vm_with_containers'}
+										☁️ VM + 🐳 Containers
+										{#if server.hypervisor && server.hypervisor !== 'unknown'}
+											({server.hypervisor})
+										{/if}
+									{:else if server.environment_type === 'container'}
+										🐳 Container
+										{#if server.container_runtime && server.container_runtime !== 'unknown'}
+											({server.container_runtime})
+										{/if}
+									{:else}
+										{server.environment_type}
+									{/if}
+								</span>
+							</div>
+						{/if}
 						{#if server.architecture}
 							<div class="info-item">
 								<span class="info-label">Architecture</span>

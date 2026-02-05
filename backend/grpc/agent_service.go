@@ -95,6 +95,9 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		"platform_family":    req.PlatformFamily,
 		"architecture":       req.Architecture,
 		"kernel":             req.Kernel,
+		"environment_type":   req.EnvironmentType,
+		"hypervisor":         req.Hypervisor,
+		"container_runtime":  req.ContainerRuntime,
 		"status":             "online",
 		"last_seen":          &now,
 		"registration_token": nil, // Clear the token after successful registration

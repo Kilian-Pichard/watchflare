@@ -8,6 +8,7 @@ import (
 
 	"watchflare-agent/client"
 	"watchflare-agent/metrics"
+	"watchflare-agent/sysinfo"
 	pb "watchflare/shared/proto"
 
 	"google.golang.org/protobuf/proto"
@@ -21,10 +22,11 @@ type Sender struct {
 	agentKey        string
 	metricsInterval time.Duration
 	maxWALSize      int64
+	metricsConfig   *sysinfo.MetricsConfig
 }
 
 // NewSender creates a new Sender
-func NewSender(wal *WAL, grpcClient *client.Client, agentID, agentKey string, metricsIntervalSec int, maxWALSizeMB int) *Sender {
+func NewSender(wal *WAL, grpcClient *client.Client, agentID, agentKey string, metricsIntervalSec int, maxWALSizeMB int, metricsConfig *sysinfo.MetricsConfig) *Sender {
 	return &Sender{
 		wal:             wal,
 		client:          grpcClient,
@@ -32,6 +34,7 @@ func NewSender(wal *WAL, grpcClient *client.Client, agentID, agentKey string, me
 		agentKey:        agentKey,
 		metricsInterval: time.Duration(metricsIntervalSec) * time.Second,
 		maxWALSize:      int64(maxWALSizeMB) * 1024 * 1024,
+		metricsConfig:   metricsConfig,
 	}
 }
 
@@ -122,8 +125,8 @@ func (s *Sender) replayWAL() error {
 
 // collectAndSend collects metrics, persists to WAL, and sends
 func (s *Sender) collectAndSend() {
-	// 1. Collect metrics
-	m, err := metrics.Collect()
+	// 1. Collect metrics (using environment-based config)
+	m, err := metrics.Collect(s.metricsConfig)
 	if err != nil {
 		log.Printf("Failed to collect metrics: %v", err)
 		return

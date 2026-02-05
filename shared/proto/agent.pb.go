@@ -34,8 +34,12 @@ type RegisterRequest struct {
 	Architecture      string                 `protobuf:"bytes,8,opt,name=architecture,proto3" json:"architecture,omitempty"`                              // "arm64", "amd64"
 	Kernel            string                 `protobuf:"bytes,9,opt,name=kernel,proto3" json:"kernel,omitempty"`                                          // "24.6.0", "5.15.0-97-generic"
 	Timestamp         int64                  `protobuf:"varint,10,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                                  // Unix timestamp in seconds (for anti-replay)
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Environment detection (added for smart metrics collection)
+	EnvironmentType  string `protobuf:"bytes,11,opt,name=environment_type,json=environmentType,proto3" json:"environment_type,omitempty"`    // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
+	Hypervisor       string `protobuf:"bytes,12,opt,name=hypervisor,proto3" json:"hypervisor,omitempty"`                                     // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
+	ContainerRuntime string `protobuf:"bytes,13,opt,name=container_runtime,json=containerRuntime,proto3" json:"container_runtime,omitempty"` // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RegisterRequest) Reset() {
@@ -136,6 +140,27 @@ func (x *RegisterRequest) GetTimestamp() int64 {
 		return x.Timestamp
 	}
 	return 0
+}
+
+func (x *RegisterRequest) GetEnvironmentType() string {
+	if x != nil {
+		return x.EnvironmentType
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetHypervisor() string {
+	if x != nil {
+		return x.Hypervisor
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetContainerRuntime() string {
+	if x != nil {
+		return x.ContainerRuntime
+	}
+	return ""
 }
 
 // RegisterResponse is sent back after successful registration
@@ -1121,7 +1146,7 @@ var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\x05agent\"\xee\x02\n" +
+	"\x11proto/agent.proto\x12\x05agent\"\xe6\x03\n" +
 	"\x0fRegisterRequest\x12-\n" +
 	"\x12registration_token\x18\x01 \x01(\tR\x11registrationToken\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\"\n" +
@@ -1133,7 +1158,12 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\farchitecture\x18\b \x01(\tR\farchitecture\x12\x16\n" +
 	"\x06kernel\x18\t \x01(\tR\x06kernel\x12\x1c\n" +
 	"\ttimestamp\x18\n" +
-	" \x01(\x03R\ttimestamp\"\xb8\x01\n" +
+	" \x01(\x03R\ttimestamp\x12)\n" +
+	"\x10environment_type\x18\v \x01(\tR\x0fenvironmentType\x12\x1e\n" +
+	"\n" +
+	"hypervisor\x18\f \x01(\tR\n" +
+	"hypervisor\x12+\n" +
+	"\x11container_runtime\x18\r \x01(\tR\x10containerRuntime\"\xb8\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +

@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"time"
+	"watchflare-agent/sysinfo"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
@@ -25,39 +26,48 @@ type SystemMetrics struct {
 	Timestamp            int64
 }
 
-// Collect gathers all system metrics
-func Collect() (*SystemMetrics, error) {
+// Collect gathers system metrics based on environment configuration
+// config parameter determines which metrics to collect (e.g., containers don't collect disk)
+func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	metrics := &SystemMetrics{
 		Timestamp: time.Now().Unix(),
 	}
 
 	// CPU usage (averaged over 1 second)
-	cpuPercent, err := cpu.Percent(time.Second, false)
-	if err == nil && len(cpuPercent) > 0 {
-		metrics.CPUUsagePercent = cpuPercent[0]
+	if config.CollectCPU {
+		cpuPercent, err := cpu.Percent(time.Second, false)
+		if err == nil && len(cpuPercent) > 0 {
+			metrics.CPUUsagePercent = cpuPercent[0]
+		}
 	}
 
 	// Memory stats
-	memStats, err := mem.VirtualMemory()
-	if err == nil {
-		metrics.MemoryTotalBytes = memStats.Total
-		metrics.MemoryUsedBytes = memStats.Used
-		metrics.MemoryAvailableBytes = memStats.Available
+	if config.CollectMemory {
+		memStats, err := mem.VirtualMemory()
+		if err == nil {
+			metrics.MemoryTotalBytes = memStats.Total
+			metrics.MemoryUsedBytes = memStats.Used
+			metrics.MemoryAvailableBytes = memStats.Available
+		}
 	}
 
 	// Load average
-	loadStats, err := load.Avg()
-	if err == nil {
-		metrics.LoadAvg1Min = loadStats.Load1
-		metrics.LoadAvg5Min = loadStats.Load5
-		metrics.LoadAvg15Min = loadStats.Load15
+	if config.CollectLoadAvg {
+		loadStats, err := load.Avg()
+		if err == nil {
+			metrics.LoadAvg1Min = loadStats.Load1
+			metrics.LoadAvg5Min = loadStats.Load5
+			metrics.LoadAvg15Min = loadStats.Load15
+		}
 	}
 
-	// Disk usage (root partition)
-	diskStats, err := disk.Usage("/")
-	if err == nil {
-		metrics.DiskTotalBytes = diskStats.Total
-		metrics.DiskUsedBytes = diskStats.Used
+	// Disk usage (root partition) - SKIPPED for containers to avoid double-counting
+	if config.CollectDisk {
+		diskStats, err := disk.Usage("/")
+		if err == nil {
+			metrics.DiskTotalBytes = diskStats.Total
+			metrics.DiskUsedBytes = diskStats.Used
+		}
 	}
 
 	// System uptime

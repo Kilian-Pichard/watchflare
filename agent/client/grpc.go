@@ -110,7 +110,7 @@ type RegistrationResponse struct {
 
 // Register attempts to register the agent with the backend
 // Returns registration credentials and TLS information
-func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel string) (*RegistrationResponse, error) {
+func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel, environmentType, hypervisor, containerRuntime string) (*RegistrationResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -125,6 +125,9 @@ func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion
 		Architecture:      architecture,
 		Kernel:            kernel,
 		Timestamp:         time.Now().Unix(), // Add timestamp for anti-replay
+		EnvironmentType:   environmentType,
+		Hypervisor:        hypervisor,
+		ContainerRuntime:  containerRuntime,
 	}
 
 	// Note: Registration uses token-based auth, not HMAC
