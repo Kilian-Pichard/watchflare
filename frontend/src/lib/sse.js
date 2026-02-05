@@ -45,6 +45,11 @@ export function connectSSE(onMessage, onError) {
 		if (onMessage) onMessage({ type: 'metrics_update', data });
 	});
 
+	eventSource.addEventListener('aggregated_metrics_update', (e) => {
+		const data = JSON.parse(e.data);
+		if (onMessage) onMessage({ type: 'aggregated_metrics_update', data });
+	});
+
 	eventSource.onerror = (error) => {
 		console.error('SSE error:', error);
 		if (onError) onError(error);

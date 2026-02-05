@@ -5,8 +5,8 @@
         logout,
         getCurrentUser,
         listServers,
-        getServerMetrics,
         getDroppedMetrics,
+        getAggregatedMetrics,
     } from "$lib/api";
     import { connectSSE } from "$lib/sse";
     import { formatBytes, formatPercent } from "$lib/utils";
@@ -24,89 +24,28 @@
     let metricsData = $state({});
     let sseDisconnect = null;
     let droppedMetricsAlerts = $state([]);
+    let aggregatedMetrics = $state([]);
 
-    // Computed aggregates
-    let stats = $derived({
-        totalServers: servers.length,
-        onlineServers: servers.filter((s) => s.server.status === "online")
-            .length,
-        offlineServers: servers.filter((s) => s.server.status === "offline")
-            .length,
+    // Computed aggregates - uses last point from backend aggregated metrics
+    let stats = $derived.by(() => {
+        const lastPoint = aggregatedMetrics.length > 0
+            ? aggregatedMetrics[aggregatedMetrics.length - 1]
+            : null;
 
-        // Aggregate CPU (average across all servers)
-        avgCPU:
-            servers.length > 0
-                ? servers.reduce(
-                      (sum, s) => sum + (s.lastMetrics?.cpu_usage_percent || 0),
-                      0,
-                  ) / servers.length
-                : 0,
+        return {
+            totalServers: servers.length,
+            onlineServers: servers.filter((s) => s.server.status === "online")
+                .length,
+            offlineServers: servers.filter((s) => s.server.status === "offline")
+                .length,
 
-        // Aggregate Memory (sum of all servers)
-        totalMemory: servers.reduce(
-            (sum, s) => sum + (s.lastMetrics?.memory_total_bytes || 0),
-            0,
-        ),
-        usedMemory: servers.reduce(
-            (sum, s) => sum + (s.lastMetrics?.memory_used_bytes || 0),
-            0,
-        ),
-
-        // Aggregate Disk (sum of all servers)
-        totalDisk: servers.reduce(
-            (sum, s) => sum + (s.lastMetrics?.disk_total_bytes || 0),
-            0,
-        ),
-        usedDisk: servers.reduce(
-            (sum, s) => sum + (s.lastMetrics?.disk_used_bytes || 0),
-            0,
-        ),
-    });
-
-    // Aggregate chart data from all servers
-    let aggregatedChartData = $derived.by(() => {
-        // Get all unique timestamps
-        const timestampMap = new Map();
-
-        servers.forEach((server) => {
-            server.metrics.forEach((metric) => {
-                const timestamp = metric.timestamp;
-                if (!timestampMap.has(timestamp)) {
-                    timestampMap.set(timestamp, {
-                        timestamp,
-                        cpuSum: 0,
-                        cpuCount: 0,
-                        memoryTotal: 0,
-                        memoryUsed: 0,
-                        diskTotal: 0,
-                        diskUsed: 0,
-                    });
-                }
-
-                const entry = timestampMap.get(timestamp);
-                entry.cpuSum += metric.cpu_usage_percent || 0;
-                entry.cpuCount += 1;
-                entry.memoryTotal += metric.memory_total_bytes || 0;
-                entry.memoryUsed += metric.memory_used_bytes || 0;
-                entry.diskTotal += metric.disk_total_bytes || 0;
-                entry.diskUsed += metric.disk_used_bytes || 0;
-            });
-        });
-
-        // Convert to array and calculate averages
-        // Backend already aggregates the data based on the interval parameter
-        return Array.from(timestampMap.values())
-            .map((entry) => ({
-                timestamp: entry.timestamp,
-                cpu_usage_percent:
-                    entry.cpuCount > 0 ? entry.cpuSum / entry.cpuCount : 0,
-                memory_total_bytes: entry.memoryTotal,
-                memory_used_bytes: entry.memoryUsed,
-                memory_available_bytes: entry.memoryTotal - entry.memoryUsed,
-                disk_total_bytes: entry.diskTotal,
-                disk_used_bytes: entry.diskUsed,
-            }))
-            .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            // Use last point from backend aggregated metrics
+            avgCPU: lastPoint?.cpu_usage_percent || 0,
+            totalMemory: lastPoint?.memory_total_bytes || 0,
+            usedMemory: lastPoint?.memory_used_bytes || 0,
+            totalDisk: lastPoint?.disk_total_bytes || 0,
+            usedDisk: lastPoint?.disk_used_bytes || 0,
+        };
     });
 
     function formatDuration(nanoseconds) {
@@ -152,15 +91,13 @@
             const serversData = await listServers();
             servers = serversData.servers.map((server) => ({
                 server,
-                lastMetrics: null,
-                metrics: [],
             }));
-
-            // Load metrics for each server
-            await loadMetrics();
 
             // Load dropped metrics alerts
             await loadDroppedMetrics();
+
+            // Load aggregated metrics (for stats cards and charts)
+            await loadAggregatedMetrics();
         } catch (err) {
             console.error("Failed to load data:", err);
             // Error will trigger redirect in apiRequest
@@ -178,60 +115,23 @@
         }
     }
 
-    async function loadMetrics() {
-        // Use time_range parameter - backend handles start/end/interval automatically
-        for (let i = 0; i < servers.length; i++) {
-            const server = servers[i];
-            if (server.server.status !== "online") continue;
-
-            try {
-                const data = await getServerMetrics(server.server.id, {
-                    time_range: timeRange,
-                });
-                servers[i].metrics = data.metrics || [];
-
-                // Set last metrics (most recent point)
-                if (servers[i].metrics.length > 0) {
-                    servers[i].lastMetrics =
-                        servers[i].metrics[servers[i].metrics.length - 1];
-                }
-            } catch (err) {
-                console.error(
-                    `Failed to load metrics for server ${server.server.id}:`,
-                    err,
-                );
-            }
+    async function loadAggregatedMetrics() {
+        try {
+            const data = await getAggregatedMetrics(timeRange);
+            aggregatedMetrics = data.metrics || [];
+        } catch (err) {
+            console.error("Failed to load aggregated metrics:", err);
         }
     }
 
     function handleTimeRangeChange() {
-        loadMetrics();
+        loadAggregatedMetrics();
     }
 
     function handleSSEMessage(event) {
-        if (event.type === "metrics_update") {
-            const { server_id, ...metrics } = event.data;
+        console.log("SSE event received:", event.type, event.data);
 
-            // Find server and update last metrics
-            const serverIndex = servers.findIndex(
-                (s) => s.server.id === server_id,
-            );
-            if (serverIndex !== -1) {
-                servers[serverIndex].lastMetrics = metrics;
-
-                // Add to metrics array for real-time chart update
-                servers[serverIndex].metrics = [
-                    ...servers[serverIndex].metrics,
-                    metrics,
-                ];
-
-                // Keep only last 100 points to avoid memory issues
-                if (servers[serverIndex].metrics.length > 100) {
-                    servers[serverIndex].metrics =
-                        servers[serverIndex].metrics.slice(-100);
-                }
-            }
-        } else if (event.type === "server_update") {
+        if (event.type === "server_update") {
             // Update server status
             const serverIndex = servers.findIndex(
                 (s) => s.server.id === event.data.id,
@@ -240,13 +140,25 @@
                 servers[serverIndex].server.status = event.data.status;
                 servers[serverIndex].server.last_seen = event.data.last_seen;
             }
+        } else if (event.type === "aggregated_metrics_update") {
+            console.log("Aggregated metrics update received:", event.data);
+            // Add new aggregated metrics point in real-time
+            const newPoint = event.data;
+            aggregatedMetrics = [...aggregatedMetrics, newPoint];
+
+            console.log("Updated aggregatedMetrics, new length:", aggregatedMetrics.length);
+
+            // Keep only last 200 points to avoid memory issues
+            if (aggregatedMetrics.length > 200) {
+                aggregatedMetrics = aggregatedMetrics.slice(-200);
+            }
         }
     }
 
     onMount(() => {
         loadData();
 
-        // Connect to SSE for real-time updates
+        // Connect to SSE for server status updates and real-time aggregated metrics
         sseDisconnect = connectSSE(handleSSEMessage, (error) => {
             console.error("SSE error:", error);
         });
@@ -438,7 +350,7 @@
                             {formatPercent(stats.avgCPU)}
                         </span>
                     </div>
-                    <CPUChart data={aggregatedChartData} />
+                    <CPUChart data={aggregatedMetrics} />
                 </div>
 
                 <!-- Memory Chart -->
@@ -462,7 +374,7 @@
                             )}
                         </span>
                     </div>
-                    <MemoryChart data={aggregatedChartData} />
+                    <MemoryChart data={aggregatedMetrics} />
                 </div>
 
                 <!-- Disk Chart -->
@@ -486,7 +398,7 @@
                             )}
                         </span>
                     </div>
-                    <DiskChart data={aggregatedChartData} />
+                    <DiskChart data={aggregatedMetrics} />
                 </div>
             </div>
         {/if}

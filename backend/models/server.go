@@ -32,6 +32,9 @@ type Server struct {
 	PlatformFamily  *string `json:"platform_family"`  // "darwin", "linux", "windows" (technical)
 	Architecture    *string `json:"architecture"`     // "arm64", "amd64"
 	Kernel          *string `json:"kernel"`           // "24.6.0", "5.15.0-97-generic"
+	EnvironmentType *string `json:"environment_type"` // "physical", "vm", "container", etc.
+	Hypervisor      *string `json:"hypervisor"`       // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
+	ContainerRuntime *string `json:"container_runtime"` // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
 	LastSeen        *time.Time `json:"last_seen"`
 
 	// Statut du serveur

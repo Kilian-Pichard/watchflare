@@ -58,6 +58,17 @@ type MetricsUpdateMinified struct {
 	Uptime           uint64  `json:"u"`  // uptime_seconds
 }
 
+// AggregatedMetricsUpdate represents aggregated metrics from all online servers
+type AggregatedMetricsUpdate struct {
+	Timestamp            string  `json:"timestamp"`
+	CPUUsagePercent      float64 `json:"cpu_usage_percent"`
+	MemoryTotalBytes     uint64  `json:"memory_total_bytes"`
+	MemoryUsedBytes      uint64  `json:"memory_used_bytes"`
+	MemoryAvailableBytes uint64  `json:"memory_available_bytes"`
+	DiskTotalBytes       uint64  `json:"disk_total_bytes"`
+	DiskUsedBytes        uint64  `json:"disk_used_bytes"`
+}
+
 // Client represents an SSE client connection
 type Client struct {
 	ID      string
@@ -148,6 +159,15 @@ func (b *Broker) BroadcastMetricsUpdate(update MetricsUpdate) {
 	event := Event{
 		Type: "metrics_update",
 		Data: minified,
+	}
+	b.Broadcast(event)
+}
+
+// BroadcastAggregatedMetricsUpdate sends an aggregated metrics update event to all clients
+func (b *Broker) BroadcastAggregatedMetricsUpdate(update AggregatedMetricsUpdate) {
+	event := Event{
+		Type: "aggregated_metrics_update",
+		Data: update,
 	}
 	b.Broadcast(event)
 }

@@ -170,6 +170,16 @@ export async function getDroppedMetrics() {
 	return apiRequest('/servers/dropped-metrics');
 }
 
+// Get aggregated metrics from all online servers
+export async function getAggregatedMetrics(timeRange) {
+	const queryParams = new URLSearchParams();
+	if (timeRange) {
+		queryParams.append('time_range', timeRange);
+	}
+	const query = queryParams.toString();
+	return apiRequest(`/servers/metrics/aggregated${query ? '?' + query : ''}`);
+}
+
 // Package API calls
 export async function getServerPackages(serverId, params = {}) {
 	const queryParams = new URLSearchParams();
