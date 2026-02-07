@@ -47,6 +47,10 @@ go build -o watchflare-agent
 ./watchflare-agent register --token=wf_reg_... --host=localhost --port=50051
 
 # Install as system service (macOS)
+# Option A: Install + register + start in one command
+sudo ./install-macos.sh --token=wf_reg_... --host=localhost --port=50051
+
+# Option B: Install only (register manually after)
 sudo ./install-macos.sh
 
 # Run tests
@@ -115,6 +119,10 @@ protoc --go_out=. --go-grpc_out=. agent.proto
 - Atomic truncation: Temp file → sync → atomic rename (crash-safe)
 
 **Flow**: Collect → Append to WAL → Send → Clear WAL only if all sends succeed.
+
+**Recovery logging**: Explicit messages when replaying metrics after backend downtime:
+- `"WAL RECOVERY: Found X pending metrics from previous backend downtime"`
+- `"WAL cleared (recovery finished)"` or `"Sent X metrics (including Y accumulated during backend outage)"`
 
 **Code**: `agent/wal/wal.go` (file operations), `agent/wal/sender.go` (orchestration).
 
@@ -247,9 +255,10 @@ All embedded at compile time (`//go:embed`).
 ```
 backend/
   ├── .env                            # Configuration (git-ignored)
-  ├── pki/                            # Auto-generated TLS certs
+  ├── data/pki/                       # Auto-generated TLS certs (dev) [git-ignored]
   │   ├── ca.pem / ca-key.pem         # CA (10 year validity)
   │   └── server.pem / server-key.pem # Server cert (5 year validity)
+  │                                   # Production: /var/lib/watchflare/pki/
   ├── database/migrations/            # SQL migrations (embedded)
   ├── grpc/agent_service.go           # 5 RPC handlers
   ├── handlers/                       # HTTP handlers (auth, servers, metrics, packages, sse)
@@ -381,6 +390,11 @@ const fieldMap = {
 3. Copy new binary: `sudo cp watchflare-agent /usr/local/bin/`
 4. Start service: `sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist`
 5. Check logs: `tail -f /var/log/watchflare-agent.log`
+
+**Agent uninstall** (macOS):
+```bash
+sudo ./uninstall-macos.sh  # Prompts for data/config/user removal
+```
 
 **Database inspection**:
 ```bash

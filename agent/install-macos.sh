@@ -19,6 +19,29 @@ CONFIG_DIR="/etc/watchflare"
 DATA_DIR="/var/lib/watchflare"
 PLIST_PATH="/Library/LaunchDaemons/${SERVICE_NAME}.plist"
 
+# Parse command line arguments
+TOKEN=""
+HOST=""
+PORT=""
+for arg in "$@"; do
+    case $arg in
+        --token=*)
+            TOKEN="${arg#*=}"
+            ;;
+        --host=*)
+            HOST="${arg#*=}"
+            ;;
+        --port=*)
+            PORT="${arg#*=}"
+            ;;
+        *)
+            echo -e "${RED}Unknown argument: $arg${NC}"
+            echo "Usage: sudo $0 [--token=TOKEN] [--host=HOST] [--port=PORT]"
+            exit 1
+            ;;
+    esac
+done
+
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error: This script must be run as root (use sudo)${NC}"
@@ -166,15 +189,37 @@ chown root:wheel "$PLIST_PATH"
 chmod 644 "$PLIST_PATH"
 echo "  → Created $PLIST_PATH"
 
-# Step 6: Check configuration
-echo -e "${YELLOW}[6/7]${NC} Checking configuration..."
+# Step 6: Registration
+echo -e "${YELLOW}[6/7]${NC} Agent registration..."
 if [ ! -f "${CONFIG_DIR}/agent.conf" ]; then
-    echo -e "${RED}  ⚠ Configuration file not found: ${CONFIG_DIR}/agent.conf${NC}"
-    echo "  → Please register the agent first:"
-    echo "     ${INSTALL_DIR}/watchflare-agent register --token=YOUR_TOKEN --host=YOUR_HOST"
-    NEEDS_REGISTRATION=true
+    # No existing config, check if we have registration parameters
+    if [ -n "$TOKEN" ]; then
+        echo "  → Registering agent with backend..."
+
+        # Set defaults if not provided
+        if [ -z "$HOST" ]; then
+            HOST="localhost"
+        fi
+        if [ -z "$PORT" ]; then
+            PORT="50051"
+        fi
+
+        # Run registration
+        if "${INSTALL_DIR}/watchflare-agent" register --token="$TOKEN" --host="$HOST" --port="$PORT"; then
+            echo -e "  → ${GREEN}Registration successful${NC}"
+            NEEDS_REGISTRATION=false
+        else
+            echo -e "  → ${RED}Registration failed${NC}"
+            NEEDS_REGISTRATION=true
+        fi
+    else
+        echo -e "${YELLOW}  ⚠ No configuration file found${NC}"
+        echo "  → To register now, run:"
+        echo "     sudo ${INSTALL_DIR}/watchflare-agent register --token=YOUR_TOKEN --host=YOUR_HOST"
+        NEEDS_REGISTRATION=true
+    fi
 else
-    echo "  → Configuration file exists"
+    echo "  → Configuration file already exists"
     NEEDS_REGISTRATION=false
 fi
 
@@ -216,6 +261,11 @@ if [ "$NEEDS_REGISTRATION" = true ]; then
     echo "     sudo launchctl bootstrap system ${PLIST_PATH}"
     echo ""
 else
+    if [ -n "$TOKEN" ]; then
+        echo "Registration details:"
+        echo "  Backend: ${HOST}:${PORT}"
+        echo ""
+    fi
     echo "Service management:"
     echo "  Status:  sudo launchctl print system/${SERVICE_NAME}"
     echo "  Stop:    sudo launchctl bootout system/${SERVICE_NAME}"

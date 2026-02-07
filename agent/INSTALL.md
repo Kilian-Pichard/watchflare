@@ -19,6 +19,19 @@ go build -o watchflare-agent
 
 #### 2. Run Installation Script
 
+**Option A: Install + Register + Start in one command**
+
+```bash
+sudo ./install-macos.sh --token=YOUR_TOKEN --host=YOUR_HOST --port=50051
+```
+
+This will:
+- Install the agent
+- Register with your backend
+- Start the service automatically
+
+**Option B: Install only (register later)**
+
 ```bash
 sudo ./install-macos.sh
 ```
@@ -29,12 +42,12 @@ This script will:
   - `/etc/watchflare/` (configuration)
   - `/var/lib/watchflare/` (data, WAL, package state)
 - Install binary to `/usr/local/bin/watchflare-agent`
-- Create LaunchDaemon at `/Library/LaunchDaemons/com.watchflare.agent.plist`
+- Create LaunchDaemon at `/Library/LaunchDaemons/io.watchflare.agent.plist`
 - Set proper permissions (principle of least privilege)
 
-#### 3. Register the Agent
+#### 3. Register the Agent (if not done during installation)
 
-If this is a new installation, register the agent with your backend:
+If you chose Option B above, register the agent with your backend:
 
 ```bash
 sudo /usr/local/bin/watchflare-agent register \
@@ -49,19 +62,19 @@ The registration command will:
 - Save configuration to `/etc/watchflare/agent.conf`
 - Download TLS CA certificate to `/etc/watchflare/ca.pem`
 
-#### 4. Start the Service
+#### 4. Start the Service (if not done during installation)
 
-If you just registered, start the service:
+If you registered manually, start the service:
 
 ```bash
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist
+sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
 ```
 
 ### Service Management
 
 **Check Status:**
 ```bash
-sudo launchctl print system/com.watchflare.agent
+sudo launchctl print system/io.watchflare.agent
 ```
 
 **View Logs:**
@@ -71,18 +84,18 @@ tail -f /var/log/watchflare-agent.log
 
 **Stop Service:**
 ```bash
-sudo launchctl bootout system/com.watchflare.agent
+sudo launchctl bootout system/io.watchflare.agent
 ```
 
 **Start Service:**
 ```bash
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist
+sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
 ```
 
 **Restart Service:**
 ```bash
-sudo launchctl bootout system/com.watchflare.agent
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist
+sudo launchctl bootout system/io.watchflare.agent
+sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
 ```
 
 ### File Locations
@@ -96,7 +109,7 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plis
 | `/var/lib/watchflare/` | Data directory | watchflare:staff | 750 |
 | `/var/lib/watchflare/wal/` | Write-Ahead Log | watchflare:staff | 750 |
 | `/var/lib/watchflare/packages.state.json` | Package inventory state | watchflare:staff | 640 |
-| `/Library/LaunchDaemons/com.watchflare.agent.plist` | Service definition | root:wheel | 644 |
+| `/Library/LaunchDaemons/io.watchflare.agent.plist` | Service definition | root:wheel | 644 |
 | `/var/log/watchflare-agent.log` | Agent logs | watchflare:staff | 644 |
 
 ### Security
@@ -164,7 +177,7 @@ sudo launchctl list | grep watchflare
 
 Should output:
 ```
--	0	com.watchflare.agent
+-	0	io.watchflare.agent
 ```
 
 #### Verify agent user exists
@@ -177,7 +190,7 @@ dscl . -read /Users/watchflare
 
 1. Stop the service:
    ```bash
-   sudo launchctl bootout system/com.watchflare.agent
+   sudo launchctl bootout system/io.watchflare.agent
    ```
 
 2. Build new version:
@@ -195,7 +208,7 @@ dscl . -read /Users/watchflare
 
 4. Start the service:
    ```bash
-   sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist
+   sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
    ```
 
 ### Configuration Reference
