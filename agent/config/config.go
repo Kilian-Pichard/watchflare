@@ -3,7 +3,10 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"runtime"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 )
@@ -112,6 +115,30 @@ func Save(cfg *Config) error {
 	encoder := toml.NewEncoder(file)
 	if err := encoder.Encode(cfg); err != nil {
 		return fmt.Errorf("failed to encode config: %w", err)
+	}
+
+	// Set proper ownership when running as root (installation/registration)
+	// Linux: root:watchflare, macOS: root:staff
+	if os.Geteuid() == 0 {
+		var groupName string
+		switch runtime.GOOS {
+		case "linux":
+			groupName = "watchflare"
+		case "darwin":
+			groupName = "staff"
+		}
+
+		if groupName != "" {
+			if group, err := user.LookupGroup(groupName); err == nil {
+				if gid, err := strconv.Atoi(group.Gid); err == nil {
+					// Change ownership to root:group (0 = root UID)
+					if err := os.Chown(configPath, 0, gid); err != nil {
+						// Don't fail on chown error, just warn
+						fmt.Fprintf(os.Stderr, "Warning: failed to set ownership on %s: %v\n", configPath, err)
+					}
+				}
+			}
+		}
 	}
 
 	return nil

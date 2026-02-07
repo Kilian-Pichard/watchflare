@@ -53,6 +53,13 @@ sudo ./install-macos.sh --token=wf_reg_... --host=localhost --port=50051
 # Option B: Install only (register manually after)
 sudo ./install-macos.sh
 
+# Install as system service (Linux)
+# Option A: Install + register + start in one command
+sudo ./install-linux.sh --token=wf_reg_... --host=localhost --port=50051
+
+# Option B: Install only (register manually after)
+sudo ./install-linux.sh
+
 # Run tests
 go test ./...
 go test ./wal -v                        # WAL tests
@@ -64,6 +71,16 @@ go test ./packages -run TestRegistry    # Package collector tests
 sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist  # Start
 sudo launchctl bootout system/io.watchflare.agent                                 # Stop
 tail -f /var/log/watchflare-agent.log                                              # Logs
+```
+
+**Service management (Linux)**:
+```bash
+sudo systemctl start watchflare-agent    # Start
+sudo systemctl stop watchflare-agent     # Stop
+sudo systemctl restart watchflare-agent  # Restart
+sudo systemctl status watchflare-agent   # Status
+journalctl -u watchflare-agent -f        # Logs (systemd journal)
+tail -f /var/log/watchflare-agent.log    # Logs (file)
 ```
 
 ### Frontend
@@ -241,6 +258,8 @@ All embedded at compile time (`//go:embed`).
 ## Key File Locations
 
 ### Agent (when installed as service)
+
+**macOS:**
 ```
 /usr/local/bin/watchflare-agent       # Binary (root:wheel, 755)
 /etc/watchflare/agent.conf            # Config with credentials (root:staff, 640)
@@ -249,6 +268,19 @@ All embedded at compile time (`//go:embed`).
   ├── metrics.wal                     # WAL file
   └── packages.state.json             # Package inventory state
 /var/log/watchflare-agent.log         # Logs (watchflare:staff, 644)
+/Library/LaunchDaemons/io.watchflare.agent.plist  # Service definition
+```
+
+**Linux:**
+```
+/usr/local/bin/watchflare-agent       # Binary (root:root, 755)
+/etc/watchflare/agent.conf            # Config with credentials (root:watchflare, 640)
+/etc/watchflare/ca.pem                # Pinned CA cert (root:watchflare, 644)
+/var/lib/watchflare/                  # Data directory (watchflare:watchflare, 750)
+  ├── wal/metrics.wal                 # WAL file
+  └── packages.state.json             # Package inventory state
+/var/log/watchflare-agent.log         # Logs (watchflare:watchflare, 644)
+/etc/systemd/system/watchflare-agent.service  # Systemd service definition
 ```
 
 ### Backend
@@ -391,9 +423,13 @@ const fieldMap = {
 4. Start service: `sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist`
 5. Check logs: `tail -f /var/log/watchflare-agent.log`
 
-**Agent uninstall** (macOS):
+**Agent uninstall:**
 ```bash
-sudo ./uninstall-macos.sh  # Prompts for data/config/user removal
+# macOS
+sudo ./uninstall-macos.sh   # Prompts for data/config/user removal
+
+# Linux
+sudo ./uninstall-linux.sh   # Prompts for data/config/user removal
 ```
 
 **Database inspection**:
@@ -412,5 +448,6 @@ SELECT * FROM packages LIMIT 10;       # View packages
 - `docs/architecture.md`: System overview, data flows, deployment
 - `docs/internals.md`: Detailed component breakdown (every package/module)
 - `docs/security.md`: Security model (TLS, HMAC, JWT, key management)
-- `agent/INSTALL.md`: Agent installation guide (macOS focus)
+- `agent/INSTALL.md`: Agent installation guide (macOS)
+- `agent/INSTALL-LINUX.md`: Agent installation guide (Linux/systemd)
 - `README.md`: (Currently minimal)

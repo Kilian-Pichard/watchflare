@@ -20,11 +20,8 @@ build/
 *.out
 
 # Go binaries
-watchflare-agent
-watchflare-backend
-watchflare
-backend
-agent
+watchflare-agent*
+watchflare-backend*
 *_linux
 test_env_*
 

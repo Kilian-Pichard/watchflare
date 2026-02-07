@@ -17,3 +17,6 @@ coverage.txt
 # Temporary files
 /tmp/
 /temp/
+
+# Build artifacts
+/dist/

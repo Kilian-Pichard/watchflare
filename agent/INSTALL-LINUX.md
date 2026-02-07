@@ -1,16 +1,14 @@
-# Watchflare Agent - Installation Guide
+# Watchflare Agent - Linux Installation Guide
 
-## macOS Installation
+## Prerequisites
 
-### Prerequisites
-
-- macOS 10.13 (High Sierra) or later
+- Linux distribution with systemd (Ubuntu 20.04+, Debian 11+, RHEL/CentOS 8+, Arch Linux)
 - Administrator (sudo) access
 - Go 1.21+ (for building from source)
 
-### Installation Steps
+## Installation Steps
 
-#### 1. Build the Agent
+### 1. Build the Agent
 
 **Option A: Build all architectures (recommended)**
 ```bash
@@ -32,19 +30,19 @@ go build -o watchflare-agent
 
 **Option C: Build for specific platform**
 ```bash
-# macOS Intel
-GOOS=darwin GOARCH=amd64 go build -o watchflare-agent-darwin-amd64
+# Linux AMD64
+GOOS=linux GOARCH=amd64 go build -o watchflare-agent-linux-amd64
 
-# macOS Apple Silicon
-GOOS=darwin GOARCH=arm64 go build -o watchflare-agent-darwin-arm64
+# Linux ARM64
+GOOS=linux GOARCH=arm64 go build -o watchflare-agent-linux-arm64
 ```
 
-#### 2. Run Installation Script
+### 2. Run Installation Script
 
 **Option A: Install + Register + Start in one command**
 
 ```bash
-sudo ./install-macos.sh --token=YOUR_TOKEN --host=YOUR_HOST --port=50051
+sudo ./install-linux.sh --token=YOUR_TOKEN --host=YOUR_HOST --port=50051
 ```
 
 This will:
@@ -55,7 +53,7 @@ This will:
 **Option B: Install only (register later)**
 
 ```bash
-sudo ./install-macos.sh
+sudo ./install-linux.sh
 ```
 
 This script will:
@@ -64,10 +62,10 @@ This script will:
   - `/etc/watchflare/` (configuration)
   - `/var/lib/watchflare/` (data, WAL, package state)
 - Install binary to `/usr/local/bin/watchflare-agent`
-- Create LaunchDaemon at `/Library/LaunchDaemons/io.watchflare.agent.plist`
+- Install systemd service to `/etc/systemd/system/watchflare-agent.service`
 - Set proper permissions (principle of least privilege)
 
-#### 3. Register the Agent (if not done during installation)
+### 3. Register the Agent (if not done during installation)
 
 If you chose Option B above, register the agent with your backend:
 
@@ -84,76 +82,91 @@ The registration command will:
 - Save configuration to `/etc/watchflare/agent.conf`
 - Download TLS CA certificate to `/etc/watchflare/ca.pem`
 
-#### 4. Start the Service (if not done during installation)
+### 4. Start the Service (if not done during installation)
 
 If you registered manually, start the service:
 
 ```bash
-sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
+sudo systemctl enable watchflare-agent
+sudo systemctl start watchflare-agent
 ```
 
-### Service Management
+## Service Management
 
 **Check Status:**
 ```bash
-sudo launchctl print system/io.watchflare.agent
+sudo systemctl status watchflare-agent
 ```
 
 **View Logs:**
 ```bash
+# Systemd journal
+journalctl -u watchflare-agent -f
+
+# Or direct log file
 tail -f /var/log/watchflare-agent.log
 ```
 
 **Stop Service:**
 ```bash
-sudo launchctl bootout system/io.watchflare.agent
+sudo systemctl stop watchflare-agent
 ```
 
 **Start Service:**
 ```bash
-sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
+sudo systemctl start watchflare-agent
 ```
 
 **Restart Service:**
 ```bash
-sudo launchctl bootout system/io.watchflare.agent
-sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
+sudo systemctl restart watchflare-agent
 ```
 
-### File Locations
+**Enable at boot:**
+```bash
+sudo systemctl enable watchflare-agent
+```
+
+**Disable at boot:**
+```bash
+sudo systemctl disable watchflare-agent
+```
+
+## File Locations
 
 | Path | Purpose | Owner | Permissions |
 |------|---------|-------|-------------|
-| `/usr/local/bin/watchflare-agent` | Binary | root:wheel | 755 |
-| `/etc/watchflare/` | Configuration | root:staff | 750 |
-| `/etc/watchflare/agent.conf` | Config file (contains credentials) | root:staff | 640 |
-| `/etc/watchflare/ca.pem` | TLS CA certificate | root:staff | 644 |
-| `/var/lib/watchflare/` | Data directory | watchflare:staff | 750 |
-| `/var/lib/watchflare/wal/` | Write-Ahead Log | watchflare:staff | 750 |
-| `/var/lib/watchflare/packages.state.json` | Package inventory state | watchflare:staff | 640 |
-| `/Library/LaunchDaemons/io.watchflare.agent.plist` | Service definition | root:wheel | 644 |
-| `/var/log/watchflare-agent.log` | Agent logs | watchflare:staff | 644 |
+| `/usr/local/bin/watchflare-agent` | Binary | root:root | 755 |
+| `/etc/watchflare/` | Configuration | root:watchflare | 750 |
+| `/etc/watchflare/agent.conf` | Config file (contains credentials) | root:watchflare | 640 |
+| `/etc/watchflare/ca.pem` | TLS CA certificate | root:watchflare | 644 |
+| `/var/lib/watchflare/` | Data directory | watchflare:watchflare | 750 |
+| `/var/lib/watchflare/wal/` | Write-Ahead Log | watchflare:watchflare | 750 |
+| `/var/lib/watchflare/packages.state.json` | Package inventory state | watchflare:watchflare | 640 |
+| `/etc/systemd/system/watchflare-agent.service` | Service definition | root:root | 644 |
+| `/var/log/watchflare-agent.log` | Agent logs | watchflare:watchflare | 644 |
 
-### Security
+## Security
 
 The agent runs as a dedicated system user `watchflare` with minimal privileges:
 - ✅ **No root access** - Runs as unprivileged user
-- ✅ **No shell** - User has `/usr/bin/false` as shell
+- ✅ **No shell** - User has `/usr/sbin/nologin` as shell
 - ✅ **No home directory** - User home is `/var/empty`
 - ✅ **Restricted permissions** - Can only access its own files
 - ✅ **TLS encryption** - All communication with backend is encrypted
 - ✅ **HMAC authentication** - Requests are authenticated with agent key
+- ✅ **Systemd hardening** - NoNewPrivileges, PrivateTmp, ProtectSystem enabled
 
-### Uninstallation
+## Uninstallation
 
 To completely remove the agent:
 
 ```bash
-sudo ./uninstall-macos.sh
+sudo ./uninstall-linux.sh
 ```
 
 This script will:
-1. Stop and remove the service
+1. Stop and disable the service
 2. Remove the binary
 3. Prompt to remove data directory (WAL, package state)
 4. Prompt to remove configuration (agent credentials)
@@ -162,12 +175,14 @@ This script will:
 
 **Note:** The script asks for confirmation before removing data and configuration to prevent accidental data loss.
 
-### Troubleshooting
+## Troubleshooting
 
-#### Agent won't start
+### Agent won't start
 
 Check logs:
 ```bash
+journalctl -u watchflare-agent -n 50
+# Or
 tail -50 /var/log/watchflare-agent.log
 ```
 
@@ -177,7 +192,7 @@ Common issues:
 - **"connection refused"** → Verify backend host and port
 - **"invalid agent credentials"** → Re-register the agent
 
-#### Permission errors
+### Permission errors
 
 Verify ownership:
 ```bash
@@ -187,32 +202,34 @@ ls -la /var/lib/watchflare/
 
 Fix permissions:
 ```bash
-sudo chown -R root:staff /etc/watchflare/
-sudo chown -R watchflare:staff /var/lib/watchflare/
+sudo chown -R root:watchflare /etc/watchflare/
+sudo chown -R watchflare:watchflare /var/lib/watchflare/
 ```
 
-#### Check if service is loaded
+### Check if service is loaded
 
 ```bash
-sudo launchctl list | grep watchflare
+systemctl list-units | grep watchflare
 ```
 
 Should output:
 ```
--	0	io.watchflare.agent
+watchflare-agent.service  loaded active running Watchflare Monitoring Agent
 ```
 
-#### Verify agent user exists
+### Verify agent user exists
 
 ```bash
-dscl . -read /Users/watchflare
+id watchflare
 ```
 
-### Updating the Agent
+Should output user and group info.
+
+## Updating the Agent
 
 1. Stop the service:
    ```bash
-   sudo launchctl bootout system/io.watchflare.agent
+   sudo systemctl stop watchflare-agent
    ```
 
 2. Build new version:
@@ -224,16 +241,16 @@ dscl . -read /Users/watchflare
 3. Copy new binary:
    ```bash
    sudo cp watchflare-agent /usr/local/bin/watchflare-agent
-   sudo chown root:wheel /usr/local/bin/watchflare-agent
+   sudo chown root:root /usr/local/bin/watchflare-agent
    sudo chmod 755 /usr/local/bin/watchflare-agent
    ```
 
 4. Start the service:
    ```bash
-   sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist
+   sudo systemctl start watchflare-agent
    ```
 
-### Configuration Reference
+## Configuration Reference
 
 The configuration file `/etc/watchflare/agent.conf` is in TOML format:
 
@@ -257,10 +274,10 @@ metrics_interval = 30    # Collect metrics every 30 seconds
 # Write-Ahead Log (WAL) - Enabled by default (optional, set to false to disable)
 wal_enabled = true
 wal_path = "/var/lib/watchflare/wal/metrics.wal"
-wal_max_size_mb = 20
+wal_max_size_mb = 10
 ```
 
-### Package Collection
+## Package Collection
 
 The agent automatically collects package inventory:
 - **Initial scan**: 60 seconds after agent startup
@@ -268,10 +285,41 @@ The agent automatically collects package inventory:
 - **Delta updates**: Only changes (added/removed/updated) are sent
 - **State file**: `/var/lib/watchflare/packages.state.json`
 
-Supported package managers on macOS:
-- ✅ **Homebrew** (`brew`)
+Supported package managers on Linux:
+- ✅ **APT** (`apt`, `dpkg`) - Debian, Ubuntu
+- ✅ **YUM/DNF** (`yum`, `dnf`, `rpm`) - RHEL, CentOS, Fedora, AlmaLinux
+- ✅ **Pacman** (`pacman`) - Arch Linux
+- ✅ **Snap** (`snap`) - Ubuntu and others
+- ✅ **Flatpak** (`flatpak`) - Cross-distribution
+- ✅ **pip** (Python packages)
+- ✅ **npm** (Node.js packages)
+- ✅ **gem** (Ruby packages)
+- ✅ **cargo** (Rust packages)
+- ✅ **go** (Go modules)
 
-### Support
+## Distribution-Specific Notes
+
+### Ubuntu/Debian
+
+Default shell for system users is `/usr/sbin/nologin`.
+
+### RHEL/CentOS/AlmaLinux
+
+If SELinux is enabled, you may need to set proper contexts:
+```bash
+sudo restorecon -Rv /usr/local/bin/watchflare-agent
+sudo restorecon -Rv /etc/watchflare
+sudo restorecon -Rv /var/lib/watchflare
+```
+
+### Arch Linux
+
+Install dependencies:
+```bash
+sudo pacman -S go
+```
+
+## Support
 
 For issues or questions:
 - GitHub Issues: https://github.com/yourusername/watchflare
