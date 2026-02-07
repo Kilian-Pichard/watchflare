@@ -57,8 +57,8 @@ go test ./packages -run TestRegistry    # Package collector tests
 
 **Service management (macOS)**:
 ```bash
-sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist  # Start
-sudo launchctl bootout system/com.watchflare.agent                                 # Stop
+sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist  # Start
+sudo launchctl bootout system/io.watchflare.agent                                 # Stop
 tail -f /var/log/watchflare-agent.log                                              # Logs
 ```
 
@@ -107,7 +107,7 @@ protoc --go_out=. --go-grpc_out=. agent.proto
 
 ### WAL (Write-Ahead Log)
 
-**Purpose**: Durability for metrics when backend is unreachable.
+**Purpose**: Durability for metrics when backend is unreachable. **Enabled by default**.
 
 **Design**: Single file (`/var/lib/watchflare/metrics.wal`), append-only with `fsync()` after each write.
 - Format: `[Length:4 bytes][Protobuf data][CRC32:4 bytes]`
@@ -377,9 +377,9 @@ const fieldMap = {
 
 **Agent install/test cycle**:
 1. Build: `go build -o watchflare-agent`
-2. Stop service: `sudo launchctl bootout system/com.watchflare.agent`
+2. Stop service: `sudo launchctl bootout system/io.watchflare.agent`
 3. Copy new binary: `sudo cp watchflare-agent /usr/local/bin/`
-4. Start service: `sudo launchctl bootstrap system /Library/LaunchDaemons/com.watchflare.agent.plist`
+4. Start service: `sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist`
 5. Check logs: `tail -f /var/log/watchflare-agent.log`
 
 **Database inspection**:

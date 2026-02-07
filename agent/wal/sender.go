@@ -100,7 +100,8 @@ func (s *Sender) replayWAL() error {
 		return nil
 	}
 
-	log.Printf("Replaying %d pending metrics from WAL...", len(records))
+	log.Printf("WAL RECOVERY: Found %d pending metrics from previous backend downtime", len(records))
+	log.Printf("Sending accumulated metrics to backend...")
 
 	// Try to send all pending records
 	success := true
@@ -117,7 +118,8 @@ func (s *Sender) replayWAL() error {
 		if err := s.wal.Clear(); err != nil {
 			return fmt.Errorf("failed to clear WAL: %w", err)
 		}
-		log.Printf("✓ All %d pending metrics sent successfully", len(records))
+		log.Printf("✓ WAL RECOVERY COMPLETE: All %d pending metrics sent successfully", len(records))
+		log.Printf("✓ WAL cleared (recovery finished)")
 	}
 
 	return nil
@@ -196,6 +198,11 @@ func (s *Sender) collectAndSend() {
 		if err := s.wal.Clear(); err != nil {
 			log.Printf("Warning: Failed to clear WAL: %v", err)
 		} else {
+			if len(records) > 1 {
+				log.Printf("✓ Sent %d metrics (including %d accumulated during backend outage)",
+					len(records), len(records)-1)
+				log.Printf("✓ WAL cleared")
+			}
 			log.Printf("✓ Metrics sent (CPU: %.1f%%, Mem: %d/%d MB)",
 				m.CPUUsagePercent,
 				m.MemoryUsedBytes/1024/1024,

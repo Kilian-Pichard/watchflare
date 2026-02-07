@@ -219,7 +219,7 @@ server_name = "watchflare"
 heartbeat_interval = 5   # Heartbeat every 5 seconds
 metrics_interval = 30    # Collect metrics every 30 seconds
 
-# Write-Ahead Log (WAL) - Optional
+# Write-Ahead Log (WAL) - Enabled by default (optional, set to false to disable)
 wal_enabled = true
 wal_path = "/var/lib/watchflare/wal/metrics.wal"
 wal_max_size_mb = 20

@@ -54,7 +54,7 @@ func main() {
 
 	// Initialize WAL
 	var walInstance *wal.WAL
-	if cfg.WALEnabled {
+	if cfg.WALEnabled != nil && *cfg.WALEnabled {
 		walInstance, err = wal.New(cfg.WALPath, cfg.WALMaxSizeMB)
 		if err != nil {
 			log.Fatalf("Failed to initialize WAL: %v", err)

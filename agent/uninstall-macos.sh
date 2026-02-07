@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-SERVICE_NAME="com.watchflare.agent"
+SERVICE_NAME="io.watchflare.agent"
 AGENT_USER="watchflare"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/watchflare"
@@ -38,7 +38,7 @@ fi
 echo ""
 
 # Step 1: Stop and unload service
-echo -e "${YELLOW}[1/6]${NC} Stopping service..."
+echo -e "${YELLOW}[1/7]${NC} Stopping service..."
 if [ -f "$PLIST_PATH" ]; then
     if launchctl print system/${SERVICE_NAME} >/dev/null 2>&1; then
         launchctl bootout system/${SERVICE_NAME} 2>/dev/null || true
@@ -51,7 +51,7 @@ else
 fi
 
 # Step 2: Remove LaunchDaemon plist
-echo -e "${YELLOW}[2/6]${NC} Removing LaunchDaemon..."
+echo -e "${YELLOW}[2/7]${NC} Removing LaunchDaemon..."
 if [ -f "$PLIST_PATH" ]; then
     rm -f "$PLIST_PATH"
     echo "  → Removed $PLIST_PATH"
@@ -60,7 +60,7 @@ else
 fi
 
 # Step 3: Remove binary
-echo -e "${YELLOW}[3/6]${NC} Removing binary..."
+echo -e "${YELLOW}[3/7]${NC} Removing binary..."
 if [ -f "${INSTALL_DIR}/watchflare-agent" ]; then
     rm -f "${INSTALL_DIR}/watchflare-agent"
     echo "  → Removed ${INSTALL_DIR}/watchflare-agent"
@@ -69,7 +69,7 @@ else
 fi
 
 # Step 4: Remove data directory
-echo -e "${YELLOW}[4/6]${NC} Removing data directory..."
+echo -e "${YELLOW}[4/7]${NC} Removing data directory..."
 if [ -d "$DATA_DIR" ]; then
     # Ask for confirmation before removing data
     read -p "Remove data directory ${DATA_DIR}? (contains WAL and package state) [y/N] " -n 1 -r
@@ -84,28 +84,24 @@ else
     echo "  → Data directory not found"
 fi
 
-# Step 5: Remove agent configuration (preserving backend PKI)
-echo -e "${YELLOW}[5/6]${NC} Removing agent configuration..."
-if [ -f "${CONFIG_DIR}/agent.conf" ]; then
-    # Ask for confirmation before removing config
-    read -p "Remove agent configuration ${CONFIG_DIR}/agent.conf? (contains agent credentials) [y/N] " -n 1 -r
+# Step 5: Remove agent configuration directory
+echo -e "${YELLOW}[5/7]${NC} Removing agent configuration..."
+if [ -d "$CONFIG_DIR" ]; then
+    # Ask for confirmation before removing config directory
+    read -p "Remove configuration directory ${CONFIG_DIR}? (contains agent.conf, ca.pem) [y/N] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -f "${CONFIG_DIR}/agent.conf"
-        echo "  → Removed ${CONFIG_DIR}/agent.conf"
-        echo "  → Preserved ${CONFIG_DIR}/pki/ (backend certificates)"
+        rm -rf "$CONFIG_DIR"
+        echo "  → Removed $CONFIG_DIR"
     else
-        echo "  → Kept ${CONFIG_DIR}/agent.conf"
+        echo "  → Kept $CONFIG_DIR"
     fi
 else
-    echo "  → Agent configuration not found"
-    if [ -d "${CONFIG_DIR}/pki" ]; then
-        echo "  → Backend PKI directory preserved"
-    fi
+    echo "  → Configuration directory not found"
 fi
 
 # Step 6: Remove system user
-echo -e "${YELLOW}[6/6]${NC} Removing system user..."
+echo -e "${YELLOW}[6/7]${NC} Removing system user..."
 if dscl . -read /Users/${AGENT_USER} >/dev/null 2>&1; then
     read -p "Remove system user '${AGENT_USER}'? [y/N] " -n 1 -r
     echo
@@ -139,14 +135,11 @@ echo ""
 echo -e "${GREEN}=== Uninstallation Complete ===${NC}"
 echo ""
 echo "The following items may still exist:"
-if [ -f "${CONFIG_DIR}/agent.conf" ]; then
-    echo "  - Agent configuration: ${CONFIG_DIR}/agent.conf"
-fi
-if [ -d "${CONFIG_DIR}/pki" ]; then
-    echo "  - Backend PKI (preserved): ${CONFIG_DIR}/pki/"
+if [ -d "$CONFIG_DIR" ]; then
+    echo "  - Configuration directory: ${CONFIG_DIR}/"
 fi
 if [ -d "$DATA_DIR" ]; then
-    echo "  - Data: ${DATA_DIR}/"
+    echo "  - Data directory: ${DATA_DIR}/"
 fi
 if dscl . -read /Users/${AGENT_USER} >/dev/null 2>&1; then
     echo "  - User: ${AGENT_USER}"

@@ -50,7 +50,7 @@ type Config struct {
 	ServerName string `toml:"server_name"`  // Server name for certificate validation
 
 	// WAL Configuration (simplified V1)
-	WALEnabled   bool   `toml:"wal_enabled"`     // Enable WAL persistence
+	WALEnabled   *bool  `toml:"wal_enabled"`     // Enable WAL persistence (default: true)
 	WALPath      string `toml:"wal_path"`        // WAL file path
 	WALMaxSizeMB int    `toml:"wal_max_size_mb"` // Max WAL size before FIFO truncate
 }
@@ -65,6 +65,10 @@ func (c *Config) SetDefaults() {
 	}
 
 	// WAL defaults
+	if c.WALEnabled == nil {
+		enabled := true
+		c.WALEnabled = &enabled
+	}
 	if c.WALPath == "" {
 		c.WALPath = filepath.Join(GetDataDir(), "metrics.wal")
 	}

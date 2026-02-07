@@ -13,6 +13,9 @@ watchflare-backend
 *.db-shm
 *.db-wal
 
+# Runtime data (PKI certificates, etc.)
+data/
+
 # Temporary files
 /tmp/
 /temp/

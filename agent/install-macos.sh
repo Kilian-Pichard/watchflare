@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-SERVICE_NAME="com.watchflare.agent"
+SERVICE_NAME="io.watchflare.agent"
 AGENT_USER="watchflare"
 AGENT_GROUP="staff"
 INSTALL_DIR="/usr/local/bin"

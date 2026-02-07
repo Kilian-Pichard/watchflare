@@ -71,7 +71,7 @@ func Connect() error {
 	// Create metrics table manually (since it's excluded from AutoMigrate due to TimescaleDB compression)
 	err = DB.Exec(`
 		CREATE TABLE IF NOT EXISTS metrics (
-			id SERIAL PRIMARY KEY,
+			id CHAR(36) NOT NULL,
 			server_id CHAR(36) NOT NULL,
 			timestamp TIMESTAMPTZ NOT NULL,
 			cpu_usage_percent DOUBLE PRECISION,
@@ -85,7 +85,8 @@ func Connect() error {
 			disk_used_bytes BIGINT,
 			uptime_seconds BIGINT,
 			created_at TIMESTAMPTZ DEFAULT NOW(),
-			updated_at TIMESTAMPTZ DEFAULT NOW()
+			updated_at TIMESTAMPTZ DEFAULT NOW(),
+			PRIMARY KEY (id, timestamp)
 		);
 	`).Error
 	if err != nil {
