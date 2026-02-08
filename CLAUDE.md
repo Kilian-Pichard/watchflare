@@ -37,8 +37,17 @@ go test -run TestCreateAgent ./services # Single test
 ```bash
 cd agent
 
-# Build
+# Build (current platform)
 go build -o watchflare-agent
+
+# Build all architectures
+./build-all.sh
+# Outputs to ./dist/:
+#   - linux_amd64/watchflare-agent
+#   - linux_arm64/watchflare-agent
+#   - darwin_amd64/watchflare-agent
+#   - darwin_arm64/watchflare-agent
+#   - watchflare_checksums.txt
 
 # Development run (requires existing config)
 ./watchflare-agent

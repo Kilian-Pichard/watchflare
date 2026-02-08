@@ -54,10 +54,10 @@ echo -e "${GREEN}=== Watchflare Agent Installation ===${NC}\n"
 ARCH=$(uname -m)
 case "$ARCH" in
     x86_64)
-        BINARY_NAME="watchflare-agent-darwin-amd64"
+        PLATFORM="darwin_amd64"
         ;;
     arm64)
-        BINARY_NAME="watchflare-agent-darwin-arm64"
+        PLATFORM="darwin_arm64"
         ;;
     *)
         echo -e "${RED}Error: Unsupported architecture: $ARCH${NC}"
@@ -66,20 +66,22 @@ case "$ARCH" in
         ;;
 esac
 
-# Check if specific binary exists, otherwise fallback to generic name
-if [ -f "./$BINARY_NAME" ]; then
-    AGENT_BINARY="./$BINARY_NAME"
-    echo "  → Detected architecture: $ARCH (using $BINARY_NAME)"
+# Check for binary in multiple locations (priority order)
+if [ -f "./dist/${PLATFORM}/watchflare-agent" ]; then
+    AGENT_BINARY="./dist/${PLATFORM}/watchflare-agent"
+    echo "  → Detected architecture: $ARCH (using dist/${PLATFORM}/watchflare-agent)"
 elif [ -f "./watchflare-agent" ]; then
     AGENT_BINARY="./watchflare-agent"
-    echo "  → Using generic binary: watchflare-agent"
+    echo "  → Using binary: ./watchflare-agent"
 else
     echo -e "${RED}Error: Agent binary not found${NC}"
-    echo "Expected: ./$BINARY_NAME or ./watchflare-agent"
+    echo "Expected locations:"
+    echo "  - ./dist/${PLATFORM}/watchflare-agent (from ./build-all.sh)"
+    echo "  - ./watchflare-agent (from manual build)"
     echo ""
     echo "Build the agent:"
-    echo "  - Single platform: go build -o watchflare-agent"
     echo "  - All platforms: ./build-all.sh"
+    echo "  - Single platform: go build -o watchflare-agent"
     exit 1
 fi
 

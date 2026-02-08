@@ -19,10 +19,14 @@ cd agent/
 ```
 
 This creates binaries in `./dist/`:
-- `watchflare-agent-linux-amd64` (x86-64)
-- `watchflare-agent-linux-arm64` (ARM64)
-- `watchflare-agent-darwin-amd64` (macOS Intel)
-- `watchflare-agent-darwin-arm64` (macOS Apple Silicon)
+```
+dist/
+├── watchflare_checksums.txt       # SHA-256 checksums
+├── linux_amd64/watchflare-agent   # Linux x86-64
+├── linux_arm64/watchflare-agent   # Linux ARM64
+├── darwin_amd64/watchflare-agent  # macOS Intel
+└── darwin_arm64/watchflare-agent  # macOS Apple Silicon
+```
 
 **Option B: Build for current platform only**
 ```bash

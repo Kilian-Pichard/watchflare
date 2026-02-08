@@ -12,6 +12,7 @@ import (
 
 	"watchflare-agent/client"
 	"watchflare-agent/config"
+	"watchflare-agent/errors"
 	"watchflare-agent/packages"
 	pb "watchflare/shared/proto"
 	"watchflare-agent/sysinfo"
@@ -147,7 +148,7 @@ func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Co
 		select {
 		case <-ticker.C:
 			if err := grpcClient.Heartbeat(cfg.AgentID, cfg.AgentKey); err != nil {
-				log.Printf("Heartbeat failed: %v", err)
+				log.Println(errors.FormatError(err, "Heartbeat"))
 			} else {
 				log.Println("✓ Heartbeat sent")
 			}

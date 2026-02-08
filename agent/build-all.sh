@@ -20,7 +20,8 @@ echo -e "${GREEN}Building Watchflare Agent v${VERSION}${NC}"
 echo "Build time: ${BUILD_TIME}"
 echo ""
 
-# Create output directory
+# Clean and create output directory
+rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
 # Build matrix: OS/ARCH combinations
@@ -31,30 +32,44 @@ declare -a BUILDS=(
     "darwin/arm64"
 )
 
+# Checksum file
+CHECKSUM_FILE="${OUTPUT_DIR}/watchflare_checksums.txt"
+echo "# Watchflare Agent Checksums" > "$CHECKSUM_FILE"
+echo "# Generated: $(date -u)" >> "$CHECKSUM_FILE"
+echo "" >> "$CHECKSUM_FILE"
+
 # Build function
 build() {
     local os=$1
     local arch=$2
-    local output_name="watchflare-agent-${os}-${arch}"
+    local platform="${os}_${arch}"
+    local platform_dir="${OUTPUT_DIR}/${platform}"
+    local binary_name="watchflare-agent"
 
     if [ "$os" = "windows" ]; then
-        output_name="${output_name}.exe"
+        binary_name="${binary_name}.exe"
     fi
 
     echo -e "${YELLOW}Building ${os}/${arch}...${NC}"
 
+    # Create platform directory
+    mkdir -p "$platform_dir"
+
+    # Build binary
     GOOS=$os GOARCH=$arch go build \
         -ldflags="-X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
-        -o "${OUTPUT_DIR}/${output_name}"
+        -o "${platform_dir}/${binary_name}"
 
-    # Create checksum
+    # Generate checksum and append to main file
+    echo "# ${os} ${arch}" >> "$CHECKSUM_FILE"
     if command -v sha256sum >/dev/null 2>&1; then
-        (cd "$OUTPUT_DIR" && sha256sum "$output_name" > "${output_name}.sha256")
+        (cd "$OUTPUT_DIR" && sha256sum "${platform}/${binary_name}") >> "$CHECKSUM_FILE"
     elif command -v shasum >/dev/null 2>&1; then
-        (cd "$OUTPUT_DIR" && shasum -a 256 "$output_name" > "${output_name}.sha256")
+        (cd "$OUTPUT_DIR" && shasum -a 256 "${platform}/${binary_name}") >> "$CHECKSUM_FILE"
     fi
+    echo "" >> "$CHECKSUM_FILE"
 
-    echo "  → ${OUTPUT_DIR}/${output_name}"
+    echo "  → ${platform_dir}/${binary_name}"
 }
 
 # Build all targets
@@ -66,8 +81,7 @@ done
 echo ""
 echo -e "${GREEN}Build complete!${NC}"
 echo ""
-echo "Binaries:"
-ls -lh "$OUTPUT_DIR" | grep -v ".sha256" | tail -n +2
+echo "Structure:"
+tree "$OUTPUT_DIR" 2>/dev/null || find "$OUTPUT_DIR" -type f
 echo ""
-echo "Checksums:"
-cat "$OUTPUT_DIR"/*.sha256
+echo "Checksums saved to: ${CHECKSUM_FILE}"

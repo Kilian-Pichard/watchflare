@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"watchflare-agent/client"
+	"watchflare-agent/errors"
 	"watchflare-agent/metrics"
 	"watchflare-agent/sysinfo"
 	pb "watchflare/shared/proto"
@@ -107,7 +108,12 @@ func (s *Sender) replayWAL() error {
 	success := true
 	for i, data := range records {
 		if err := s.sendRecord(data); err != nil {
-			log.Printf("Failed to send record %d/%d: %v (will retry later)", i+1, len(records), err)
+			if errors.IsTimestampError(err) {
+				log.Printf("Failed to send record %d/%d: CLOCK SYNC ERROR - System time is out of sync (>5min difference with backend). "+
+					"Fix: Run 'sudo timedatectl set-ntp true' and restart the agent (will retry later)", i+1, len(records))
+			} else {
+				log.Printf("Failed to send record %d/%d: %v (will retry later)", i+1, len(records), err)
+			}
 			success = false
 			break // Stop at first failure
 		}
@@ -186,8 +192,14 @@ func (s *Sender) collectAndSend() {
 	success := true
 	for i, record := range records {
 		if err := s.sendRecord(record); err != nil {
-			log.Printf("Send failed (record %d/%d): %v (will retry in %v)",
-				i+1, len(records), err, s.metricsInterval)
+			if errors.IsTimestampError(err) {
+				log.Printf("Send failed (record %d/%d): CLOCK SYNC ERROR - System time is out of sync (>5min difference with backend). "+
+					"Fix: Run 'sudo timedatectl set-ntp true' and restart the agent (will retry in %v)",
+					i+1, len(records), s.metricsInterval)
+			} else {
+				log.Printf("Send failed (record %d/%d): %v (will retry in %v)",
+					i+1, len(records), err, s.metricsInterval)
+			}
 			success = false
 			break // Stop at first failure
 		}
