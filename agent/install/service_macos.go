@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 const (
@@ -111,7 +112,7 @@ func (s *MacOSService) Start() error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Check if already loaded
-		if string(output) != "" && contains(string(output), "Already loaded") {
+		if strings.Contains(string(output), "Already loaded") {
 			fmt.Println("  → Service already running")
 			return nil
 		}
@@ -128,7 +129,7 @@ func (s *MacOSService) Stop() error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Check if already stopped
-		if string(output) != "" && contains(string(output), "Could not find") {
+		if strings.Contains(string(output), "Could not find") {
 			fmt.Println("  → Service already stopped")
 			return nil
 		}
@@ -159,19 +160,32 @@ func (s *MacOSService) IsRunning() bool {
 	return cmd.Run() == nil
 }
 
-// contains checks if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-		findSubstring(s, substr)))
+// Restart restarts the service
+func (s *MacOSService) Restart() error {
+	fmt.Println("Restarting service...")
+
+	// Use kickstart -k to kill and restart the service (works only if already loaded)
+	// This is more reliable than stop + start on macOS
+	if s.IsRunning() {
+		cmd := exec.Command("launchctl", "kickstart", "-k", "system/"+macOSServiceName)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to restart service: %w", err)
+		}
+		fmt.Println("  → Service restarted")
+		return nil
+	}
+
+	// If not running, just start it
+	return s.Start()
 }
 
-// findSubstring finds a substring in a string
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+// ShowLogs displays and follows the service logs
+func (s *MacOSService) ShowLogs() error {
+	logPath := "/var/log/watchflare-agent.log"
+	fmt.Printf("Following logs from %s (Ctrl+C to exit)...\n\n", logPath)
+
+	cmd := exec.Command("tail", "-f", logPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

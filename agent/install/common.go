@@ -33,6 +33,9 @@ type ServiceManager interface {
 	// Stop stops the service
 	Stop() error
 
+	// Restart restarts the service
+	Restart() error
+
 	// Enable enables the service to start on boot
 	Enable() error
 
@@ -41,6 +44,9 @@ type ServiceManager interface {
 
 	// IsRunning checks if the service is running
 	IsRunning() bool
+
+	// ShowLogs displays service logs (follows them)
+	ShowLogs() error
 }
 
 // GetServiceManager is defined in platform-specific files (common_linux.go, common_darwin.go)

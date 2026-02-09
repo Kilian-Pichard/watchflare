@@ -184,6 +184,36 @@ func (s *LinuxService) IsRunning() bool {
 	return cmd.Run() == nil
 }
 
+// Restart restarts the service
+func (s *LinuxService) Restart() error {
+	if !s.hasSystemd() {
+		return fmt.Errorf("systemd not available")
+	}
+
+	fmt.Println("Restarting service...")
+	cmd := exec.Command("systemctl", "restart", serviceName)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to restart service: %w", err)
+	}
+
+	fmt.Println("  → Service restarted")
+	return nil
+}
+
+// ShowLogs displays and follows the service logs
+func (s *LinuxService) ShowLogs() error {
+	if !s.hasSystemd() {
+		return fmt.Errorf("systemd not available")
+	}
+
+	fmt.Println("Following logs (Ctrl+C to exit)...\n")
+
+	cmd := exec.Command("journalctl", "-u", serviceName, "-f", "--no-pager")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // hasSystemd checks if systemd is available
 func (s *LinuxService) hasSystemd() bool {
 	// Check if systemctl command exists

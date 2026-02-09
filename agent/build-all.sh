@@ -55,8 +55,8 @@ build() {
     # Create platform directory
     mkdir -p "$platform_dir"
 
-    # Build binary
-    GOOS=$os GOARCH=$arch go build \
+    # Build binary (CGO disabled for true static cross-compilation)
+    CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build \
         -ldflags="-X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
         -o "${platform_dir}/${binary_name}"
 
