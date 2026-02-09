@@ -102,32 +102,34 @@ func (c *Client) Close() error {
 
 // RegistrationResponse contains the result of a successful registration
 type RegistrationResponse struct {
-	AgentID    string
-	AgentKey   string
-	CACert     string // CA certificate in PEM format
-	ServerName string // Server name for TLS verification
+	AgentID     string
+	AgentKey    string
+	CACert      string // CA certificate in PEM format
+	ServerName  string // Server name for TLS verification
+	Reactivated bool   // True if existing agent was reactivated (UUID reused)
 }
 
 // Register attempts to register the agent with the backend
 // Returns registration credentials and TLS information
-func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel, environmentType, hypervisor, containerRuntime string) (*RegistrationResponse, error) {
+func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel, environmentType, hypervisor, containerRuntime, existingUUID string) (*RegistrationResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	req := &pb.RegisterRequest{
-		RegistrationToken: token,
-		Hostname:          hostname,
-		IpAddressV4:       ipv4,
-		IpAddressV6:       ipv6,
-		Platform:          platform,
-		PlatformVersion:   platformVersion,
-		PlatformFamily:    platformFamily,
-		Architecture:      architecture,
-		Kernel:            kernel,
-		Timestamp:         time.Now().Unix(), // Add timestamp for anti-replay
-		EnvironmentType:   environmentType,
-		Hypervisor:        hypervisor,
-		ContainerRuntime:  containerRuntime,
+		RegistrationToken:   token,
+		Hostname:            hostname,
+		IpAddressV4:         ipv4,
+		IpAddressV6:         ipv6,
+		Platform:            platform,
+		PlatformVersion:     platformVersion,
+		PlatformFamily:      platformFamily,
+		Architecture:        architecture,
+		Kernel:              kernel,
+		Timestamp:           time.Now().Unix(), // Add timestamp for anti-replay
+		EnvironmentType:     environmentType,
+		Hypervisor:          hypervisor,
+		ContainerRuntime:    containerRuntime,
+		ExistingAgentUuid:   existingUUID, // For re-registration
 	}
 
 	// Note: Registration uses token-based auth, not HMAC
@@ -143,10 +145,11 @@ func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion
 	}
 
 	return &RegistrationResponse{
-		AgentID:    resp.AgentId,
-		AgentKey:   resp.AgentKey,
-		CACert:     resp.CaCert,
-		ServerName: resp.ServerName,
+		AgentID:     resp.AgentId,
+		AgentKey:    resp.AgentKey,
+		CACert:      resp.CaCert,
+		ServerName:  resp.ServerName,
+		Reactivated: resp.Reactivated,
 	}, nil
 }
 

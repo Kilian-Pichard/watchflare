@@ -10,6 +10,7 @@
     } from "$lib/api";
     import { connectSSE } from "$lib/sse";
     import { formatBytes, formatPercent } from "$lib/utils";
+    import { toasts } from "$lib/stores/toasts";
     import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
     import StatCard from "$lib/components/StatCard.svelte";
     import CPUChart from "$lib/components/CPUChart.svelte";
@@ -132,6 +133,15 @@
         console.log("SSE event received:", event.type, event.data);
 
         if (event.type === "server_update") {
+            // Show toast notification if agent was reactivated
+            if (event.data.reactivated && event.data.hostname) {
+                toasts.add(
+                    `Agent "${event.data.hostname}" was reactivated (same physical server detected via UUID)`,
+                    'info',
+                    8000 // 8 seconds
+                );
+            }
+
             // Update server status
             const serverIndex = servers.findIndex(
                 (s) => s.server.id === event.data.id,

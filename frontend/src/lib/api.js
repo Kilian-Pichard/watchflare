@@ -131,6 +131,12 @@ export async function ignoreIPMismatch(id) {
 	});
 }
 
+export async function dismissReactivation(id) {
+	return apiRequest(`/servers/${id}/dismiss-reactivation`, {
+		method: 'PUT'
+	});
+}
+
 // User preferences API calls
 export async function getCurrentUser() {
 	return apiRequest('/auth/user');

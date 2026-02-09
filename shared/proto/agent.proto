@@ -39,6 +39,10 @@ message RegisterRequest {
   string environment_type = 11;     // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
   string hypervisor = 12;           // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
   string container_runtime = 13;    // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
+
+  // Existing agent UUID (for re-registration without creating new agent)
+  // If provided and exists in DB, the agent will be reactivated instead of creating a new one
+  string existing_agent_uuid = 14;  // UUID from /var/lib/watchflare/agent.uuid (empty if first registration)
 }
 
 // RegisterResponse is sent back after successful registration
@@ -49,6 +53,7 @@ message RegisterResponse {
   string agent_key = 4;     // Key for authenticating future requests
   string ca_cert = 5;       // CA certificate in PEM format for TLS verification
   string server_name = 6;   // Server name for TLS SNI verification (e.g., "watchflare-backend")
+  bool reactivated = 7;     // True if existing agent was reactivated (UUID reused), false if new registration
 }
 
 // HeartbeatRequest contains info sent with each heartbeat

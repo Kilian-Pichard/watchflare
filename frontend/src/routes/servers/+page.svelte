@@ -3,6 +3,18 @@
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
+	import { toasts } from '$lib/stores/toasts';
+
+	async function dismissReactivation(serverId) {
+		try {
+			await api.dismissReactivation(serverId);
+			// Refresh server list to update badge
+			const response = await api.listServers();
+			servers = response.servers || [];
+		} catch (err) {
+			console.error('Failed to dismiss reactivation:', err);
+		}
+	}
 
 	let servers = [];
 	let loading = true;
@@ -34,6 +46,15 @@
 
 		eventSource.addEventListener('server_update', (e) => {
 			const update = JSON.parse(e.data);
+
+			// Show toast notification if agent was reactivated
+			if (update.reactivated && update.hostname) {
+				toasts.add(
+					`Agent "${update.hostname}" was reactivated (same physical server detected via UUID)`,
+					'info',
+					8000 // 8 seconds
+				);
+			}
 
 			// Find and update the server in the list
 			const serverIndex = servers.findIndex((s) => s.id === update.id);
@@ -211,6 +232,21 @@
 										</span>
 										{#if hasIPMismatch(server)}
 											<span class="warning-badge" title="IP mismatch detected">⚠️</span>
+										{/if}
+										{#if server.reactivated_at}
+											<span class="reactivated-badge" title="Agent was reactivated (same physical server via UUID)">
+												↻ Reactivated
+												<button
+													class="dismiss-btn"
+													on:click={(e) => {
+														e.stopPropagation();
+														dismissReactivation(server.id);
+													}}
+													title="Dismiss"
+												>
+													×
+												</button>
+											</span>
 										{/if}
 									</div>
 								</td>
@@ -512,6 +548,38 @@
 		font-size: 1.2rem;
 		cursor: help;
 		animation: pulse 2s infinite;
+	}
+
+	.reactivated-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.25rem 0.5rem;
+		background: #e6f7ff;
+		color: #0066cc;
+		border: 1px solid #91d5ff;
+		border-radius: 4px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		cursor: help;
+	}
+
+	.reactivated-badge .dismiss-btn {
+		background: none;
+		border: none;
+		color: #0066cc;
+		font-size: 1.2rem;
+		font-weight: bold;
+		line-height: 1;
+		padding: 0;
+		margin-left: 0.25rem;
+		cursor: pointer;
+		opacity: 0.6;
+		transition: opacity 0.2s;
+	}
+
+	.reactivated-badge .dismiss-btn:hover {
+		opacity: 1;
 	}
 
 	@keyframes pulse {

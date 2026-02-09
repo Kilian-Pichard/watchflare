@@ -39,12 +39,10 @@ func NewAgentServer() *AgentServer {
 
 // RegisterServer handles initial agent registration
 func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	// Hash the provided token to compare with stored hash
+	// Step 1: Validate token and find the pending agent
 	hashedToken := hashToken(req.RegistrationToken)
-
-	// Find server with matching registration token
-	var server models.Server
-	result := database.DB.Where("registration_token = ?", hashedToken).First(&server)
+	var pendingAgent models.Server
+	result := database.DB.Where("registration_token = ?", hashedToken).First(&pendingAgent)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return &pb.RegisterResponse{
@@ -55,36 +53,62 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		return nil, result.Error
 	}
 
-	// Check if token has expired
-	if server.ExpiresAt != nil && time.Now().After(*server.ExpiresAt) {
+	// Step 2: Validate token hasn't expired
+	if pendingAgent.ExpiresAt != nil && time.Now().After(*pendingAgent.ExpiresAt) {
 		return &pb.RegisterResponse{
 			Success: false,
 			Message: "Registration token has expired",
 		}, nil
 	}
 
-	// Check if server is in pending status
-	if server.Status != "pending" && server.Status != "expired" {
+	// Step 3: Validate token is for a pending agent
+	if pendingAgent.Status != "pending" && pendingAgent.Status != "expired" {
 		return &pb.RegisterResponse{
 			Success: false,
 			Message: "Server is already registered",
 		}, nil
 	}
 
-	// Validate IP address if allow_any_ip_registration is false
-	if !server.AllowAnyIPRegistration {
-		if server.ConfiguredIP != nil && *server.ConfiguredIP != "" {
-			// Check if the actual IP matches the configured IP
-			if req.IpAddressV4 != *server.ConfiguredIP {
+	// Step 4: Validate IP if required
+	if !pendingAgent.AllowAnyIPRegistration {
+		if pendingAgent.ConfiguredIP != nil && *pendingAgent.ConfiguredIP != "" {
+			if req.IpAddressV4 != *pendingAgent.ConfiguredIP {
 				return &pb.RegisterResponse{
 					Success: false,
-					Message: "IP address mismatch. Expected: " + *server.ConfiguredIP + ", Got: " + req.IpAddressV4,
+					Message: "IP address mismatch. Expected: " + *pendingAgent.ConfiguredIP + ", Got: " + req.IpAddressV4,
 				}, nil
 			}
 		}
 	}
 
-	// Update server with agent information
+	// Step 5: Check if this is a re-registration (existing UUID provided)
+	var agentToUse *models.Server
+	var deletePending bool
+
+	if req.ExistingAgentUuid != "" {
+		// Try to find existing agent by UUID
+		var existingAgent models.Server
+		result := database.DB.Where("agent_id = ?", req.ExistingAgentUuid).First(&existingAgent)
+		if result.Error == nil {
+			// Found existing agent - reactivate it instead of using pending
+			log.Printf("Re-registration: Reactivating existing agent %s (hostname: %s)", existingAgent.AgentID, req.Hostname)
+			agentToUse = &existingAgent
+			deletePending = true // We'll delete the unused pending agent
+		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			// Database error (not "not found")
+			return nil, result.Error
+		}
+		// If UUID not found, fall through to use pending agent
+	}
+
+	// Step 6: If no existing agent found, use the pending agent
+	if agentToUse == nil {
+		log.Printf("New registration: Using pending agent %s (hostname: %s)", pendingAgent.AgentID, req.Hostname)
+		agentToUse = &pendingAgent
+		deletePending = false
+	}
+
+	// Step 7: Update the agent with registration information
 	now := time.Now()
 	updates := map[string]interface{}{
 		"hostname":           req.Hostname,
@@ -100,43 +124,61 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		"container_runtime":  req.ContainerRuntime,
 		"status":             "online",
 		"last_seen":          &now,
-		"registration_token": nil, // Clear the token after successful registration
+		"registration_token": nil, // Always clear token after successful registration
 		"expires_at":         nil, // Clear expiration
 	}
 
-	if err := database.DB.Model(&server).Updates(updates).Error; err != nil {
+	// If this is a reactivation, set reactivated_at timestamp
+	if deletePending {
+		updates["reactivated_at"] = &now
+	}
+
+	if err := database.DB.Model(agentToUse).Updates(updates).Error; err != nil {
 		return nil, err
 	}
 
-	// Broadcast SSE event for server registration
+	// Step 8: Delete the pending agent if we reactivated an existing one
+	if deletePending {
+		if err := database.DB.Delete(&pendingAgent).Error; err != nil {
+			log.Printf("Warning: Failed to delete pending agent %s: %v", pendingAgent.AgentID, err)
+			// Not fatal - continue with registration
+		} else {
+			log.Printf("Deleted unused pending agent %s", pendingAgent.AgentID)
+		}
+	}
+
+	// Step 9: Broadcast SSE event for server update
 	broker := sse.GetBroker()
 	configuredIP := ""
-	if server.ConfiguredIP != nil {
-		configuredIP = *server.ConfiguredIP
+	if agentToUse.ConfiguredIP != nil {
+		configuredIP = *agentToUse.ConfiguredIP
 	}
 	broker.BroadcastServerUpdate(sse.ServerUpdate{
-		ID:               server.ID,
+		ID:               agentToUse.ID,
 		Status:           "online",
 		IPv4Address:      req.IpAddressV4,
 		IPv6Address:      req.IpAddressV6,
 		ConfiguredIP:     configuredIP,
-		IgnoreIPMismatch: server.IgnoreIPMismatch,
+		IgnoreIPMismatch: agentToUse.IgnoreIPMismatch,
 		LastSeen:         now.Format(time.RFC3339),
+		Reactivated:      deletePending, // True if existing agent was reactivated
+		Hostname:         req.Hostname,  // For notification message
 	})
 
-	// Get CA certificate for agent TLS verification
+	// Step 10: Get CA certificate for agent TLS verification
 	caCertPEM, err := pkiInstance.GetCACertPEM()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA certificate: %w", err)
 	}
 
 	return &pb.RegisterResponse{
-		Success:    true,
-		Message:    "Server registered successfully",
-		AgentId:    server.AgentID,
-		AgentKey:   server.AgentKey,
-		CaCert:     string(caCertPEM),
-		ServerName: "watchflare",
+		Success:     true,
+		Message:     "Server registered successfully",
+		AgentId:     agentToUse.AgentID,
+		AgentKey:    agentToUse.AgentKey,
+		CaCert:      string(caCertPEM),
+		ServerName:  "watchflare",
+		Reactivated: deletePending, // True if we reactivated existing agent
 	}, nil
 }
 

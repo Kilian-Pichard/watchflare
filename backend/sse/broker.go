@@ -23,6 +23,8 @@ type ServerUpdate struct {
 	ConfiguredIP     string `json:"configured_ip,omitempty"`
 	IgnoreIPMismatch bool   `json:"ignore_ip_mismatch"`
 	LastSeen         string `json:"last_seen"`
+	Reactivated      bool   `json:"reactivated,omitempty"`      // True if agent was reactivated (UUID reused)
+	Hostname         string `json:"hostname,omitempty"`         // Hostname for reactivation notification
 }
 
 // MetricsUpdate represents a real-time metrics update

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"watchflare/backend/cache"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 
@@ -59,16 +60,34 @@ func CreateAgent(name, configuredIP string, allowAnyIP bool) (*models.Server, st
 	return server, token, agentKey, nil
 }
 
-// ListServers returns all servers
+// ListServers returns all servers with real-time status from cache
 func ListServers() ([]models.Server, error) {
 	var servers []models.Server
 	if err := database.DB.Find(&servers).Error; err != nil {
 		return nil, err
 	}
+
+	// Merge with cache data for real-time status (cache may have more recent status than DB)
+	heartbeatCache := cache.GetCache()
+	for i := range servers {
+		if cachedData, ok := heartbeatCache.Get(servers[i].AgentID); ok {
+			// Update status and last_seen from cache if available
+			servers[i].Status = cachedData.Status
+			servers[i].LastSeen = &cachedData.LastSeen
+			// Also update IPs if they changed
+			if cachedData.IPv4Address != "" {
+				servers[i].IPAddressV4 = &cachedData.IPv4Address
+			}
+			if cachedData.IPv6Address != "" {
+				servers[i].IPAddressV6 = &cachedData.IPv6Address
+			}
+		}
+	}
+
 	return servers, nil
 }
 
-// GetServer returns a server by ID
+// GetServer returns a server by ID with real-time status from cache
 func GetServer(serverID string) (*models.Server, error) {
 	var server models.Server
 	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
@@ -77,6 +96,20 @@ func GetServer(serverID string) (*models.Server, error) {
 		}
 		return nil, err
 	}
+
+	// Merge with cache data for real-time status
+	heartbeatCache := cache.GetCache()
+	if cachedData, ok := heartbeatCache.Get(server.AgentID); ok {
+		server.Status = cachedData.Status
+		server.LastSeen = &cachedData.LastSeen
+		if cachedData.IPv4Address != "" {
+			server.IPAddressV4 = &cachedData.IPv4Address
+		}
+		if cachedData.IPv6Address != "" {
+			server.IPAddressV6 = &cachedData.IPv6Address
+		}
+	}
+
 	return &server, nil
 }
 
@@ -141,6 +174,26 @@ func IgnoreIPMismatch(serverID string) error {
 
 	// Mark the mismatch as ignored
 	server.IgnoreIPMismatch = true
+
+	if err := database.DB.Save(&server).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DismissReactivation clears the reactivation badge for an agent
+func DismissReactivation(serverID string) error {
+	var server models.Server
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("server not found")
+		}
+		return err
+	}
+
+	// Clear reactivated_at timestamp
+	server.ReactivatedAt = nil
 
 	if err := database.DB.Save(&server).Error; err != nil {
 		return err

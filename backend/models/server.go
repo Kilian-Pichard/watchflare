@@ -41,6 +41,10 @@ type Server struct {
 	// Valeurs: "pending", "online", "offline", "expired"
 	Status string `gorm:"default:pending" json:"status"`
 
+	// Timestamp when agent was reactivated (via UUID reuse)
+	// NULL if never reactivated or badge was dismissed
+	ReactivatedAt *time.Time `json:"reactivated_at"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

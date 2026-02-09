@@ -151,6 +151,20 @@ func IgnoreIPMismatch(c *gin.Context) {
 	})
 }
 
+// DismissReactivation clears the reactivation badge for an agent
+func DismissReactivation(c *gin.Context) {
+	serverID := c.Param("id")
+
+	if err := services.DismissReactivation(serverID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Reactivation badge dismissed",
+	})
+}
+
 // DeleteServer deletes a server
 func DeleteServer(c *gin.Context) {
 	serverID := c.Param("id")
