@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"log"
 	"time"
 	"watchflare-agent/sysinfo"
 
@@ -10,6 +11,17 @@ import (
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+// Initialize initializes the metrics collector
+// This is necessary on macOS where cpu.Percent() needs an initial baseline
+func Initialize() {
+	// Call cpu.Percent once to initialize internal state
+	// This prevents getting 0% on first real measurement
+	_, err := cpu.Percent(time.Second, false)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize CPU metrics: %v", err)
+	}
+}
 
 // SystemMetrics represents collected system metrics
 type SystemMetrics struct {

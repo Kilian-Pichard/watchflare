@@ -117,6 +117,6 @@ func printHelp() {
 }
 
 func printVersion() {
-	fmt.Println("Watchflare Agent v1.0.0")
+	fmt.Println("Watchflare Agent v0.1.1")
 	fmt.Println("https://watchflare.io")
 }

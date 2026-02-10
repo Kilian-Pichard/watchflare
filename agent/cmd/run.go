@@ -13,6 +13,7 @@ import (
 	"watchflare-agent/client"
 	"watchflare-agent/config"
 	"watchflare-agent/errors"
+	"watchflare-agent/metrics"
 	"watchflare-agent/packages"
 	pb "watchflare/shared/proto"
 	"watchflare-agent/sysinfo"
@@ -64,6 +65,10 @@ func Run() {
 	env := sysinfo.DetectEnvironment()
 	metricsConfig := sysinfo.GetMetricsConfig(env)
 	log.Printf("Environment: %s", env.String())
+
+	// Initialize metrics collector (important for macOS CPU metrics)
+	log.Println("Initializing metrics collector...")
+	metrics.Initialize()
 
 	// Create sender with metrics config
 	sender := wal.NewSender(walInstance, grpcClient, cfg.AgentID, cfg.AgentKey, cfg.MetricsInterval, cfg.WALMaxSizeMB, metricsConfig)

@@ -29,6 +29,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.1.1` - Fix macOS CPU metrics always showing 0% (gopsutil initialization bug)
 - `0.1.0` - Initial frontend redesign with military green theme, sidebar navigation, table layouts
 
 **Commit messages:**
