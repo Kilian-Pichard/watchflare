@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.1.0
+**Current version**: 0.2.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -29,6 +29,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.2.0` - Dashboard layout improvements: collapsible sidebars, stats cards with trends, right panel with alerts
 - `0.1.1` - Fix macOS CPU metrics always showing 0% (gopsutil initialization bug)
 - `0.1.0` - Initial frontend redesign with military green theme, sidebar navigation, table layouts
 

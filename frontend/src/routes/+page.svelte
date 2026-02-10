@@ -12,13 +12,14 @@
     import { connectSSE } from "$lib/sse";
     import { formatBytes, formatPercent } from "$lib/utils";
     import { toasts } from "$lib/stores/toasts";
+    import { sidebarCollapsed } from "$lib/stores/sidebar";
     import Sidebar from "$lib/components/Sidebar.svelte";
     import ServerTable from "$lib/components/ServerTable.svelte";
-    import CompactStats from "$lib/components/CompactStats.svelte";
+    import StatsCard from "$lib/components/StatsCard.svelte";
+    import RightSidebar from "$lib/components/RightSidebar.svelte";
     import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
     import CPUChart from "$lib/components/CPUChart.svelte";
     import MemoryChart from "$lib/components/MemoryChart.svelte";
-    import DiskChart from "$lib/components/DiskChart.svelte";
 
     // State
     let user = $state(null);
@@ -29,7 +30,7 @@
     let sseDisconnect = null;
     let droppedMetricsAlerts = $state([]);
     let aggregatedMetrics = $state([]);
-    let showCharts = $state(false); // Collapsible charts section
+    let rightSidebarOpen = $state(false); // Right sidebar toggle state
 
     // Computed aggregates - uses last point from backend aggregated metrics
     let stats = $derived.by(() => {
@@ -37,19 +38,49 @@
             ? aggregatedMetrics[aggregatedMetrics.length - 1]
             : null;
 
-        return {
-            totalServers: servers.length,
-            onlineServers: servers.filter((s) => s.server.status === "online")
-                .length,
-            offlineServers: servers.filter((s) => s.server.status === "offline")
-                .length,
+        // Calculate trend by comparing current to 10 points ago (rough trend indicator)
+        const comparePoint = aggregatedMetrics.length > 10
+            ? aggregatedMetrics[aggregatedMetrics.length - 11]
+            : null;
 
-            // Use last point from backend aggregated metrics
-            avgCPU: lastPoint?.cpu_usage_percent || 0,
-            totalMemory: lastPoint?.memory_total_bytes || 0,
-            usedMemory: lastPoint?.memory_used_bytes || 0,
-            totalDisk: lastPoint?.disk_total_bytes || 0,
-            usedDisk: lastPoint?.disk_used_bytes || 0,
+        const totalServers = servers.length;
+        const onlineServers = servers.filter((s) => s.server.status === "online").length;
+        const avgCPU = lastPoint?.cpu_usage_percent || 0;
+        const totalMemory = lastPoint?.memory_total_bytes || 0;
+        const usedMemory = lastPoint?.memory_used_bytes || 0;
+        const totalDisk = lastPoint?.disk_total_bytes || 0;
+        const usedDisk = lastPoint?.disk_used_bytes || 0;
+
+        // Calculate trends
+        const cpuTrend = comparePoint
+            ? ((avgCPU - comparePoint.cpu_usage_percent) / (comparePoint.cpu_usage_percent || 1)) * 100
+            : 0;
+        const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
+        const compareMemoryPercent = comparePoint && comparePoint.memory_total_bytes > 0
+            ? (comparePoint.memory_used_bytes / comparePoint.memory_total_bytes) * 100
+            : memoryPercent;
+        const memoryTrend = ((memoryPercent - compareMemoryPercent) / (compareMemoryPercent || 1)) * 100;
+
+        const diskPercent = totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0;
+        const compareDiskPercent = comparePoint && comparePoint.disk_total_bytes > 0
+            ? (comparePoint.disk_used_bytes / comparePoint.disk_total_bytes) * 100
+            : diskPercent;
+        const diskTrend = ((diskPercent - compareDiskPercent) / (compareDiskPercent || 1)) * 100;
+
+        return {
+            totalServers,
+            onlineServers,
+            offlineServers: totalServers - onlineServers,
+            avgCPU,
+            avgMemory: memoryPercent,
+            avgDisk: diskPercent,
+            totalMemory,
+            usedMemory,
+            totalDisk,
+            usedDisk,
+            cpuTrend: isFinite(cpuTrend) ? cpuTrend : 0,
+            memoryTrend: isFinite(memoryTrend) ? memoryTrend : 0,
+            diskTrend: isFinite(diskTrend) ? diskTrend : 0,
         };
     });
 
@@ -75,6 +106,10 @@
             console.error("Logout failed:", err);
             goto("/login");
         }
+    }
+
+    function toggleRightSidebar() {
+        rightSidebarOpen = !rightSidebarOpen;
     }
 
     async function loadData() {
@@ -233,19 +268,35 @@
     <!-- Sidebar -->
     <Sidebar onLogout={handleLogout} />
 
+    <!-- Right Sidebar -->
+    <RightSidebar {stats} {servers} isOpen={rightSidebarOpen} onToggle={toggleRightSidebar} />
+
     <!-- Main Content -->
-    <main class="ml-64 min-h-screen p-8">
+    <main class="min-h-screen p-8 transition-all duration-300 {$sidebarCollapsed ? 'ml-16' : 'ml-64'} {rightSidebarOpen ? 'mr-80' : 'mr-0'}">
         {#if loading}
             <div class="flex items-center justify-center py-20">
                 <p class="text-muted-foreground">Loading dashboard...</p>
             </div>
         {:else}
-            <!-- Header -->
-            <div class="mb-6">
-                <h1 class="text-2xl font-semibold text-foreground">Dashboard</h1>
-                <p class="text-sm text-muted-foreground mt-1">
-                    Monitoring {stats.totalServers} {stats.totalServers === 1 ? "server" : "servers"}
-                </p>
+            <!-- Header with Welcome + Add Server -->
+            <div class="mb-6 flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-semibold text-foreground">
+                        Welcome back, <span class="text-primary">{user?.email?.split('@')[0] || 'User'}</span>
+                    </h1>
+                    <p class="text-sm text-muted-foreground mt-1">
+                        Global uptime at <span class="font-medium text-foreground">{formatPercent((stats.onlineServers / stats.totalServers) * 100)}</span> in the last 24h
+                    </p>
+                </div>
+                <button
+                    onclick={() => goto('/servers/new')}
+                    class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Server
+                </button>
             </div>
 
             <!-- Dropped Metrics Alerts -->
@@ -271,78 +322,78 @@
                 </div>
             {/if}
 
-            <!-- Compact Stats -->
+            <!-- 4 Stats Cards -->
+            <div class="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <StatsCard
+                    title="Active Servers"
+                    value="{stats.onlineServers}/{stats.totalServers}"
+                    trend={0}
+                    trendLabel="Server"
+                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>'
+                />
+                <StatsCard
+                    title="Avg CPU Load"
+                    value="{stats.avgCPU.toFixed(1)}%"
+                    trend={stats.cpuTrend}
+                    trendLabel="Last 24h usage"
+                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>'
+                />
+                <StatsCard
+                    title="Memory Usage"
+                    value="{stats.avgMemory.toFixed(1)}%"
+                    trend={stats.memoryTrend}
+                    trendLabel="Rising trend"
+                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>'
+                />
+                <StatsCard
+                    title="Disk Usage"
+                    value="{stats.avgDisk.toFixed(1)}%"
+                    trend={stats.diskTrend}
+                    trendLabel="Stable trend"
+                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>'
+                />
+            </div>
+
+            <!-- Central Charts (CPU + Memory only) -->
             <div class="mb-6">
-                <CompactStats {stats} />
+                <div class="mb-4 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold">Global Metrics</h2>
+                    <TimeRangeSelector
+                        bind:value={timeRange}
+                        onValueChange={handleTimeRangeChange}
+                    />
+                </div>
+                <div class="grid gap-4 lg:grid-cols-2">
+                    <!-- CPU Chart -->
+                    <div class="rounded-lg border bg-card p-4">
+                        <div class="mb-3 flex items-center justify-between">
+                            <h3 class="text-sm font-medium">CPU Usage</h3>
+                            <span class="text-xs text-muted-foreground">
+                                {formatPercent(stats.avgCPU)}
+                            </span>
+                        </div>
+                        <CPUChart data={aggregatedMetrics} />
+                    </div>
+
+                    <!-- Memory Chart -->
+                    <div class="rounded-lg border bg-card p-4">
+                        <div class="mb-3 flex items-center justify-between">
+                            <h3 class="text-sm font-medium">Memory Usage</h3>
+                            <span class="text-xs text-muted-foreground">
+                                {formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)}
+                            </span>
+                        </div>
+                        <MemoryChart data={aggregatedMetrics} />
+                    </div>
+                </div>
             </div>
 
             <!-- Servers Table -->
             <div class="mb-6">
                 <div class="mb-4 flex items-center justify-between">
-                    <h2 class="text-lg font-semibold">Servers</h2>
+                    <h2 class="text-lg font-semibold">Server Summary</h2>
                 </div>
                 <ServerTable {servers} {metricsData} />
-            </div>
-
-            <!-- Charts Section (Collapsible) -->
-            <div class="mb-6">
-                <button
-                    onclick={() => showCharts = !showCharts}
-                    class="mb-4 flex w-full items-center justify-between rounded-lg border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
-                >
-                    <div class="flex items-center gap-3">
-                        <svg
-                            class="h-5 w-5 text-muted-foreground transition-transform {showCharts ? 'rotate-90' : ''}"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                        </svg>
-                        <span class="text-sm font-medium">Global Metrics</span>
-                    </div>
-                    <TimeRangeSelector
-                        bind:value={timeRange}
-                        onValueChange={handleTimeRangeChange}
-                    />
-                </button>
-
-                {#if showCharts}
-                    <div class="grid gap-4 lg:grid-cols-3">
-                        <!-- CPU Chart -->
-                        <div class="rounded-lg border bg-card p-4">
-                            <div class="mb-3 flex items-center justify-between">
-                                <h3 class="text-sm font-medium">CPU Usage</h3>
-                                <span class="text-xs text-muted-foreground">
-                                    {formatPercent(stats.avgCPU)}
-                                </span>
-                            </div>
-                            <CPUChart data={aggregatedMetrics} />
-                        </div>
-
-                        <!-- Memory Chart -->
-                        <div class="rounded-lg border bg-card p-4">
-                            <div class="mb-3 flex items-center justify-between">
-                                <h3 class="text-sm font-medium">Memory Usage</h3>
-                                <span class="text-xs text-muted-foreground">
-                                    {formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)}
-                                </span>
-                            </div>
-                            <MemoryChart data={aggregatedMetrics} />
-                        </div>
-
-                        <!-- Disk Chart -->
-                        <div class="rounded-lg border bg-card p-4">
-                            <div class="mb-3 flex items-center justify-between">
-                                <h3 class="text-sm font-medium">Disk Usage</h3>
-                                <span class="text-xs text-muted-foreground">
-                                    {formatBytes(stats.usedDisk)} / {formatBytes(stats.totalDisk)}
-                                </span>
-                            </div>
-                            <DiskChart data={aggregatedMetrics} />
-                        </div>
-                    </div>
-                {/if}
             </div>
         {/if}
     </main>
