@@ -78,7 +78,7 @@
 <!-- Toggle Button -->
 <button
 	onclick={onToggle}
-	class="fixed right-0 top-20 z-40 flex h-10 w-10 items-center justify-center rounded-l-lg border border-r-0 bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground {isOpen ? 'translate-x-[-320px]' : ''}"
+	class="fixed right-0 top-20 z-40 flex h-10 w-10 items-center justify-center rounded-l-lg border border-r-0 bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground {isOpen ? 'xl:translate-x-[-320px]' : ''}"
 	aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
 >
 	{#if isOpen}
@@ -95,7 +95,7 @@
 </button>
 
 <!-- Sidebar -->
-<aside class="fixed right-0 top-0 z-30 h-screen w-80 border-l bg-sidebar p-6 overflow-y-auto transition-transform duration-300 {isOpen ? 'translate-x-0' : 'translate-x-full'}">
+<aside class="fixed right-0 top-0 z-30 h-screen w-80 border-l bg-sidebar p-6 overflow-y-auto transition-transform duration-300 {isOpen ? 'translate-x-0' : 'translate-x-full'} hidden xl:block">
 	<!-- Resource Usage -->
 	<div class="mb-8">
 		<h3 class="text-sm font-semibold text-foreground mb-4">Global Resource Usage</h3>

@@ -22,7 +22,7 @@
 	}
 </script>
 
-<aside class="fixed left-0 top-0 z-40 h-screen border-r bg-sidebar transition-all duration-300 {$sidebarCollapsed ? 'w-16' : 'w-64'}">
+<aside class="fixed left-0 top-0 z-40 hidden lg:block h-screen border-r bg-sidebar overflow-y-auto {$sidebarCollapsed ? 'w-16' : 'w-64'}">
 	<div class="flex h-full flex-col">
 		<!-- Logo + Toggle -->
 		<div class="flex h-16 items-center border-b {$sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-6'}">

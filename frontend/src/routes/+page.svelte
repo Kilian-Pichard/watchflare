@@ -13,7 +13,9 @@
     import { formatBytes, formatPercent } from "$lib/utils";
     import { toasts } from "$lib/stores/toasts";
     import { sidebarCollapsed } from "$lib/stores/sidebar";
-    import Sidebar from "$lib/components/Sidebar.svelte";
+    import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
+    import MobileSidebar from "$lib/components/MobileSidebar.svelte";
+    import Header from "$lib/components/Header.svelte";
     import ServerTable from "$lib/components/ServerTable.svelte";
     import StatsCard from "$lib/components/StatsCard.svelte";
     import RightSidebar from "$lib/components/RightSidebar.svelte";
@@ -30,6 +32,7 @@
     let sseDisconnect = null;
     let droppedMetricsAlerts = $state([]);
     let aggregatedMetrics = $state([]);
+    let aggregatedMetrics24h = $state([]); // Metrics for 24h trend calculation
     let rightSidebarOpen = $state(false); // Right sidebar toggle state
 
     // Computed aggregates - uses last point from backend aggregated metrics
@@ -38,9 +41,9 @@
             ? aggregatedMetrics[aggregatedMetrics.length - 1]
             : null;
 
-        // Calculate trend by comparing current to 10 points ago (rough trend indicator)
-        const comparePoint = aggregatedMetrics.length > 10
-            ? aggregatedMetrics[aggregatedMetrics.length - 11]
+        // Calculate trend by comparing current to first point from 24h data (true 24h trend)
+        const firstPoint24h = aggregatedMetrics24h.length > 0
+            ? aggregatedMetrics24h[0]
             : null;
 
         const totalServers = servers.length;
@@ -51,21 +54,26 @@
         const totalDisk = lastPoint?.disk_total_bytes || 0;
         const usedDisk = lastPoint?.disk_used_bytes || 0;
 
-        // Calculate trends
-        const cpuTrend = comparePoint
-            ? ((avgCPU - comparePoint.cpu_usage_percent) / (comparePoint.cpu_usage_percent || 1)) * 100
+        // Calculate trends (comparing current to 24h ago)
+        const cpuTrend = firstPoint24h && firstPoint24h.cpu_usage_percent > 0
+            ? ((avgCPU - firstPoint24h.cpu_usage_percent) / firstPoint24h.cpu_usage_percent) * 100
             : 0;
+
         const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
-        const compareMemoryPercent = comparePoint && comparePoint.memory_total_bytes > 0
-            ? (comparePoint.memory_used_bytes / comparePoint.memory_total_bytes) * 100
+        const compareMemoryPercent = firstPoint24h && firstPoint24h.memory_total_bytes > 0
+            ? (firstPoint24h.memory_used_bytes / firstPoint24h.memory_total_bytes) * 100
             : memoryPercent;
-        const memoryTrend = ((memoryPercent - compareMemoryPercent) / (compareMemoryPercent || 1)) * 100;
+        const memoryTrend = compareMemoryPercent > 0
+            ? ((memoryPercent - compareMemoryPercent) / compareMemoryPercent) * 100
+            : 0;
 
         const diskPercent = totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0;
-        const compareDiskPercent = comparePoint && comparePoint.disk_total_bytes > 0
-            ? (comparePoint.disk_used_bytes / comparePoint.disk_total_bytes) * 100
+        const compareDiskPercent = firstPoint24h && firstPoint24h.disk_total_bytes > 0
+            ? (firstPoint24h.disk_used_bytes / firstPoint24h.disk_total_bytes) * 100
             : diskPercent;
-        const diskTrend = ((diskPercent - compareDiskPercent) / (compareDiskPercent || 1)) * 100;
+        const diskTrend = compareDiskPercent > 0
+            ? ((diskPercent - compareDiskPercent) / compareDiskPercent) * 100
+            : 0;
 
         return {
             totalServers,
@@ -141,6 +149,9 @@
 
             // Load aggregated metrics (for stats cards and charts)
             await loadAggregatedMetrics();
+
+            // Load 24h metrics for trend calculation
+            await loadAggregatedMetrics24h();
         } catch (err) {
             console.error("Failed to load data:", err);
             // Error will trigger redirect in apiRequest
@@ -181,6 +192,15 @@
             aggregatedMetrics = data.metrics || [];
         } catch (err) {
             console.error("Failed to load aggregated metrics:", err);
+        }
+    }
+
+    async function loadAggregatedMetrics24h() {
+        try {
+            const data = await getAggregatedMetrics("24h");
+            aggregatedMetrics24h = data.metrics || [];
+        } catch (err) {
+            console.error("Failed to load 24h aggregated metrics for trends:", err);
         }
     }
 
@@ -247,9 +267,13 @@
         // Refresh dropped metrics every 1 hour
         const droppedMetricsInterval = setInterval(loadDroppedMetrics, 3600000);
 
+        // Refresh 24h metrics for trend calculation every 5 minutes
+        const trend24hInterval = setInterval(loadAggregatedMetrics24h, 300000);
+
         // Cleanup on unmount
         return () => {
             clearInterval(droppedMetricsInterval);
+            clearInterval(trend24hInterval);
         };
     });
 
@@ -265,14 +289,20 @@
 </svelte:head>
 
 <div class="min-h-screen bg-background">
-    <!-- Sidebar -->
-    <Sidebar onLogout={handleLogout} />
+    <!-- Header -->
+    <Header />
+
+    <!-- Desktop Sidebar -->
+    <DesktopSidebar onLogout={handleLogout} />
+
+    <!-- Mobile Sidebar -->
+    <MobileSidebar onLogout={handleLogout} />
 
     <!-- Right Sidebar -->
     <RightSidebar {stats} {servers} isOpen={rightSidebarOpen} onToggle={toggleRightSidebar} />
 
     <!-- Main Content -->
-    <main class="min-h-screen p-8 transition-all duration-300 {$sidebarCollapsed ? 'ml-16' : 'ml-64'} {rightSidebarOpen ? 'mr-80' : 'mr-0'}">
+    <main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} {rightSidebarOpen ? 'xl:mr-80' : 'mr-0'}">
         {#if loading}
             <div class="flex items-center justify-center py-20">
                 <p class="text-muted-foreground">Loading dashboard...</p>
@@ -335,21 +365,21 @@
                     title="Avg CPU Load"
                     value="{stats.avgCPU.toFixed(1)}%"
                     trend={stats.cpuTrend}
-                    trendLabel="Last 24h usage"
+                    trendLabel="vs 24h ago"
                     icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>'
                 />
                 <StatsCard
                     title="Memory Usage"
                     value="{stats.avgMemory.toFixed(1)}%"
                     trend={stats.memoryTrend}
-                    trendLabel="Rising trend"
+                    trendLabel="vs 24h ago"
                     icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>'
                 />
                 <StatsCard
                     title="Disk Usage"
                     value="{stats.avgDisk.toFixed(1)}%"
                     trend={stats.diskTrend}
-                    trendLabel="Stable trend"
+                    trendLabel="vs 24h ago"
                     icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>'
                 />
             </div>

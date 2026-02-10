@@ -4,7 +4,10 @@
 	import { page } from '$app/stores';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
-	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { sidebarCollapsed } from '$lib/stores/sidebar';
+	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
+	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
+	import Header from '$lib/components/Header.svelte';
 
 	let packages = [];
 	let stats = null;
@@ -116,9 +119,16 @@
 </svelte:head>
 
 <div class="min-h-screen bg-background">
-	<Sidebar onLogout={handleLogout} />
+	<!-- Header -->
+	<Header title="Packages" />
 
-	<main class="ml-64 min-h-screen p-8">
+	<!-- Desktop Sidebar -->
+	<DesktopSidebar onLogout={handleLogout} />
+
+	<!-- Mobile Sidebar -->
+	<MobileSidebar onLogout={handleLogout} />
+
+	<main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}">
 		<!-- Back Link -->
 		<div class="mb-6">
 			<a

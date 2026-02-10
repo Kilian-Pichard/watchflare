@@ -4,27 +4,30 @@
 	import { page } from '$app/stores';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
-	import Sidebar from '$lib/components/Sidebar.svelte';
+	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
+	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
+	import Header from '$lib/components/Header.svelte';
+	import { sidebarCollapsed } from '$lib/stores/sidebar';
 	import { formatBytes } from '$lib/utils';
 	import CPUChart from '$lib/components/CPUChart.svelte';
 	import MemoryChart from '$lib/components/MemoryChart.svelte';
 	import DiskChart from '$lib/components/DiskChart.svelte';
 	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
 
-	let server = null;
-	let loading = true;
-	let error = '';
-	let showDeleteConfirm = false;
-	let showRegenerateConfirm = false;
-	let showChangeIP = false;
-	let newIP = '';
-	let regeneratedToken = '';
+	let server = $state(null);
+	let loading = $state(true);
+	let error = $state('');
+	let showDeleteConfirm = $state(false);
+	let showRegenerateConfirm = $state(false);
+	let showChangeIP = $state(false);
+	let newIP = $state('');
+	let regeneratedToken = $state('');
 	let eventSource = null;
-	let packageStats = null;
-	let metrics = [];
-	let timeRange = '24h';
+	let packageStats = $state(null);
+	let metrics = $state([]);
+	let timeRange = $state('24h');
 
-	$: serverId = $page.params.id;
+	const serverId = $derived($page.params.id);
 
 	async function handleLogout() {
 		try {
@@ -67,9 +70,7 @@
 		};
 	}
 
-	onMount(async () => {
-		await loadServer();
-		await loadMetrics();
+	onMount(() => {
 		connectSSE();
 	});
 
@@ -77,6 +78,14 @@
 		if (eventSource) {
 			eventSource.close();
 			eventSource = null;
+		}
+	});
+
+	// Load data when serverId changes
+	$effect(() => {
+		if (serverId) {
+			loadServer();
+			loadMetrics();
 		}
 	});
 
@@ -197,14 +206,15 @@
 		loadMetrics();
 	}
 
-	$: showIPMismatchWarning =
+	const showIPMismatchWarning = $derived(
 		server &&
 		server.configured_ip &&
 		server.ip_address_v4 &&
 		server.configured_ip !== server.ip_address_v4 &&
-		!server.ignore_ip_mismatch;
+		!server.ignore_ip_mismatch
+	);
 
-	$: latestMetric = metrics.length > 0 ? metrics[metrics.length - 1] : null;
+	const latestMetric = $derived(metrics.length > 0 ? metrics[metrics.length - 1] : null);
 </script>
 
 <svelte:head>
@@ -212,9 +222,16 @@
 </svelte:head>
 
 <div class="min-h-screen bg-background">
-	<Sidebar onLogout={handleLogout} />
+	<!-- Header -->
+	<Header title={server?.name} />
 
-	<main class="ml-64 min-h-screen p-8">
+	<!-- Desktop Sidebar -->
+	<DesktopSidebar onLogout={handleLogout} />
+
+	<!-- Mobile Sidebar -->
+	<MobileSidebar onLogout={handleLogout} />
+
+	<main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}">
 		<!-- Back Link -->
 		<div class="mb-6">
 			<a

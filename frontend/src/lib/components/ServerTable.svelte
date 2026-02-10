@@ -84,14 +84,11 @@
 								class="group flex flex-col"
 							>
 								<span class="font-medium text-foreground group-hover:text-primary transition-colors">
-									{server.hostname}
+									{server.name}
 								</span>
-								{#if server.os}
+								{#if server.hostname}
 									<span class="text-xs text-muted-foreground">
-										{server.os}
-										{#if server.architecture}
-											· {server.architecture}
-										{/if}
+										{server.hostname}
 									</span>
 								{/if}
 							</a>
