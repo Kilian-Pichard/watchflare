@@ -11,7 +11,6 @@
 	async function handleRegister() {
 		error = '';
 
-		// Validate password confirmation
 		if (password !== confirmPassword) {
 			error = 'Passwords do not match';
 			return;
@@ -34,162 +33,91 @@
 	<title>Setup - Watchflare</title>
 </svelte:head>
 
-<div class="container">
-	<div class="register-card">
-		<h1>Watchflare</h1>
-		<p class="subtitle">Initial Setup - Create Admin Account</p>
+<div class="flex min-h-screen items-center justify-center bg-background p-4">
+	<div class="w-full max-w-md">
+		<!-- Logo/Title -->
+		<div class="mb-8 text-center">
+			<h1 class="text-3xl font-semibold text-foreground mb-2">Watchflare</h1>
+			<p class="text-sm text-muted-foreground">Initial Setup - Create Admin Account</p>
+		</div>
 
-		<form on:submit|preventDefault={handleRegister}>
-			<div class="form-group">
-				<label for="email">Email</label>
-				<input
-					id="email"
-					type="email"
-					bind:value={email}
-					required
-					placeholder="admin@watchflare.io"
+		<!-- Register Card -->
+		<div class="rounded-lg border bg-card p-8 shadow-sm">
+			<h2 class="text-lg font-semibold text-foreground mb-6">Create your admin account</h2>
+
+			<form onsubmit={(e) => { e.preventDefault(); handleRegister(); }}>
+				<!-- Email -->
+				<div class="mb-4">
+					<label for="email" class="block text-sm font-medium text-foreground mb-2">
+						Email
+					</label>
+					<input
+						id="email"
+						type="email"
+						bind:value={email}
+						required
+						placeholder="admin@watchflare.io"
+						disabled={loading}
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+					/>
+				</div>
+
+				<!-- Password -->
+				<div class="mb-4">
+					<label for="password" class="block text-sm font-medium text-foreground mb-2">
+						Password
+					</label>
+					<input
+						id="password"
+						type="password"
+						bind:value={password}
+						required
+						minlength="8"
+						placeholder="••••••••"
+						disabled={loading}
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+					/>
+					<p class="mt-1 text-xs text-muted-foreground">Minimum 8 characters</p>
+				</div>
+
+				<!-- Confirm Password -->
+				<div class="mb-6">
+					<label for="confirmPassword" class="block text-sm font-medium text-foreground mb-2">
+						Confirm Password
+					</label>
+					<input
+						id="confirmPassword"
+						type="password"
+						bind:value={confirmPassword}
+						required
+						minlength="8"
+						placeholder="••••••••"
+						disabled={loading}
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+					/>
+				</div>
+
+				<!-- Error Message -->
+				{#if error}
+					<div class="mb-4 rounded-lg border border-destructive bg-destructive/10 p-3">
+						<p class="text-sm text-destructive">{error}</p>
+					</div>
+				{/if}
+
+				<!-- Submit Button -->
+				<button
+					type="submit"
 					disabled={loading}
-				/>
-			</div>
+					class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					{loading ? 'Creating Account...' : 'Create Admin Account'}
+				</button>
+			</form>
+		</div>
 
-			<div class="form-group">
-				<label for="password">Password</label>
-				<input
-					id="password"
-					type="password"
-					bind:value={password}
-					required
-					minlength="8"
-					placeholder="••••••••"
-					disabled={loading}
-				/>
-				<p class="helper-text">Minimum 8 characters</p>
-			</div>
-
-			<div class="form-group">
-				<label for="confirmPassword">Confirm Password</label>
-				<input
-					id="confirmPassword"
-					type="password"
-					bind:value={confirmPassword}
-					required
-					minlength="8"
-					placeholder="••••••••"
-					disabled={loading}
-				/>
-			</div>
-
-			{#if error}
-				<div class="error">{error}</div>
-			{/if}
-
-			<button type="submit" disabled={loading}>
-				{loading ? 'Creating Account...' : 'Create Admin Account'}
-			</button>
-		</form>
+		<!-- Footer -->
+		<p class="mt-6 text-center text-xs text-muted-foreground">
+			Watchflare Server Monitoring
+		</p>
 	</div>
 </div>
-
-<style>
-	.container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		min-height: 100vh;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-	}
-
-	.register-card {
-		background: white;
-		padding: 2.5rem;
-		border-radius: 12px;
-		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-		width: 100%;
-		max-width: 400px;
-	}
-
-	h1 {
-		margin: 0 0 0.5rem 0;
-		font-size: 2rem;
-		color: #1a202c;
-		text-align: center;
-	}
-
-	.subtitle {
-		margin: 0 0 2rem 0;
-		color: #718096;
-		text-align: center;
-		font-size: 0.875rem;
-	}
-
-	.form-group {
-		margin-bottom: 1.5rem;
-	}
-
-	label {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #4a5568;
-		font-weight: 500;
-		font-size: 0.875rem;
-	}
-
-	input {
-		width: 100%;
-		padding: 0.75rem;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-size: 1rem;
-		transition: border-color 0.2s;
-		box-sizing: border-box;
-	}
-
-	input:focus {
-		outline: none;
-		border-color: #667eea;
-	}
-
-	input:disabled {
-		background-color: #f7fafc;
-		cursor: not-allowed;
-	}
-
-	.helper-text {
-		margin: 0.25rem 0 0 0;
-		font-size: 0.75rem;
-		color: #718096;
-	}
-
-	button {
-		width: 100%;
-		padding: 0.75rem;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: transform 0.2s;
-	}
-
-	button:hover:not(:disabled) {
-		transform: translateY(-1px);
-	}
-
-	button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.error {
-		background: #fed7d7;
-		color: #c53030;
-		padding: 0.75rem;
-		border-radius: 6px;
-		margin-bottom: 1rem;
-		font-size: 0.875rem;
-	}
-</style>

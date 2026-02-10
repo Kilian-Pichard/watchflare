@@ -4,6 +4,12 @@
 	import { page } from '$app/stores';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
+	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { formatBytes } from '$lib/utils';
+	import CPUChart from '$lib/components/CPUChart.svelte';
+	import MemoryChart from '$lib/components/MemoryChart.svelte';
+	import DiskChart from '$lib/components/DiskChart.svelte';
+	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
 
 	let server = null;
 	let loading = true;
@@ -13,9 +19,10 @@
 	let showChangeIP = false;
 	let newIP = '';
 	let regeneratedToken = '';
-	let regeneratedCommand = '';
 	let eventSource = null;
 	let packageStats = null;
+	let metrics = [];
+	let timeRange = '24h';
 
 	$: serverId = $page.params.id;
 
@@ -30,14 +37,12 @@
 	}
 
 	function connectSSE() {
-		// Connect to SSE endpoint
 		eventSource = new EventSource('http://localhost:8080/servers/events', {
 			withCredentials: true
 		});
 
 		eventSource.addEventListener('server_update', (e) => {
 			const update = JSON.parse(e.data);
-			// Only update if it's the current server
 			if (server && update.id === server.id) {
 				server = {
 					...server,
@@ -53,7 +58,6 @@
 
 		eventSource.onerror = (err) => {
 			console.error('SSE error:', err);
-			// Reconnect after 5 seconds
 			setTimeout(() => {
 				if (eventSource) {
 					eventSource.close();
@@ -65,12 +69,11 @@
 
 	onMount(async () => {
 		await loadServer();
-		// Connect to SSE for real-time updates
+		await loadMetrics();
 		connectSSE();
 	});
 
 	onDestroy(() => {
-		// Close SSE connection when component is destroyed
 		if (eventSource) {
 			eventSource.close();
 			eventSource = null;
@@ -82,12 +85,10 @@
 			const response = await api.getServer(serverId);
 			server = response.server;
 
-			// Load package stats if server is online
 			if (server.status === 'online') {
 				try {
 					packageStats = await api.getPackageStats(serverId);
 				} catch (err) {
-					// Package stats are optional, don't fail if they error
 					console.error('Failed to load package stats:', err);
 				}
 			}
@@ -95,6 +96,15 @@
 			error = err.message || 'Failed to load server';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadMetrics() {
+		try {
+			const data = await api.getServerMetrics(serverId, { time_range: timeRange });
+			metrics = data.metrics || [];
+		} catch (err) {
+			console.error('Failed to load metrics:', err);
 		}
 	}
 
@@ -112,8 +122,6 @@
 		try {
 			const response = await api.regenerateToken(serverId);
 			regeneratedToken = response.token;
-			// Generate install command on frontend
-			regeneratedCommand = `curl -sSL https://get.watchflare.io/ | bash -s -- --token ${response.token}`;
 			showRegenerateConfirm = false;
 			await loadServer();
 		} catch (err) {
@@ -132,38 +140,6 @@
 			error = err.message || 'Failed to update IP';
 		}
 	}
-
-	function formatDate(dateString) {
-		if (!dateString) return '-';
-		return new Date(dateString).toLocaleString('fr-FR');
-	}
-
-	function getStatusClass(status) {
-		switch (status) {
-			case 'online':
-				return 'status-online';
-			case 'offline':
-				return 'status-offline';
-			case 'pending':
-				return 'status-pending';
-			case 'expired':
-				return 'status-expired';
-			default:
-				return 'status-unknown';
-		}
-	}
-
-	function copyToClipboard(text) {
-		navigator.clipboard.writeText(text);
-	}
-
-	// Reactive statement - automatically updates when server changes
-	$: showIPMismatchWarning =
-		server &&
-		server.configured_ip &&
-		server.ip_address_v4 &&
-		server.configured_ip !== server.ip_address_v4 &&
-		!server.ignore_ip_mismatch; // Don't show warning if user chose to ignore
 
 	async function handleUpdateIP() {
 		if (!server) return;
@@ -184,985 +160,423 @@
 			error = err.message || 'Failed to ignore IP mismatch';
 		}
 	}
+
+	async function handleDismissReactivation() {
+		if (!server) return;
+		try {
+			await api.dismissReactivation(server.id);
+			await loadServer();
+		} catch (err) {
+			error = err.message || 'Failed to dismiss reactivation';
+		}
+	}
+
+	function formatDate(dateString) {
+		if (!dateString) return '-';
+		return new Date(dateString).toLocaleString('fr-FR');
+	}
+
+	function getStatusClass(status) {
+		switch (status) {
+			case 'online':
+				return 'bg-success/10 text-success border-success/20';
+			case 'offline':
+				return 'bg-muted text-muted-foreground border-border';
+			case 'pending':
+				return 'bg-warning/10 text-warning border-warning/20';
+			default:
+				return 'bg-muted text-muted-foreground border-border';
+		}
+	}
+
+	function copyToClipboard(text) {
+		navigator.clipboard.writeText(text);
+	}
+
+	function handleTimeRangeChange() {
+		loadMetrics();
+	}
+
+	$: showIPMismatchWarning =
+		server &&
+		server.configured_ip &&
+		server.ip_address_v4 &&
+		server.configured_ip !== server.ip_address_v4 &&
+		!server.ignore_ip_mismatch;
+
+	$: latestMetric = metrics.length > 0 ? metrics[metrics.length - 1] : null;
 </script>
 
 <svelte:head>
-	<title>Server Details - Watchflare</title>
+	<title>{server?.name || 'Server'} - Watchflare</title>
 </svelte:head>
 
-<div class="container">
-	<nav class="navbar">
-		<div class="nav-content">
-			<h1>Watchflare</h1>
-			<div class="nav-actions">
-				<a href="/" class="nav-link">Dashboard</a>
-				<a href="/servers" class="nav-link active">Servers</a>
-				<a href="/settings" class="nav-link">Settings</a>
-				<button on:click={handleLogout} class="logout-btn">Logout</button>
-			</div>
-		</div>
-	</nav>
+<div class="min-h-screen bg-background">
+	<Sidebar onLogout={handleLogout} />
 
-	<main class="main">
-		<div class="back-link">
-			<a href="/servers">← Back to Servers</a>
+	<main class="ml-64 min-h-screen p-8">
+		<!-- Back Link -->
+		<div class="mb-6">
+			<a
+				href="/servers"
+				class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+				</svg>
+				Back to Servers
+			</a>
 		</div>
 
 		{#if loading}
-			<div class="loading">
-				<p>Loading server details...</p>
+			<div class="flex items-center justify-center py-20">
+				<p class="text-muted-foreground">Loading server details...</p>
 			</div>
-		{:else if error && !server}
-			<div class="error-box">
-				<p>{error}</p>
+		{:else if error}
+			<div class="rounded-lg border border-destructive bg-destructive/10 p-4">
+				<p class="text-sm text-destructive">{error}</p>
 			</div>
 		{:else if server}
-			{#if error}
-				<div class="error-box">
-					<p>{error}</p>
+			<!-- Header -->
+			<div class="mb-6 flex items-start justify-between">
+				<div>
+					<div class="flex items-center gap-3 mb-2">
+						<h1 class="text-2xl font-semibold text-foreground">{server.name}</h1>
+						<span
+							class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
+						>
+							<span class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : 'bg-muted-foreground'}"></span>
+							{server.status}
+						</span>
+					</div>
+					{#if server.hostname}
+						<p class="text-sm text-muted-foreground">{server.hostname}</p>
+					{/if}
+				</div>
+				<div class="flex gap-2">
+					<button
+						onclick={() => showChangeIP = true}
+						class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+					>
+						Change IP
+					</button>
+					<button
+						onclick={() => showRegenerateConfirm = true}
+						class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+					>
+						Regenerate Token
+					</button>
+					<button
+						onclick={() => showDeleteConfirm = true}
+						class="rounded-lg border border-destructive bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20"
+					>
+						Delete
+					</button>
+				</div>
+			</div>
+
+			<!-- Alerts -->
+			{#if showIPMismatchWarning}
+				<div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4">
+					<div class="flex items-start gap-3">
+						<svg class="h-5 w-5 text-warning mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+							<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+						</svg>
+						<div class="flex-1">
+							<p class="text-sm font-medium text-foreground">IP Address Mismatch</p>
+							<p class="text-sm text-muted-foreground mt-1">
+								Configured IP: {server.configured_ip} • Actual IP: {server.ip_address_v4}
+							</p>
+							<div class="mt-3 flex gap-2">
+								<button
+									onclick={handleUpdateIP}
+									class="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+								>
+									Update to {server.ip_address_v4}
+								</button>
+								<button
+									onclick={handleIgnoreIP}
+									class="rounded-lg border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+								>
+									Ignore
+								</button>
+							</div>
+						</div>
+					</div>
 				</div>
 			{/if}
 
-			<!-- Header Card -->
-			<div class="card header-card">
-				<div class="header-content">
-					<div>
-						<h2>{server.name}</h2>
-						<p class="agent-id">Agent ID: {server.agent_id}</p>
+			{#if server.reactivated_at}
+				<div class="mb-6 rounded-lg border border-primary bg-primary/10 p-4">
+					<div class="flex items-start justify-between gap-3">
+						<div class="flex items-start gap-3">
+							<svg class="h-5 w-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+							</svg>
+							<div>
+								<p class="text-sm font-medium text-foreground">Agent Reactivated</p>
+								<p class="text-sm text-muted-foreground mt-1">
+									Same physical server detected via UUID at {formatDate(server.reactivated_at)}
+								</p>
+							</div>
+						</div>
+						<button
+							onclick={handleDismissReactivation}
+							class="text-primary hover:text-primary/80"
+						>
+							<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+							</svg>
+						</button>
 					</div>
-					<span class="status-badge {getStatusClass(server.status)}">
-						{server.status}
-					</span>
+				</div>
+			{/if}
+
+			<!-- Server Info Grid -->
+			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+				<div class="rounded-lg border bg-card p-4">
+					<p class="text-xs text-muted-foreground mb-1">Operating System</p>
+					<p class="text-sm font-medium text-foreground">{server.os || '-'}</p>
+				</div>
+				<div class="rounded-lg border bg-card p-4">
+					<p class="text-xs text-muted-foreground mb-1">Architecture</p>
+					<p class="text-sm font-medium text-foreground">{server.architecture || '-'}</p>
+				</div>
+				<div class="rounded-lg border bg-card p-4">
+					<p class="text-xs text-muted-foreground mb-1">IP Address</p>
+					<p class="text-sm font-medium text-foreground">{server.ip_address_v4 || '-'}</p>
+				</div>
+				<div class="rounded-lg border bg-card p-4">
+					<p class="text-xs text-muted-foreground mb-1">Last Seen</p>
+					<p class="text-sm font-medium text-foreground">{formatDate(server.last_seen)}</p>
 				</div>
 			</div>
 
-			<!-- IP Mismatch Warning -->
-			{#if showIPMismatchWarning}
-				<div class="warning-card">
-					<div class="warning-header">
-						<span class="warning-icon">⚠️</span>
-						<h3>IP Address Mismatch Detected</h3>
+			<!-- Current Metrics -->
+			{#if latestMetric}
+				<div class="grid gap-4 md:grid-cols-3 mb-6">
+					<div class="rounded-lg border bg-card p-4">
+						<div class="flex items-center justify-between mb-2">
+							<p class="text-sm font-medium text-foreground">CPU Usage</p>
+							<div class="h-2 w-2 rounded-full bg-[var(--chart-1)]"></div>
+						</div>
+						<p class="text-2xl font-semibold text-foreground">{latestMetric.cpu_usage_percent.toFixed(1)}%</p>
 					</div>
-					<p class="warning-message">
-						The configured IP address does not match the actual IP address reported by the
-						agent.
-					</p>
-					<div class="ip-comparison">
-						<div class="ip-item">
-							<span class="ip-label">Configured IP:</span>
-							<span class="ip-value configured">{server.configured_ip}</span>
+					<div class="rounded-lg border bg-card p-4">
+						<div class="flex items-center justify-between mb-2">
+							<p class="text-sm font-medium text-foreground">Memory</p>
+							<div class="h-2 w-2 rounded-full bg-[var(--chart-2)]"></div>
 						</div>
-						<div class="ip-item">
-							<span class="ip-label">Actual IP (from agent):</span>
-							<span class="ip-value actual">{server.ip_address_v4}</span>
-						</div>
+						<p class="text-2xl font-semibold text-foreground">
+							{formatBytes(latestMetric.memory_used_bytes)}
+						</p>
+						<p class="text-xs text-muted-foreground mt-1">
+							of {formatBytes(latestMetric.memory_total_bytes)}
+						</p>
 					</div>
-					<div class="warning-actions">
-						<div class="warning-buttons">
-							<button class="btn-update" on:click={handleUpdateIP}>
-								Update configured IP to {server.ip_address_v4}
-							</button>
-							<button class="btn-ignore" on:click={handleIgnoreIP}>
-								Ignore this warning
-							</button>
+					<div class="rounded-lg border bg-card p-4">
+						<div class="flex items-center justify-between mb-2">
+							<p class="text-sm font-medium text-foreground">Disk</p>
+							<div class="h-2 w-2 rounded-full bg-[var(--chart-3)]"></div>
 						</div>
-						<p class="warning-note">
-							Updating will replace the configured IP with the actual IP reported by the agent.
-							Ignoring will hide this warning until the IPs change again.
+						<p class="text-2xl font-semibold text-foreground">
+							{formatBytes(latestMetric.disk_used_bytes)}
+						</p>
+						<p class="text-xs text-muted-foreground mt-1">
+							of {formatBytes(latestMetric.disk_total_bytes)}
 						</p>
 					</div>
 				</div>
 			{/if}
 
-			<!-- Server Information Card -->
-			<div class="card">
-				<h3>Server Information</h3>
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="info-label">Configured IP</span>
-						<span class="info-value">{server.configured_ip || 'Not set'}</span>
-					</div>
-					<div class="info-item">
-						<span class="info-label">Allow Any IP</span>
-						<span class="info-value">{server.allow_any_ip_registration ? 'Yes' : 'No'}</span>
-					</div>
-					<div class="info-item">
-						<span class="info-label">Created At</span>
-						<span class="info-value">{formatDate(server.created_at)}</span>
-					</div>
-				</div>
-			</div>
-
-			<!-- Agent Information Card (only if registered) -->
-			{#if server.hostname || server.ip_address_v4}
-				<div class="card">
-					<h3>Agent Information</h3>
-					<div class="info-grid">
-						{#if server.hostname}
-							<div class="info-item">
-								<span class="info-label">Hostname</span>
-								<span class="info-value">{server.hostname}</span>
-							</div>
-						{/if}
-						{#if server.ip_address_v4}
-							<div class="info-item">
-								<span class="info-label">IPv4 Address</span>
-								<span class="info-value">{server.ip_address_v4}</span>
-							</div>
-						{/if}
-						{#if server.ip_address_v6}
-							<div class="info-item">
-								<span class="info-label">IPv6 Address</span>
-								<span class="info-value">{server.ip_address_v6}</span>
-							</div>
-						{/if}
-						{#if server.platform || server.os}
-							<div class="info-item">
-								<span class="info-label">Operating System</span>
-								<span class="info-value">
-									{server.platform || server.os}
-									{server.platform_version || server.os_version || ''}
-								</span>
-							</div>
-						{/if}
-						{#if server.environment_type}
-							<div class="info-item">
-								<span class="info-label">Environment</span>
-								<span class="info-value environment-badge">
-									{#if server.environment_type === 'physical'}
-										🖥️ Physical Server
-									{:else if server.environment_type === 'physical_with_containers'}
-										🖥️ Physical + 🐳 Containers
-									{:else if server.environment_type === 'vm'}
-										☁️ Virtual Machine
-										{#if server.hypervisor && server.hypervisor !== 'unknown'}
-											({server.hypervisor})
-										{/if}
-									{:else if server.environment_type === 'vm_with_containers'}
-										☁️ VM + 🐳 Containers
-										{#if server.hypervisor && server.hypervisor !== 'unknown'}
-											({server.hypervisor})
-										{/if}
-									{:else if server.environment_type === 'container'}
-										🐳 Container
-										{#if server.container_runtime && server.container_runtime !== 'unknown'}
-											({server.container_runtime})
-										{/if}
-									{:else}
-										{server.environment_type}
-									{/if}
-								</span>
-							</div>
-						{/if}
-						{#if server.architecture}
-							<div class="info-item">
-								<span class="info-label">Architecture</span>
-								<span class="info-value">{server.architecture}</span>
-							</div>
-						{/if}
-						{#if server.kernel}
-							<div class="info-item">
-								<span class="info-label">Kernel</span>
-								<span class="info-value">{server.kernel}</span>
-							</div>
-						{/if}
-						{#if server.platform_family}
-							<div class="info-item">
-								<span class="info-label">Platform Family</span>
-								<span class="info-value">{server.platform_family}</span>
-							</div>
-						{/if}
-						{#if server.last_seen}
-							<div class="info-item">
-								<span class="info-label">Last Seen</span>
-								<span class="info-value">{formatDate(server.last_seen)}</span>
-							</div>
-						{/if}
-					</div>
-				</div>
-			{/if}
-
-			<!-- Packages Card (only if registered and has stats) -->
+			<!-- Packages Stats -->
 			{#if packageStats}
-				<div class="card">
-					<div class="card-header-with-link">
-						<h3>Installed Packages</h3>
-						<a href="/servers/{serverId}/packages" class="view-all-link">View All →</a>
+				<div class="mb-6 rounded-lg border bg-card p-4">
+					<div class="flex items-center justify-between mb-4">
+						<h2 class="text-base font-semibold text-foreground">Package Inventory</h2>
+						<a
+							href="/servers/{serverId}/packages"
+							class="text-sm font-medium text-primary hover:text-primary/80"
+						>
+							View Details →
+						</a>
 					</div>
-					<div class="package-stats-grid">
-						<div class="package-stat">
-							<div class="package-stat-value">{packageStats.total_packages}</div>
-							<div class="package-stat-label">Total Packages</div>
+					<div class="flex items-center gap-6">
+						<div>
+							<p class="text-xs text-muted-foreground mb-1">Total Packages</p>
+							<p class="text-xl font-semibold text-foreground">{packageStats.total_packages || 0}</p>
 						</div>
-						{#each packageStats.by_package_manager || [] as pm}
-							<div class="package-stat">
-								<div class="package-stat-value">{pm.count}</div>
-								<div class="package-stat-label">{pm.package_manager}</div>
+						{#if packageStats.recent_changes}
+							<div>
+								<p class="text-xs text-muted-foreground mb-1">Recent Changes (30d)</p>
+								<p class="text-xl font-semibold text-foreground">{packageStats.recent_changes}</p>
 							</div>
-						{/each}
-					</div>
-					{#if packageStats.last_collection}
-						<div class="package-last-collection">
-							<p>
-								Last scan: {formatDate(packageStats.last_collection.timestamp)} ({packageStats
-									.last_collection.collection_type}, {packageStats.last_collection
-									.package_count} packages)
-							</p>
-						</div>
-					{/if}
-				</div>
-			{/if}
-
-			<!-- Regenerated Token Card -->
-			{#if regeneratedToken}
-				<div class="card success-card">
-					<h3>New Registration Token</h3>
-					<div class="token-section">
-						<div class="token-item">
-							<label>Token</label>
-							<div class="input-with-button">
-								<input type="text" readonly value={regeneratedToken} class="code-input" />
-								<button class="copy-btn" on:click={() => copyToClipboard(regeneratedToken)}>
-									Copy
-								</button>
-							</div>
-						</div>
-						<div class="token-item">
-							<label>Installation Command</label>
-							<div class="code-block-wrapper">
-								<pre class="code-block">{regeneratedCommand}</pre>
-								<button
-									class="copy-btn-absolute"
-									on:click={() => copyToClipboard(regeneratedCommand)}
-								>
-									Copy
-								</button>
-							</div>
-						</div>
-						<p class="warning-text">⚠️ Save this token securely. It won't be shown again!</p>
+						{/if}
 					</div>
 				</div>
 			{/if}
 
-			<!-- Actions Card -->
-			<div class="card">
-				<h3>Actions</h3>
-				<div class="actions-grid">
-					{#if server.status === 'pending' || server.status === 'expired'}
-						<button class="btn-action btn-primary" on:click={() => (showRegenerateConfirm = true)}>
-							Regenerate Token
-						</button>
-					{/if}
-					<button class="btn-action btn-secondary" on:click={() => (showChangeIP = true)}>
-						Change Configured IP
-					</button>
-					{#if server.status === 'pending' || server.status === 'expired'}
-						<button class="btn-action btn-danger" on:click={() => (showDeleteConfirm = true)}>
-							Delete Server
-						</button>
-					{/if}
+			<!-- Charts -->
+			<div class="mb-6">
+				<div class="mb-4 flex items-center justify-between">
+					<h2 class="text-lg font-semibold text-foreground">Metrics</h2>
+					<TimeRangeSelector
+						bind:value={timeRange}
+						onValueChange={handleTimeRangeChange}
+					/>
+				</div>
+
+				<div class="grid gap-4 lg:grid-cols-3">
+					<div class="rounded-lg border bg-card p-4">
+						<h3 class="text-sm font-medium text-foreground mb-3">CPU Usage</h3>
+						<CPUChart data={metrics} />
+					</div>
+					<div class="rounded-lg border bg-card p-4">
+						<h3 class="text-sm font-medium text-foreground mb-3">Memory Usage</h3>
+						<MemoryChart data={metrics} />
+					</div>
+					<div class="rounded-lg border bg-card p-4">
+						<h3 class="text-sm font-medium text-foreground mb-3">Disk Usage</h3>
+						<DiskChart data={metrics} />
+					</div>
 				</div>
 			</div>
-
-			<!-- Expiration Info -->
-			{#if server.status === 'pending' && server.expires_at}
-				<div class="warning-card">
-					<p>
-						<strong>Note:</strong> This registration token will expire on {formatDate(
-							server.expires_at
-						)}
-					</p>
-				</div>
-			{/if}
 		{/if}
 	</main>
 </div>
 
 <!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}
-	<div class="modal-overlay" on:click={() => (showDeleteConfirm = false)}>
-		<div class="modal" on:click={(e) => e.stopPropagation()}>
-			<h3>Delete Server</h3>
-			<p>Are you sure you want to delete "{server.name}"? This action cannot be undone.</p>
-			<div class="modal-actions">
-				<button class="btn-danger" on:click={handleDelete}>Delete</button>
-				<button class="btn-secondary" on:click={() => (showDeleteConfirm = false)}>
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		onclick={() => showDeleteConfirm = false}
+	>
+		<div
+			class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h3 class="text-lg font-semibold text-foreground mb-3">Confirm Delete</h3>
+			<p class="text-sm text-muted-foreground mb-4">
+				Are you sure you want to delete "{server?.name}"?
+			</p>
+			<p class="text-sm font-medium text-destructive mb-6">This action cannot be undone.</p>
+			<div class="flex gap-3 justify-end">
+				<button
+					onclick={() => showDeleteConfirm = false}
+					class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+				>
 					Cancel
+				</button>
+				<button
+					onclick={handleDelete}
+					class="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+				>
+					Delete Server
 				</button>
 			</div>
 		</div>
 	</div>
 {/if}
 
-<!-- Regenerate Token Confirmation Modal -->
+<!-- Regenerate Token Modal -->
 {#if showRegenerateConfirm}
-	<div class="modal-overlay" on:click={() => (showRegenerateConfirm = false)}>
-		<div class="modal" on:click={(e) => e.stopPropagation()}>
-			<h3>Regenerate Token</h3>
-			<p>
-				This will invalidate the current registration token and generate a new one. Continue?
-			</p>
-			<div class="modal-actions">
-				<button class="btn-primary" on:click={handleRegenerateToken}>Regenerate</button>
-				<button class="btn-secondary" on:click={() => (showRegenerateConfirm = false)}>
-					Cancel
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		onclick={() => { showRegenerateConfirm = false; regeneratedToken = ''; }}
+	>
+		<div
+			class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+			onclick={(e) => e.stopPropagation()}
+		>
+			{#if !regeneratedToken}
+				<h3 class="text-lg font-semibold text-foreground mb-3">Regenerate Token</h3>
+				<p class="text-sm text-muted-foreground mb-6">
+					This will invalidate the current registration token. The agent will need to re-register.
+				</p>
+				<div class="flex gap-3 justify-end">
+					<button
+						onclick={() => showRegenerateConfirm = false}
+						class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+					>
+						Cancel
+					</button>
+					<button
+						onclick={handleRegenerateToken}
+						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+					>
+						Regenerate
+					</button>
+				</div>
+			{:else}
+				<h3 class="text-lg font-semibold text-success mb-3">Token Regenerated</h3>
+				<div class="mb-4">
+					<label class="block text-sm font-medium text-foreground mb-2">New Registration Token</label>
+					<div class="flex gap-2">
+						<input
+							type="text"
+							readonly
+							value={regeneratedToken}
+							class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
+						/>
+						<button
+							onclick={() => copyToClipboard(regeneratedToken)}
+							class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+						>
+							Copy
+						</button>
+					</div>
+					<p class="mt-2 text-xs font-medium text-warning">
+						⚠️ Save this token securely. It won't be shown again!
+					</p>
+				</div>
+				<button
+					onclick={() => { showRegenerateConfirm = false; regeneratedToken = ''; }}
+					class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+				>
+					Close
 				</button>
-			</div>
+			{/if}
 		</div>
 	</div>
 {/if}
 
 <!-- Change IP Modal -->
 {#if showChangeIP}
-	<div class="modal-overlay" on:click={() => (showChangeIP = false)}>
-		<div class="modal" on:click={(e) => e.stopPropagation()}>
-			<h3>Change Configured IP</h3>
-			<form
-				on:submit={(e) => {
-					e.preventDefault();
-					handleChangeIP();
-				}}
-			>
-				<div class="form-group">
-					<label for="new-ip">New IP Address</label>
-					<input
-						id="new-ip"
-						type="text"
-						bind:value={newIP}
-						required
-						placeholder="e.g., 192.168.1.200"
-					/>
-				</div>
-				<div class="modal-actions">
-					<button type="submit" class="btn-primary">Update</button>
-					<button
-						type="button"
-						class="btn-secondary"
-						on:click={() => {
-							showChangeIP = false;
-							newIP = '';
-						}}
-					>
-						Cancel
-					</button>
-				</div>
-			</form>
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		onclick={() => { showChangeIP = false; newIP = ''; }}
+	>
+		<div
+			class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h3 class="text-lg font-semibold text-foreground mb-3">Change Configured IP</h3>
+			<div class="mb-4">
+				<label for="newip" class="block text-sm font-medium text-foreground mb-2">
+					New IP Address
+				</label>
+				<input
+					id="newip"
+					type="text"
+					bind:value={newIP}
+					placeholder="e.g., 192.168.1.100"
+					class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+				/>
+			</div>
+			<div class="flex gap-3 justify-end">
+				<button
+					onclick={() => { showChangeIP = false; newIP = ''; }}
+					class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={handleChangeIP}
+					class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+				>
+					Update IP
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}
-
-<style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-		background: #f7fafc;
-	}
-
-	.container {
-		min-height: 100vh;
-	}
-
-	.navbar {
-		background: white;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		padding: 1rem 0;
-	}
-
-	.nav-content {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 0 2rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.navbar h1 {
-		margin: 0;
-		font-size: 1.5rem;
-		color: #667eea;
-	}
-
-	.nav-actions {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.nav-link {
-		color: #4a5568;
-		text-decoration: none;
-		font-weight: 500;
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		transition: background-color 0.2s;
-	}
-
-	.nav-link:hover {
-		background-color: #edf2f7;
-	}
-
-	.nav-link.active {
-		background-color: #edf2f7;
-		color: #667eea;
-	}
-
-	.logout-btn {
-		padding: 0.5rem 1rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.logout-btn:hover {
-		background: #c53030;
-	}
-
-	.main {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 2rem;
-	}
-
-	.back-link {
-		margin-bottom: 1.5rem;
-	}
-
-	.back-link a {
-		color: #667eea;
-		text-decoration: none;
-		font-weight: 500;
-	}
-
-	.back-link a:hover {
-		color: #5a67d8;
-	}
-
-	.loading {
-		background: white;
-		padding: 3rem;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		text-align: center;
-		color: #718096;
-	}
-
-	.error-box {
-		background: #fed7d7;
-		color: #c53030;
-		padding: 1rem;
-		border-radius: 6px;
-		border: 1px solid #fc8181;
-		margin-bottom: 1.5rem;
-	}
-
-	.error-box p {
-		margin: 0;
-	}
-
-	.card {
-		background: white;
-		padding: 2rem;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		margin-bottom: 1.5rem;
-	}
-
-	.header-card {
-		padding: 1.5rem 2rem;
-	}
-
-	.header-content {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-	}
-
-	h2 {
-		margin: 0 0 0.5rem 0;
-		font-size: 2rem;
-		color: #1a202c;
-	}
-
-	.agent-id {
-		margin: 0;
-		color: #718096;
-		font-size: 0.875rem;
-	}
-
-	h3 {
-		margin: 0 0 1.5rem 0;
-		font-size: 1.25rem;
-		color: #1a202c;
-		font-weight: 600;
-	}
-
-	.status-badge {
-		display: inline-block;
-		padding: 0.5rem 1rem;
-		border-radius: 12px;
-		font-size: 0.875rem;
-		font-weight: 600;
-		text-transform: capitalize;
-	}
-
-	.status-online {
-		background: #c6f6d5;
-		color: #2f855a;
-	}
-
-	.status-offline {
-		background: #fed7d7;
-		color: #c53030;
-	}
-
-	.status-pending {
-		background: #fef5e7;
-		color: #d69e2e;
-	}
-
-	.status-expired {
-		background: #e2e8f0;
-		color: #4a5568;
-	}
-
-	.status-unknown {
-		background: #e2e8f0;
-		color: #718096;
-	}
-
-	.info-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: 1.5rem;
-	}
-
-	.info-item {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.info-label {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: #718096;
-	}
-
-	.info-value {
-		font-size: 0.875rem;
-		color: #1a202c;
-	}
-
-	.capitalize {
-		text-transform: capitalize;
-	}
-
-	.success-card {
-		background: linear-gradient(135deg, #c6f6d515 0%, #9ae6b415 100%);
-		border: 1px solid #c6f6d5;
-	}
-
-	.token-section {
-		margin-top: 1rem;
-	}
-
-	.token-item {
-		margin-bottom: 1.5rem;
-	}
-
-	.token-item:last-child {
-		margin-bottom: 0;
-	}
-
-	.token-item label {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #4a5568;
-		font-weight: 600;
-		font-size: 0.875rem;
-	}
-
-	.input-with-button {
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.code-input {
-		flex: 1;
-		padding: 0.75rem;
-		background: white;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-family: 'Monaco', 'Courier New', monospace;
-		font-size: 0.875rem;
-	}
-
-	.copy-btn {
-		padding: 0.75rem 1rem;
-		background: #edf2f7;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.copy-btn:hover {
-		background: #e2e8f0;
-	}
-
-	.code-block-wrapper {
-		position: relative;
-	}
-
-	.code-block {
-		background: #1a202c;
-		color: #e2e8f0;
-		padding: 1rem;
-		border-radius: 6px;
-		overflow-x: auto;
-		font-family: 'Monaco', 'Courier New', monospace;
-		font-size: 0.875rem;
-		margin: 0;
-	}
-
-	.copy-btn-absolute {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		background: #2d3748;
-		color: white;
-		border: none;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.copy-btn-absolute:hover {
-		background: #4a5568;
-	}
-
-	.warning-text {
-		margin: 0.5rem 0 0 0;
-		color: #e53e3e;
-		font-size: 0.875rem;
-	}
-
-	.actions-grid {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 1rem;
-	}
-
-	.btn-action {
-		padding: 0.75rem 1.5rem;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: transform 0.2s;
-	}
-
-	.btn-action:hover {
-		transform: translateY(-1px);
-	}
-
-	.btn-primary {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-	}
-
-	.btn-secondary {
-		background: #4a5568;
-		color: white;
-	}
-
-	.btn-danger {
-		background: #e53e3e;
-		color: white;
-	}
-
-	.warning-card {
-		background: #fef5e7;
-		border-left: 4px solid #f6ad55;
-		padding: 1.5rem;
-		border-radius: 8px;
-		margin-bottom: 2rem;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-	}
-
-	.warning-header {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		margin-bottom: 1rem;
-	}
-
-	.warning-icon {
-		font-size: 1.5rem;
-		flex-shrink: 0;
-	}
-
-	.warning-header h3 {
-		margin: 0;
-		font-size: 1.125rem;
-		color: #744210;
-		font-weight: 600;
-	}
-
-	.warning-message {
-		margin: 0 0 1.25rem 0;
-		color: #975a16;
-		font-size: 0.9rem;
-		line-height: 1.5;
-	}
-
-	.ip-comparison {
-		background: white;
-		border: 1px solid #f6e05e;
-		border-radius: 6px;
-		padding: 1rem;
-		margin-bottom: 1.25rem;
-	}
-
-	.ip-item {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0.5rem 0;
-	}
-
-	.ip-item:not(:last-child) {
-		border-bottom: 1px solid #fef5e7;
-		margin-bottom: 0.5rem;
-	}
-
-	.ip-label {
-		font-weight: 500;
-		color: #744210;
-		font-size: 0.875rem;
-	}
-
-	.ip-value {
-		font-family: 'Monaco', 'Courier New', monospace;
-		font-size: 0.875rem;
-		padding: 0.25rem 0.75rem;
-		border-radius: 4px;
-		font-weight: 600;
-	}
-
-	.ip-value.configured {
-		background: #fed7d7;
-		color: #c53030;
-	}
-
-	.ip-value.actual {
-		background: #c6f6d5;
-		color: #2f855a;
-	}
-
-	.warning-actions {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.warning-buttons {
-		display: flex;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.btn-update {
-		flex: 1;
-		min-width: 200px;
-		padding: 0.75rem 1.25rem;
-		background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: transform 0.2s;
-		font-size: 0.9rem;
-	}
-
-	.btn-update:hover {
-		transform: translateY(-1px);
-		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-	}
-
-	.btn-ignore {
-		padding: 0.75rem 1.25rem;
-		background: white;
-		color: #975a16;
-		border: 2px solid #f6ad55;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-		font-size: 0.9rem;
-	}
-
-	.btn-ignore:hover {
-		background: #fef5e7;
-		transform: translateY(-1px);
-		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-	}
-
-	.warning-note {
-		margin: 0;
-		color: #975a16;
-		font-size: 0.8rem;
-		font-style: italic;
-		padding: 0.5rem;
-		background: rgba(246, 173, 85, 0.1);
-		border-radius: 4px;
-	}
-
-	/* Modal Styles */
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-	}
-
-	.modal {
-		background: white;
-		border-radius: 12px;
-		padding: 2rem;
-		max-width: 500px;
-		width: 90%;
-		margin: 1rem;
-		box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-	}
-
-	.modal h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1.25rem;
-		color: #1a202c;
-	}
-
-	.modal p {
-		margin: 0 0 1.5rem 0;
-		color: #718096;
-	}
-
-	.form-group {
-		margin-bottom: 1.5rem;
-	}
-
-	.form-group label {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #4a5568;
-		font-weight: 500;
-		font-size: 0.875rem;
-	}
-
-	.form-group input {
-		width: 100%;
-		padding: 0.75rem;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-size: 1rem;
-		transition: border-color 0.2s;
-		box-sizing: border-box;
-	}
-
-	.form-group input:focus {
-		outline: none;
-		border-color: #667eea;
-	}
-
-	.modal-actions {
-		display: flex;
-		gap: 0.75rem;
-	}
-
-	.modal-actions button {
-		flex: 1;
-		padding: 0.75rem 1rem;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: transform 0.2s;
-	}
-
-	.modal-actions button:hover {
-		transform: translateY(-1px);
-	}
-
-	/* Package Stats Styles */
-	.card-header-with-link {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1.5rem;
-	}
-
-	.view-all-link {
-		color: #667eea;
-		text-decoration: none;
-		font-weight: 500;
-		font-size: 0.875rem;
-		transition: color 0.2s;
-	}
-
-	.view-all-link:hover {
-		color: #5a67d8;
-	}
-
-	.package-stats-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-		gap: 1rem;
-	}
-
-	.package-stat {
-		background: #f7fafc;
-		padding: 1.5rem;
-		border-radius: 8px;
-		text-align: center;
-	}
-
-	.package-stat-value {
-		font-size: 2rem;
-		font-weight: 700;
-		color: #667eea;
-		margin-bottom: 0.5rem;
-	}
-
-	.package-stat-label {
-		font-size: 0.875rem;
-		color: #718096;
-		font-weight: 500;
-		text-transform: capitalize;
-	}
-
-	.package-last-collection {
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px solid #e2e8f0;
-	}
-
-	.package-last-collection p {
-		margin: 0;
-		color: #718096;
-		font-size: 0.875rem;
-	}
-</style>

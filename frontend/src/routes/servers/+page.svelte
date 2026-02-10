@@ -4,11 +4,11 @@
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
 	import { toasts } from '$lib/stores/toasts';
+	import Sidebar from '$lib/components/Sidebar.svelte';
 
 	async function dismissReactivation(serverId) {
 		try {
 			await api.dismissReactivation(serverId);
-			// Refresh server list to update badge
 			const response = await api.listServers();
 			servers = response.servers || [];
 		} catch (err) {
@@ -34,29 +34,25 @@
 	}
 
 	function connectSSE() {
-		// Connect to SSE endpoint
 		eventSource = new EventSource('http://localhost:8080/servers/events', {
 			withCredentials: true
 		});
 
 		eventSource.addEventListener('connected', (e) => {
 			const data = JSON.parse(e.data);
-			// SSE connection established
 		});
 
 		eventSource.addEventListener('server_update', (e) => {
 			const update = JSON.parse(e.data);
 
-			// Show toast notification if agent was reactivated
 			if (update.reactivated && update.hostname) {
 				toasts.add(
 					`Agent "${update.hostname}" was reactivated (same physical server detected via UUID)`,
 					'info',
-					8000 // 8 seconds
+					8000
 				);
 			}
 
-			// Find and update the server in the list
 			const serverIndex = servers.findIndex((s) => s.id === update.id);
 			if (serverIndex !== -1) {
 				servers[serverIndex] = {
@@ -68,13 +64,12 @@
 					ignore_ip_mismatch: update.ignore_ip_mismatch,
 					last_seen: update.last_seen
 				};
-				servers = [...servers]; // Trigger reactivity
+				servers = [...servers];
 			}
 		});
 
 		eventSource.onerror = (err) => {
 			console.error('SSE error:', err);
-			// Reconnect after 5 seconds
 			setTimeout(() => {
 				if (eventSource) {
 					eventSource.close();
@@ -88,8 +83,6 @@
 		try {
 			const response = await api.listServers();
 			servers = response.servers || [];
-
-			// Connect to SSE for real-time updates
 			connectSSE();
 		} catch (err) {
 			error = err.message || 'Failed to load servers';
@@ -99,7 +92,6 @@
 	});
 
 	onDestroy(() => {
-		// Close SSE connection when component is destroyed
 		if (eventSource) {
 			eventSource.close();
 			eventSource = null;
@@ -109,25 +101,31 @@
 	function getStatusClass(status) {
 		switch (status) {
 			case 'online':
-				return 'status-online';
+				return 'bg-success/10 text-success border-success/20';
 			case 'offline':
-				return 'status-offline';
+				return 'bg-muted text-muted-foreground border-border';
 			case 'pending':
-				return 'status-pending';
+				return 'bg-warning/10 text-warning border-warning/20';
 			case 'expired':
-				return 'status-expired';
+				return 'bg-muted text-muted-foreground border-border';
 			default:
-				return 'status-unknown';
+				return 'bg-muted text-muted-foreground border-border';
 		}
 	}
 
 	function formatDate(dateString) {
 		if (!dateString) return '-';
-		return new Date(dateString).toLocaleString('fr-FR');
+		const date = new Date(dateString);
+		const now = new Date();
+		const diff = Math.floor((now - date) / 1000);
+
+		if (diff < 60) return `${diff}s ago`;
+		if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+		if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+		return date.toLocaleDateString('fr-FR');
 	}
 
 	function hasIPMismatch(server) {
-		// Check if both IPs exist and are different, and user hasn't chosen to ignore
 		return (
 			server.configured_ip &&
 			server.ip_address_v4 &&
@@ -152,7 +150,6 @@
 
 		try {
 			await api.deleteServer(serverToDelete.id);
-			// Reload servers list
 			const response = await api.listServers();
 			servers = response.servers || [];
 			showDeleteConfirm = false;
@@ -169,544 +166,208 @@
 	<title>Servers - Watchflare</title>
 </svelte:head>
 
-<div class="container">
-	<nav class="navbar">
-		<div class="nav-content">
-			<h1>Watchflare</h1>
-			<div class="nav-actions">
-				<a href="/" class="nav-link">Dashboard</a>
-				<a href="/servers" class="nav-link active">Servers</a>
-				<a href="/settings" class="nav-link">Settings</a>
-				<button on:click={handleLogout} class="logout-btn">Logout</button>
-			</div>
-		</div>
-	</nav>
+<div class="min-h-screen bg-background">
+	<Sidebar onLogout={handleLogout} />
 
-	<main class="main">
-		<div class="header">
-			<h2>Servers</h2>
-			<button class="btn-primary" on:click={() => goto('/servers/new')}>Add Server</button>
+	<main class="ml-64 min-h-screen p-8">
+		<!-- Header -->
+		<div class="mb-6 flex items-center justify-between">
+			<div>
+				<h1 class="text-2xl font-semibold text-foreground">Servers</h1>
+				<p class="text-sm text-muted-foreground mt-1">Manage your monitored servers</p>
+			</div>
+			<button
+				onclick={() => goto('/servers/new')}
+				class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+			>
+				Add Server
+			</button>
 		</div>
 
 		{#if loading}
-			<div class="loading">
-				<p>Loading servers...</p>
+			<div class="flex items-center justify-center py-20">
+				<p class="text-muted-foreground">Loading servers...</p>
 			</div>
 		{:else if error}
-			<div class="error-box">
-				<p>{error}</p>
+			<div class="rounded-lg border border-destructive bg-destructive/10 p-4">
+				<p class="text-sm text-destructive">{error}</p>
 			</div>
 		{:else if servers.length === 0}
-			<div class="empty-state">
-				<h3>No servers configured yet</h3>
-				<p>Add your first server to start monitoring</p>
-				<button class="btn-primary" on:click={() => goto('/servers/new')}>
+			<div class="flex flex-col items-center justify-center rounded-lg border bg-card py-20 text-center">
+				<svg
+					class="h-12 w-12 text-muted-foreground/50 mb-4"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="1.5"
+						d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+					/>
+				</svg>
+				<h3 class="text-lg font-medium text-foreground mb-2">No servers configured yet</h3>
+				<p class="text-sm text-muted-foreground mb-6">Add your first server to start monitoring</p>
+				<button
+					onclick={() => goto('/servers/new')}
+					class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+				>
 					Add Your First Server
 				</button>
 			</div>
 		{:else}
-			<div class="servers-table">
-				<table>
-					<thead>
-						<tr>
-							<th>Name</th>
-							<th>Status</th>
-							<th>IP Address</th>
-							<th>Last Seen</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each servers as server}
-							<tr on:click={() => goto(`/servers/${server.id}`)}>
-								<td>
-									<div class="server-name">{server.name}</div>
-									{#if server.hostname}
-										<div class="server-hostname">{server.hostname}</div>
-									{/if}
-								</td>
-								<td>
-									<div class="status-cell">
-										<span class="status-badge {getStatusClass(server.status)}">
-											{server.status}
-										</span>
-										{#if hasIPMismatch(server)}
-											<span class="warning-badge" title="IP mismatch detected">⚠️</span>
-										{/if}
-										{#if server.reactivated_at}
-											<span class="reactivated-badge" title="Agent was reactivated (same physical server via UUID)">
-												↻ Reactivated
-												<button
-													class="dismiss-btn"
-													on:click={(e) => {
-														e.stopPropagation();
-														dismissReactivation(server.id);
-													}}
-													title="Dismiss"
-												>
-													×
-												</button>
-											</span>
-										{/if}
-									</div>
-								</td>
-								<td>{server.ip_address_v4 || server.configured_ip || '-'}</td>
-								<td>{formatDate(server.last_seen)}</td>
-								<td>
-									<div class="action-buttons">
-										<button
-											class="link-btn"
-											on:click={(e) => {
-												e.stopPropagation();
-												goto(`/servers/${server.id}`);
-											}}
-										>
-											View Details
-										</button>
-										<button
-											class="delete-btn"
-											on:click={(e) => openDeleteModal(server, e)}
-										>
-											Delete
-										</button>
-									</div>
-								</td>
+			<div class="rounded-lg border bg-card">
+				<div class="overflow-x-auto">
+					<table class="w-full">
+						<thead>
+							<tr class="border-b bg-muted/30">
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+									Name
+								</th>
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+									Status
+								</th>
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+									IP Address
+								</th>
+								<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+									Last Seen
+								</th>
+								<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+									Actions
+								</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody class="divide-y divide-border">
+							{#each servers as server}
+								<tr
+									onclick={() => goto(`/servers/${server.id}`)}
+									class="hover:bg-muted/20 transition-colors cursor-pointer"
+								>
+									<td class="px-4 py-3.5">
+										<div class="flex flex-col">
+											<span class="font-medium text-foreground">{server.name}</span>
+											{#if server.hostname}
+												<span class="text-xs text-muted-foreground">{server.hostname}</span>
+											{/if}
+										</div>
+									</td>
+									<td class="px-4 py-3.5">
+										<div class="flex items-center gap-2">
+											<span
+												class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
+											>
+												<span class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : 'bg-muted-foreground'}"></span>
+												{server.status}
+											</span>
+											{#if hasIPMismatch(server)}
+												<span
+													class="inline-flex items-center text-warning"
+													title="IP mismatch detected"
+												>
+													<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+														<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+													</svg>
+												</span>
+											{/if}
+											{#if server.reactivated_at}
+												<span
+													class="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+													title="Agent was reactivated (same physical server via UUID)"
+												>
+													<svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+														<path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+													</svg>
+													Reactivated
+													<button
+														onclick={(e) => {
+															e.stopPropagation();
+															dismissReactivation(server.id);
+														}}
+														class="ml-0.5 text-primary hover:text-primary/80"
+														title="Dismiss"
+													>
+														<svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+															<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+														</svg>
+													</button>
+												</span>
+											{/if}
+										</div>
+									</td>
+									<td class="px-4 py-3.5 text-sm text-foreground">
+										{server.ip_address_v4 || server.configured_ip || '-'}
+									</td>
+									<td class="px-4 py-3.5 text-right text-sm text-muted-foreground">
+										{formatDate(server.last_seen)}
+									</td>
+									<td class="px-4 py-3.5 text-right">
+										<div class="flex items-center justify-end gap-3">
+											<button
+												onclick={(e) => {
+													e.stopPropagation();
+													goto(`/servers/${server.id}`);
+												}}
+												class="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+											>
+												View
+											</button>
+											<button
+												onclick={(e) => openDeleteModal(server, e)}
+												class="text-sm font-medium text-destructive hover:text-destructive/80 transition-colors"
+											>
+												Delete
+											</button>
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 	</main>
 </div>
 
+<!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}
-	<div class="modal-overlay" on:click={cancelDelete}>
-		<div class="modal-box" on:click={(e) => e.stopPropagation()}>
-			<h3>Confirm Delete</h3>
-			<p>Are you sure you want to delete the server "{serverToDelete?.name}"?</p>
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		onclick={cancelDelete}
+	>
+		<div
+			class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h3 class="text-lg font-semibold text-foreground mb-3">Confirm Delete</h3>
+			<p class="text-sm text-muted-foreground mb-4">
+				Are you sure you want to delete the server "{serverToDelete?.name}"?
+			</p>
 			{#if serverToDelete?.status === 'online'}
-				<p class="info-text">
-					Note: This will remove the server from the database, but the agent will remain
-					installed on the server. You will need to uninstall it manually.
-				</p>
+				<div class="mb-4 rounded-md border border-primary/20 bg-primary/5 p-3">
+					<p class="text-sm text-foreground">
+						Note: This will remove the server from the database, but the agent will remain
+						installed on the server. You will need to uninstall it manually.
+					</p>
+				</div>
 			{/if}
-			<p class="warning-text">This action cannot be undone.</p>
-			<div class="modal-actions">
-				<button class="btn-secondary" on:click={cancelDelete}>Cancel</button>
-				<button class="btn-danger" on:click={handleDelete}>Delete Server</button>
+			<p class="text-sm font-medium text-destructive mb-6">This action cannot be undone.</p>
+			<div class="flex gap-3 justify-end">
+				<button
+					onclick={cancelDelete}
+					class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={handleDelete}
+					class="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+				>
+					Delete Server
+				</button>
 			</div>
 		</div>
 	</div>
 {/if}
-
-<style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-		background: #f7fafc;
-	}
-
-	.container {
-		min-height: 100vh;
-	}
-
-	.navbar {
-		background: white;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		padding: 1rem 0;
-	}
-
-	.nav-content {
-		max-width: 1400px;
-		margin: 0 auto;
-		padding: 0 2rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.navbar h1 {
-		margin: 0;
-		font-size: 1.5rem;
-		color: #667eea;
-	}
-
-	.nav-actions {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.nav-link {
-		color: #4a5568;
-		text-decoration: none;
-		font-weight: 500;
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		transition: background-color 0.2s;
-	}
-
-	.nav-link:hover {
-		background-color: #edf2f7;
-	}
-
-	.nav-link.active {
-		background-color: #edf2f7;
-		color: #667eea;
-	}
-
-	.logout-btn {
-		padding: 0.5rem 1rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.logout-btn:hover {
-		background: #c53030;
-	}
-
-	.main {
-		max-width: 1400px;
-		margin: 0 auto;
-		padding: 2rem;
-	}
-
-	.header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 2rem;
-	}
-
-	h2 {
-		margin: 0;
-		font-size: 2rem;
-		color: #1a202c;
-	}
-
-	.btn-primary {
-		padding: 0.75rem 1.5rem;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: transform 0.2s;
-	}
-
-	.btn-primary:hover {
-		transform: translateY(-1px);
-	}
-
-	.loading {
-		background: white;
-		padding: 3rem;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		text-align: center;
-		color: #718096;
-	}
-
-	.error-box {
-		background: #fed7d7;
-		color: #c53030;
-		padding: 1rem;
-		border-radius: 6px;
-		border: 1px solid #fc8181;
-	}
-
-	.empty-state {
-		background: white;
-		padding: 4rem 2rem;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		text-align: center;
-	}
-
-	.empty-state h3 {
-		margin: 0 0 0.5rem 0;
-		color: #1a202c;
-		font-size: 1.5rem;
-	}
-
-	.empty-state p {
-		margin: 0 0 2rem 0;
-		color: #718096;
-	}
-
-	.servers-table {
-		background: white;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		overflow: hidden;
-	}
-
-	table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	thead {
-		background: #f7fafc;
-	}
-
-	th {
-		padding: 1rem;
-		text-align: left;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: #718096;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		border-bottom: 1px solid #e2e8f0;
-	}
-
-	tbody tr {
-		border-bottom: 1px solid #e2e8f0;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	tbody tr:hover {
-		background-color: #f7fafc;
-	}
-
-	tbody tr:last-child {
-		border-bottom: none;
-	}
-
-	td {
-		padding: 1rem;
-		color: #1a202c;
-	}
-
-	.server-name {
-		font-weight: 600;
-		color: #1a202c;
-	}
-
-	.server-hostname {
-		font-size: 0.75rem;
-		color: #718096;
-		margin-top: 0.25rem;
-	}
-
-	.capitalize {
-		text-transform: capitalize;
-	}
-
-	.status-badge {
-		display: inline-block;
-		padding: 0.25rem 0.75rem;
-		border-radius: 12px;
-		font-size: 0.75rem;
-		font-weight: 600;
-		text-transform: capitalize;
-	}
-
-	.status-online {
-		background: #c6f6d5;
-		color: #2f855a;
-	}
-
-	.status-offline {
-		background: #fed7d7;
-		color: #c53030;
-	}
-
-	.status-pending {
-		background: #fef5e7;
-		color: #d69e2e;
-	}
-
-	.status-expired {
-		background: #e2e8f0;
-		color: #4a5568;
-	}
-
-	.status-unknown {
-		background: #e2e8f0;
-		color: #718096;
-	}
-
-	.status-cell {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.warning-badge {
-		font-size: 1.2rem;
-		cursor: help;
-		animation: pulse 2s infinite;
-	}
-
-	.reactivated-badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 0.25rem 0.5rem;
-		background: #e6f7ff;
-		color: #0066cc;
-		border: 1px solid #91d5ff;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		font-weight: 500;
-		cursor: help;
-	}
-
-	.reactivated-badge .dismiss-btn {
-		background: none;
-		border: none;
-		color: #0066cc;
-		font-size: 1.2rem;
-		font-weight: bold;
-		line-height: 1;
-		padding: 0;
-		margin-left: 0.25rem;
-		cursor: pointer;
-		opacity: 0.6;
-		transition: opacity 0.2s;
-	}
-
-	.reactivated-badge .dismiss-btn:hover {
-		opacity: 1;
-	}
-
-	@keyframes pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.5;
-		}
-	}
-
-	.link-btn {
-		background: none;
-		border: none;
-		color: #667eea;
-		font-weight: 500;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.link-btn:hover {
-		color: #5a67d8;
-		text-decoration: underline;
-	}
-
-	.action-buttons {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-	}
-
-	.delete-btn {
-		background: none;
-		border: none;
-		color: #e53e3e;
-		font-weight: 500;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.delete-btn:hover {
-		color: #c53030;
-		text-decoration: underline;
-	}
-
-	.modal-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-	}
-
-	.modal-box {
-		background: white;
-		border-radius: 12px;
-		padding: 2rem;
-		max-width: 500px;
-		width: 90%;
-		box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-	}
-
-	.modal-box h3 {
-		margin: 0 0 1rem 0;
-		color: #1a202c;
-		font-size: 1.5rem;
-	}
-
-	.modal-box p {
-		margin: 0 0 1rem 0;
-		color: #4a5568;
-	}
-
-	.info-text {
-		background: #ebf8ff;
-		color: #2c5282;
-		padding: 0.75rem;
-		border-radius: 6px;
-		border-left: 3px solid #3182ce;
-		font-size: 0.9rem;
-	}
-
-	.warning-text {
-		color: #e53e3e;
-		font-weight: 500;
-		margin-bottom: 1.5rem !important;
-	}
-
-	.modal-actions {
-		display: flex;
-		gap: 1rem;
-		justify-content: flex-end;
-	}
-
-	.btn-secondary {
-		padding: 0.75rem 1.5rem;
-		background: #e2e8f0;
-		color: #1a202c;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.btn-secondary:hover {
-		background: #cbd5e0;
-	}
-
-	.btn-danger {
-		padding: 0.75rem 1.5rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.btn-danger:hover {
-		background: #c53030;
-	}
-</style>

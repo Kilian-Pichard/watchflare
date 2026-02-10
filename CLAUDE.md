@@ -13,6 +13,43 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ---
 
+## Versioning
+
+**Current version**: 0.1.0
+
+**Versioning scheme** (pre-v1.0):
+- `0.x.0` - Major features, redesigns, significant architectural changes
+- `0.x.x` - Bug fixes, minor improvements, small features
+
+**v1.0 criteria** (not yet reached):
+- All planned features implemented
+- UI/UX polished and finalized
+- Zero known bugs
+- Production-ready quality
+- User validation complete
+
+**Version history:**
+- `0.1.0` - Initial frontend redesign with military green theme, sidebar navigation, table layouts
+
+**Commit messages:**
+- First line: Short summary (required)
+- Optional: Up to 4 additional lines with brief details prefixed by "-" (not too detailed)
+- Put comprehensive changes in this file's version history, not in commit messages
+- Example format:
+  ```
+  Redesign frontend with minimal military green theme (v0.1.0)
+
+  - New components: Sidebar, ServerTable, CompactStats
+  - Table layouts replacing grids throughout
+  - Reduced complexity in server details and packages pages
+  ```
+
+**Version updates:**
+- Always update `frontend/package.json` version when improving the frontend
+- Update version in this file's version history with brief description
+
+---
+
 ## Build & Run Commands
 
 ### Backend

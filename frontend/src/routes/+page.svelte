@@ -7,12 +7,15 @@
         listServers,
         getDroppedMetrics,
         getAggregatedMetrics,
+        getServerMetrics,
     } from "$lib/api";
     import { connectSSE } from "$lib/sse";
     import { formatBytes, formatPercent } from "$lib/utils";
     import { toasts } from "$lib/stores/toasts";
+    import Sidebar from "$lib/components/Sidebar.svelte";
+    import ServerTable from "$lib/components/ServerTable.svelte";
+    import CompactStats from "$lib/components/CompactStats.svelte";
     import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
-    import StatCard from "$lib/components/StatCard.svelte";
     import CPUChart from "$lib/components/CPUChart.svelte";
     import MemoryChart from "$lib/components/MemoryChart.svelte";
     import DiskChart from "$lib/components/DiskChart.svelte";
@@ -22,10 +25,11 @@
     let servers = $state([]);
     let timeRange = $state("24h");
     let loading = $state(true);
-    let metricsData = $state({});
+    let metricsData = $state({}); // { serverId: [metrics] }
     let sseDisconnect = null;
     let droppedMetricsAlerts = $state([]);
     let aggregatedMetrics = $state([]);
+    let showCharts = $state(false); // Collapsible charts section
 
     // Computed aggregates - uses last point from backend aggregated metrics
     let stats = $derived.by(() => {
@@ -94,6 +98,9 @@
                 server,
             }));
 
+            // Load metrics for each server (for table display)
+            await loadServerMetrics();
+
             // Load dropped metrics alerts
             await loadDroppedMetrics();
 
@@ -104,6 +111,23 @@
             // Error will trigger redirect in apiRequest
         } finally {
             loading = false;
+        }
+    }
+
+    async function loadServerMetrics() {
+        try {
+            const promises = servers.map(async ({ server }) => {
+                try {
+                    const data = await getServerMetrics(server.id, { time_range: "1h" });
+                    metricsData[server.id] = data.metrics || [];
+                } catch (err) {
+                    console.error(`Failed to load metrics for ${server.hostname}:`, err);
+                    metricsData[server.id] = [];
+                }
+            });
+            await Promise.all(promises);
+        } catch (err) {
+            console.error("Failed to load server metrics:", err);
         }
     }
 
@@ -150,6 +174,18 @@
                 servers[serverIndex].server.status = event.data.status;
                 servers[serverIndex].server.last_seen = event.data.last_seen;
             }
+        } else if (event.type === "metrics_update") {
+            // Update individual server metrics for table display
+            const serverId = event.data.server_id;
+            if (!metricsData[serverId]) {
+                metricsData[serverId] = [];
+            }
+            metricsData[serverId] = [...metricsData[serverId], event.data];
+
+            // Keep only last 50 points per server
+            if (metricsData[serverId].length > 50) {
+                metricsData[serverId] = metricsData[serverId].slice(-50);
+            }
         } else if (event.type === "aggregated_metrics_update") {
             console.log("Aggregated metrics update received:", event.data);
             // Add new aggregated metrics point in real-time
@@ -193,223 +229,120 @@
     <title>Dashboard - Watchflare</title>
 </svelte:head>
 
-<div
-    class="min-h-screen bg-gradient-to-br from-background via-background to-muted/20"
->
-    <!-- Navbar -->
-    <nav class="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-lg">
-        <div class="mx-auto max-w-7xl px-6 py-4">
-            <div class="flex items-center justify-between">
-                <h1
-                    class="text-2xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent"
-                >
-                    Watchflare
-                </h1>
-                <div class="flex items-center gap-6">
-                    <a
-                        href="/servers"
-                        class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                        Servers
-                    </a>
-                    <a
-                        href="/settings"
-                        class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                        Settings
-                    </a>
-                    <button
-                        onclick={handleLogout}
-                        class="text-sm font-medium text-destructive hover:text-destructive/90 transition-colors"
-                    >
-                        Logout
-                    </button>
-                </div>
-            </div>
-        </div>
-    </nav>
+<div class="min-h-screen bg-background">
+    <!-- Sidebar -->
+    <Sidebar onLogout={handleLogout} />
 
     <!-- Main Content -->
-    <main class="mx-auto max-w-7xl px-6 py-10">
+    <main class="ml-64 min-h-screen p-8">
         {#if loading}
             <div class="flex items-center justify-center py-20">
                 <p class="text-muted-foreground">Loading dashboard...</p>
             </div>
         {:else}
-            <!-- Header with Time Range Selector -->
-            <div
-                class="mb-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-            >
-                <div>
-                    <h2 class="text-4xl font-bold tracking-tight">Dashboard</h2>
-                    <p class="text-muted-foreground mt-2">
-                        Overview of {stats.totalServers}
-                        {stats.totalServers === 1 ? "server" : "servers"}
-                    </p>
-                </div>
-                <TimeRangeSelector
-                    bind:value={timeRange}
-                    onValueChange={handleTimeRangeChange}
-                />
+            <!-- Header -->
+            <div class="mb-6">
+                <h1 class="text-2xl font-semibold text-foreground">Dashboard</h1>
+                <p class="text-sm text-muted-foreground mt-1">
+                    Monitoring {stats.totalServers} {stats.totalServers === 1 ? "server" : "servers"}
+                </p>
             </div>
 
             <!-- Dropped Metrics Alerts -->
             {#if droppedMetricsAlerts.length > 0}
-                <div
-                    class="mb-6 rounded-lg border border-[var(--warning)] bg-[var(--warning)]/10 p-4"
-                >
-                    <h3
-                        class="mb-3 flex items-center gap-2 text-lg font-semibold text-[var(--warning)]"
-                    >
-                        ⚠️ Dropped Metrics
+                <div class="mb-6 rounded-lg border border-warning bg-warning/5 p-4">
+                    <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-warning">
+                        <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        Dropped Metrics
                     </h3>
                     {#each droppedMetricsAlerts as alert}
-                        <div
-                            class="mb-2 last:mb-0 rounded-md bg-background/50 p-3"
-                        >
-                            <p class="font-medium">
-                                <strong>{alert.hostname}</strong> dropped
-                                <strong>{alert.total_dropped} metrics</strong>
+                        <div class="mb-2 last:mb-0 rounded-md bg-background p-3">
+                            <p class="text-sm font-medium">
+                                <strong>{alert.hostname}</strong> dropped <strong>{alert.total_dropped} metrics</strong>
                             </p>
-                            <p class="text-sm text-muted-foreground mt-1">
-                                Backend unavailable for {formatDuration(
-                                    alert.downtime_duration,
-                                )}
-                                ({new Date(
-                                    alert.first_dropped_at,
-                                ).toLocaleString()} → {new Date(
-                                    alert.last_dropped_at,
-                                ).toLocaleString()})
+                            <p class="text-xs text-muted-foreground mt-1">
+                                Backend unavailable for {formatDuration(alert.downtime_duration)}
+                                ({new Date(alert.first_dropped_at).toLocaleString()} → {new Date(alert.last_dropped_at).toLocaleString()})
                             </p>
                         </div>
                     {/each}
                 </div>
             {/if}
 
-            <!-- Bento Grid -->
-            <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-4 mb-8">
-                <!-- Servers Status -->
-                <StatCard
-                    title="Servers"
-                    value={stats.totalServers}
-                    subtitle="{stats.onlineServers} online, {stats.offlineServers} offline"
-                    icon="🖥️"
-                    status={stats.offlineServers > 0
-                        ? {
-                              label: "Issues",
-                              color: "bg-[var(--warning)] text-white",
-                              dot: "bg-[var(--warning)]",
-                          }
-                        : {
-                              label: "All Online",
-                              color: "bg-[var(--success)] text-white",
-                              dot: "bg-[var(--success)]",
-                          }}
-                />
-
-                <!-- Average CPU -->
-                <StatCard
-                    title="Average CPU"
-                    value={formatPercent(stats.avgCPU)}
-                    subtitle="Across all servers"
-                    icon="💻"
-                    percentage={stats.avgCPU}
-                />
-
-                <!-- Total Memory -->
-                <StatCard
-                    title="Total RAM"
-                    value={formatBytes(stats.usedMemory)}
-                    subtitle="of {formatBytes(stats.totalMemory)}"
-                    icon="💾"
-                    percentage={stats.totalMemory > 0
-                        ? (stats.usedMemory / stats.totalMemory) * 100
-                        : 0}
-                />
-
-                <!-- Total Disk -->
-                <StatCard
-                    title="Total Disk"
-                    value={formatBytes(stats.usedDisk)}
-                    subtitle="of {formatBytes(stats.totalDisk)}"
-                    icon="💿"
-                    percentage={stats.totalDisk > 0
-                        ? (stats.usedDisk / stats.totalDisk) * 100
-                        : 0}
-                />
+            <!-- Compact Stats -->
+            <div class="mb-6">
+                <CompactStats {stats} />
             </div>
 
-            <!-- Charts Section -->
-            <div class="grid gap-6 lg:grid-cols-2">
-                <!-- CPU Chart -->
-                <div
-                    class="group rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-card to-card/80"
-                >
-                    <div class="flex items-center justify-between mb-4">
-                        <h3
-                            class="text-lg font-semibold flex items-center gap-2"
-                        >
-                            <div
-                                class="h-3 w-3 rounded-full bg-[var(--chart-1)]"
-                            ></div>
-                            CPU Usage (Average)
-                        </h3>
-                        <span
-                            class="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted"
-                        >
-                            {formatPercent(stats.avgCPU)}
-                        </span>
-                    </div>
-                    <CPUChart data={aggregatedMetrics} />
+            <!-- Servers Table -->
+            <div class="mb-6">
+                <div class="mb-4 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold">Servers</h2>
                 </div>
+                <ServerTable {servers} {metricsData} />
+            </div>
 
-                <!-- Memory Chart -->
-                <div
-                    class="group rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-card to-card/80"
+            <!-- Charts Section (Collapsible) -->
+            <div class="mb-6">
+                <button
+                    onclick={() => showCharts = !showCharts}
+                    class="mb-4 flex w-full items-center justify-between rounded-lg border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
                 >
-                    <div class="flex items-center justify-between mb-4">
-                        <h3
-                            class="text-lg font-semibold flex items-center gap-2"
+                    <div class="flex items-center gap-3">
+                        <svg
+                            class="h-5 w-5 text-muted-foreground transition-transform {showCharts ? 'rotate-90' : ''}"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
                         >
-                            <div
-                                class="h-3 w-3 rounded-full bg-[var(--chart-2)]"
-                            ></div>
-                            Memory Usage (Total)
-                        </h3>
-                        <span
-                            class="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted"
-                        >
-                            {formatBytes(stats.usedMemory)} / {formatBytes(
-                                stats.totalMemory,
-                            )}
-                        </span>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        <span class="text-sm font-medium">Global Metrics</span>
                     </div>
-                    <MemoryChart data={aggregatedMetrics} />
-                </div>
+                    <TimeRangeSelector
+                        bind:value={timeRange}
+                        onValueChange={handleTimeRangeChange}
+                    />
+                </button>
 
-                <!-- Disk Chart -->
-                <div
-                    class="group rounded-xl border bg-card p-6 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-card to-card/80 lg:col-span-2"
-                >
-                    <div class="flex items-center justify-between mb-4">
-                        <h3
-                            class="text-lg font-semibold flex items-center gap-2"
-                        >
-                            <div
-                                class="h-3 w-3 rounded-full bg-[var(--chart-3)]"
-                            ></div>
-                            Disk Usage (Total)
-                        </h3>
-                        <span
-                            class="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted"
-                        >
-                            {formatBytes(stats.usedDisk)} / {formatBytes(
-                                stats.totalDisk,
-                            )}
-                        </span>
+                {#if showCharts}
+                    <div class="grid gap-4 lg:grid-cols-3">
+                        <!-- CPU Chart -->
+                        <div class="rounded-lg border bg-card p-4">
+                            <div class="mb-3 flex items-center justify-between">
+                                <h3 class="text-sm font-medium">CPU Usage</h3>
+                                <span class="text-xs text-muted-foreground">
+                                    {formatPercent(stats.avgCPU)}
+                                </span>
+                            </div>
+                            <CPUChart data={aggregatedMetrics} />
+                        </div>
+
+                        <!-- Memory Chart -->
+                        <div class="rounded-lg border bg-card p-4">
+                            <div class="mb-3 flex items-center justify-between">
+                                <h3 class="text-sm font-medium">Memory Usage</h3>
+                                <span class="text-xs text-muted-foreground">
+                                    {formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)}
+                                </span>
+                            </div>
+                            <MemoryChart data={aggregatedMetrics} />
+                        </div>
+
+                        <!-- Disk Chart -->
+                        <div class="rounded-lg border bg-card p-4">
+                            <div class="mb-3 flex items-center justify-between">
+                                <h3 class="text-sm font-medium">Disk Usage</h3>
+                                <span class="text-xs text-muted-foreground">
+                                    {formatBytes(stats.usedDisk)} / {formatBytes(stats.totalDisk)}
+                                </span>
+                            </div>
+                            <DiskChart data={aggregatedMetrics} />
+                        </div>
                     </div>
-                    <DiskChart data={aggregatedMetrics} />
-                </div>
+                {/if}
             </div>
         {/if}
     </main>

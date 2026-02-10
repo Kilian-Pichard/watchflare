@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
+	import Sidebar from '$lib/components/Sidebar.svelte';
 
 	let packages = [];
 	let stats = null;
@@ -38,7 +39,6 @@
 	async function loadData() {
 		loading = true;
 		try {
-			// Load packages and stats in parallel
 			const [packagesData, statsData, collectionsData] = await Promise.all([
 				api.getServerPackages(serverId, {
 					limit,
@@ -62,12 +62,12 @@
 	}
 
 	async function handleSearch() {
-		offset = 0; // Reset to first page
+		offset = 0;
 		await loadData();
 	}
 
 	async function handleFilterChange() {
-		offset = 0; // Reset to first page
+		offset = 0;
 		await loadData();
 	}
 
@@ -90,14 +90,24 @@
 		return new Date(dateString).toLocaleString('fr-FR');
 	}
 
-	function getPackageManagerBadge(manager) {
-		const badges = {
-			brew: { class: 'badge-brew', label: 'Homebrew' },
-			dpkg: { class: 'badge-dpkg', label: 'apt/dpkg' },
-			rpm: { class: 'badge-rpm', label: 'yum/rpm' },
-			pacman: { class: 'badge-pacman', label: 'pacman' }
+	function getManagerColor(manager) {
+		const colors = {
+			brew: 'bg-[var(--chart-4)]/10 text-[var(--chart-4)] border-[var(--chart-4)]/20',
+			dpkg: 'bg-[var(--chart-2)]/10 text-[var(--chart-2)] border-[var(--chart-2)]/20',
+			rpm: 'bg-[var(--chart-1)]/10 text-[var(--chart-1)] border-[var(--chart-1)]/20',
+			pacman: 'bg-[var(--chart-5)]/10 text-[var(--chart-5)] border-[var(--chart-5)]/20'
 		};
-		return badges[manager] || { class: 'badge-default', label: manager };
+		return colors[manager] || 'bg-muted text-muted-foreground border-border';
+	}
+
+	function getManagerLabel(manager) {
+		const labels = {
+			brew: 'Homebrew',
+			dpkg: 'apt/dpkg',
+			rpm: 'yum/rpm',
+			pacman: 'Pacman'
+		};
+		return labels[manager] || manager;
 	}
 </script>
 
@@ -105,156 +115,202 @@
 	<title>Packages - Watchflare</title>
 </svelte:head>
 
-<div class="container">
-	<nav class="navbar">
-		<div class="nav-content">
-			<h1>Watchflare</h1>
-			<div class="nav-actions">
-				<a href="/" class="nav-link">Dashboard</a>
-				<a href="/servers" class="nav-link active">Servers</a>
-				<a href="/settings" class="nav-link">Settings</a>
-				<button on:click={handleLogout} class="logout-btn">Logout</button>
-			</div>
-		</div>
-	</nav>
+<div class="min-h-screen bg-background">
+	<Sidebar onLogout={handleLogout} />
 
-	<main class="main">
-		<div class="back-link">
-			<a href="/servers/{serverId}">← Back to Server</a>
+	<main class="ml-64 min-h-screen p-8">
+		<!-- Back Link -->
+		<div class="mb-6">
+			<a
+				href="/servers/{serverId}"
+				class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+				</svg>
+				Back to Server
+			</a>
 		</div>
 
+		<!-- Header -->
+		<div class="mb-6">
+			<h1 class="text-2xl font-semibold text-foreground">Package Inventory</h1>
+			<p class="text-sm text-muted-foreground mt-1">
+				Installed packages and software on this server
+			</p>
+		</div>
+
+		<!-- Error -->
 		{#if error}
-			<div class="error-box">
-				<p>{error}</p>
+			<div class="mb-6 rounded-lg border border-destructive bg-destructive/10 p-4">
+				<p class="text-sm text-destructive">{error}</p>
 			</div>
 		{/if}
 
-		<!-- Stats Card -->
+		<!-- Stats -->
 		{#if stats}
-			<div class="card stats-card">
-				<h2>Package Statistics</h2>
-				<div class="stats-grid">
-					<div class="stat-item">
-						<div class="stat-value">{stats.total_packages}</div>
-						<div class="stat-label">Total Packages</div>
-					</div>
-					<div class="stat-item">
-						<div class="stat-value">{stats.recent_changes}</div>
-						<div class="stat-label">Recent Changes</div>
-					</div>
-					{#each stats.by_package_manager || [] as pm}
-						<div class="stat-item">
-							<div class="stat-value">{pm.count}</div>
-							<div class="stat-label">{getPackageManagerBadge(pm.package_manager).label}</div>
-						</div>
-					{/each}
+			<div class="grid gap-4 md:grid-cols-4 mb-6">
+				<div class="rounded-lg border bg-card p-4">
+					<p class="text-xs text-muted-foreground mb-1">Total Packages</p>
+					<p class="text-2xl font-semibold text-foreground">{stats.total_packages || 0}</p>
 				</div>
-				{#if stats.last_collection}
-					<div class="last-collection">
-						<p>
-							Last collection: {formatDate(stats.last_collection.timestamp)} ({stats
-								.last_collection.collection_type}, {stats.last_collection.duration_ms}ms)
-						</p>
+				<div class="rounded-lg border bg-card p-4">
+					<p class="text-xs text-muted-foreground mb-1">Recent Changes (30d)</p>
+					<p class="text-2xl font-semibold text-foreground">{stats.recent_changes || 0}</p>
+				</div>
+				{#each (stats.by_package_manager || []).slice(0, 2) as pm}
+					<div class="rounded-lg border bg-card p-4">
+						<p class="text-xs text-muted-foreground mb-1">{getManagerLabel(pm.package_manager)}</p>
+						<p class="text-2xl font-semibold text-foreground">{pm.count}</p>
 					</div>
-				{/if}
+				{/each}
 			</div>
 		{/if}
+
+		<!-- Search & Filters -->
+		<div class="mb-6 rounded-lg border bg-card p-4">
+			<div class="flex flex-col sm:flex-row gap-4">
+				<!-- Search -->
+				<div class="flex-1">
+					<input
+						type="text"
+						bind:value={searchTerm}
+						onkeydown={(e) => e.key === 'Enter' && handleSearch()}
+						placeholder="Search packages..."
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+					/>
+				</div>
+
+				<!-- Filter by Package Manager -->
+				<select
+					bind:value={selectedManager}
+					onchange={handleFilterChange}
+					class="rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+				>
+					<option value="">All Package Managers</option>
+					{#each stats?.by_package_manager || [] as pm}
+						<option value={pm.package_manager}>{getManagerLabel(pm.package_manager)}</option>
+					{/each}
+				</select>
+
+				<!-- Search Button -->
+				<button
+					onclick={handleSearch}
+					class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+				>
+					Search
+				</button>
+			</div>
+		</div>
 
 		<!-- Collections Toggle -->
-		<div class="card">
-			<button class="toggle-btn" on:click={() => (showCollections = !showCollections)}>
-				{showCollections ? '▼' : '▶'} Collection History ({collections.length})
+		<div class="mb-6">
+			<button
+				onclick={() => showCollections = !showCollections}
+				class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+			>
+				<svg
+					class="h-4 w-4 transition-transform {showCollections ? 'rotate-90' : ''}"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+				</svg>
+				{showCollections ? 'Hide' : 'Show'} Collection History
 			</button>
 
-			{#if showCollections}
-				<div class="collections-list">
-					{#each collections as collection}
-						<div class="collection-item">
-							<div class="collection-header">
-								<span class="collection-time">{formatDate(collection.timestamp)}</span>
-								<span class="collection-type {collection.collection_type}">
-									{collection.collection_type}
-								</span>
-								<span
-									class="collection-status {collection.status === 'success'
-										? 'status-success'
-										: 'status-error'}"
-								>
-									{collection.status}
-								</span>
-							</div>
-							<div class="collection-details">
-								<span>{collection.package_count} packages</span>
-								<span>{collection.changes_count} changes</span>
-								<span>{collection.duration_ms}ms</span>
-							</div>
-						</div>
-					{/each}
+			{#if showCollections && collections.length > 0}
+				<div class="mt-4 rounded-lg border bg-card overflow-hidden">
+					<table class="w-full">
+						<thead>
+							<tr class="border-b bg-muted/30">
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
+								<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Packages</th>
+								<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Changes</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-border">
+							{#each collections as collection}
+								<tr class="hover:bg-muted/20">
+									<td class="px-4 py-3 text-sm text-foreground">
+										{formatDate(collection.collected_at)}
+									</td>
+									<td class="px-4 py-3">
+										<span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {collection.collection_type === 'full' ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}">
+											{collection.collection_type}
+										</span>
+									</td>
+									<td class="px-4 py-3 text-right text-sm text-foreground">
+										{collection.total_packages}
+									</td>
+									<td class="px-4 py-3 text-right text-sm text-foreground">
+										{collection.changes_detected || 0}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				</div>
 			{/if}
 		</div>
 
-		<!-- Filters Card -->
-		<div class="card filters-card">
-			<div class="filters">
-				<div class="search-box">
-					<input
-						type="text"
-						placeholder="Search packages..."
-						bind:value={searchTerm}
-						on:keyup={(e) => e.key === 'Enter' && handleSearch()}
-					/>
-					<button on:click={handleSearch}>Search</button>
-				</div>
-				<div class="filter-select">
-					<select bind:value={selectedManager} on:change={handleFilterChange}>
-						<option value="">All Package Managers</option>
-						<option value="brew">Homebrew</option>
-						<option value="dpkg">apt/dpkg</option>
-						<option value="rpm">yum/rpm</option>
-						<option value="pacman">pacman</option>
-					</select>
-				</div>
-			</div>
-		</div>
-
-		<!-- Packages List -->
-		<div class="card">
-			<div class="card-header">
-				<h3>Installed Packages</h3>
-				<div class="package-count">{totalCount} total</div>
-			</div>
-
+		<!-- Packages Table -->
+		<div class="rounded-lg border bg-card overflow-hidden">
 			{#if loading}
-				<div class="loading">Loading packages...</div>
+				<div class="flex items-center justify-center py-20">
+					<p class="text-muted-foreground">Loading packages...</p>
+				</div>
 			{:else if packages.length === 0}
-				<div class="empty-state">
-					<p>No packages found</p>
+				<div class="flex flex-col items-center justify-center py-20 text-center">
+					<svg
+						class="h-12 w-12 text-muted-foreground/50 mb-4"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="1.5"
+							d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+						/>
+					</svg>
+					<p class="text-sm text-muted-foreground">No packages found</p>
 				</div>
 			{:else}
-				<div class="packages-table">
-					<table>
+				<div class="overflow-x-auto">
+					<table class="w-full">
 						<thead>
-							<tr>
-								<th>Name</th>
-								<th>Version</th>
-								<th>Manager</th>
-								<th>Description</th>
-								<th>Last Seen</th>
+							<tr class="border-b bg-muted/30">
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Name</th>
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Version</th>
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Manager</th>
+								<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
+								<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Last Seen</th>
 							</tr>
 						</thead>
-						<tbody>
+						<tbody class="divide-y divide-border">
 							{#each packages as pkg}
-								<tr>
-									<td class="package-name">{pkg.name}</td>
-									<td class="package-version">{pkg.version}</td>
-									<td>
-										<span class="badge {getPackageManagerBadge(pkg.package_manager).class}">
-											{getPackageManagerBadge(pkg.package_manager).label}
+								<tr class="hover:bg-muted/20 transition-colors">
+									<td class="px-4 py-3 text-sm font-medium text-foreground">
+										{pkg.name}
+									</td>
+									<td class="px-4 py-3 text-sm font-mono text-muted-foreground">
+										{pkg.version}
+									</td>
+									<td class="px-4 py-3">
+										<span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {getManagerColor(pkg.package_manager)}">
+											{getManagerLabel(pkg.package_manager)}
 										</span>
 									</td>
-									<td class="package-description">{pkg.description || '-'}</td>
-									<td class="package-date">{formatDate(pkg.last_seen)}</td>
+									<td class="px-4 py-3 text-sm text-muted-foreground max-w-md truncate">
+										{pkg.description || '-'}
+									</td>
+									<td class="px-4 py-3 text-right text-sm text-muted-foreground">
+										{formatDate(pkg.last_seen)}
+									</td>
 								</tr>
 							{/each}
 						</tbody>
@@ -262,481 +318,31 @@
 				</div>
 
 				<!-- Pagination -->
-				{#if totalPages > 1}
-					<div class="pagination">
-						<button on:click={prevPage} disabled={offset === 0} class="pagination-btn">
+				<div class="border-t bg-muted/10 px-4 py-3 flex items-center justify-between">
+					<div class="text-sm text-muted-foreground">
+						Showing {offset + 1} to {Math.min(offset + limit, totalCount)} of {totalCount} packages
+					</div>
+					<div class="flex gap-2">
+						<button
+							onclick={prevPage}
+							disabled={offset === 0}
+							class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+						>
 							Previous
 						</button>
-						<span class="pagination-info">
+						<div class="flex items-center px-3 py-1.5 text-sm text-muted-foreground">
 							Page {currentPage} of {totalPages}
-						</span>
+						</div>
 						<button
-							on:click={nextPage}
+							onclick={nextPage}
 							disabled={offset + limit >= totalCount}
-							class="pagination-btn"
+							class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							Next
 						</button>
 					</div>
-				{/if}
+				</div>
 			{/if}
 		</div>
 	</main>
 </div>
-
-<style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-		background: #f7fafc;
-	}
-
-	.container {
-		min-height: 100vh;
-	}
-
-	.navbar {
-		background: white;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		padding: 1rem 0;
-	}
-
-	.nav-content {
-		max-width: 1400px;
-		margin: 0 auto;
-		padding: 0 2rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.navbar h1 {
-		margin: 0;
-		font-size: 1.5rem;
-		color: #667eea;
-	}
-
-	.nav-actions {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.nav-link {
-		color: #4a5568;
-		text-decoration: none;
-		font-weight: 500;
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		transition: background-color 0.2s;
-	}
-
-	.nav-link:hover {
-		background-color: #edf2f7;
-	}
-
-	.nav-link.active {
-		background-color: #edf2f7;
-		color: #667eea;
-	}
-
-	.logout-btn {
-		padding: 0.5rem 1rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.logout-btn:hover {
-		background: #c53030;
-	}
-
-	.main {
-		max-width: 1400px;
-		margin: 0 auto;
-		padding: 2rem;
-	}
-
-	.back-link {
-		margin-bottom: 1.5rem;
-	}
-
-	.back-link a {
-		color: #667eea;
-		text-decoration: none;
-		font-weight: 500;
-	}
-
-	.back-link a:hover {
-		color: #5a67d8;
-	}
-
-	.error-box {
-		background: #fed7d7;
-		color: #c53030;
-		padding: 1rem;
-		border-radius: 6px;
-		border: 1px solid #fc8181;
-		margin-bottom: 1.5rem;
-	}
-
-	.card {
-		background: white;
-		padding: 2rem;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		margin-bottom: 1.5rem;
-	}
-
-	.stats-card h2 {
-		margin: 0 0 1.5rem 0;
-		font-size: 1.5rem;
-		color: #1a202c;
-	}
-
-	.stats-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-		gap: 1.5rem;
-		margin-bottom: 1rem;
-	}
-
-	.stat-item {
-		text-align: center;
-		padding: 1rem;
-		background: #f7fafc;
-		border-radius: 8px;
-	}
-
-	.stat-value {
-		font-size: 2rem;
-		font-weight: 700;
-		color: #667eea;
-		margin-bottom: 0.5rem;
-	}
-
-	.stat-label {
-		font-size: 0.875rem;
-		color: #718096;
-		font-weight: 500;
-	}
-
-	.last-collection {
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px solid #e2e8f0;
-	}
-
-	.last-collection p {
-		margin: 0;
-		color: #718096;
-		font-size: 0.875rem;
-	}
-
-	.toggle-btn {
-		background: none;
-		border: none;
-		color: #667eea;
-		font-weight: 600;
-		cursor: pointer;
-		font-size: 1rem;
-		padding: 0;
-		margin-bottom: 1rem;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.toggle-btn:hover {
-		color: #5a67d8;
-	}
-
-	.collections-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.collection-item {
-		padding: 1rem;
-		background: #f7fafc;
-		border-radius: 8px;
-		border-left: 4px solid #667eea;
-	}
-
-	.collection-header {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-		margin-bottom: 0.5rem;
-		flex-wrap: wrap;
-	}
-
-	.collection-time {
-		font-weight: 500;
-		color: #1a202c;
-		font-size: 0.875rem;
-	}
-
-	.collection-type {
-		padding: 0.25rem 0.75rem;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		font-weight: 600;
-		text-transform: uppercase;
-	}
-
-	.collection-type.full {
-		background: #bee3f8;
-		color: #2c5282;
-	}
-
-	.collection-type.delta {
-		background: #c6f6d5;
-		color: #2f855a;
-	}
-
-	.collection-status {
-		padding: 0.25rem 0.75rem;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	.status-success {
-		background: #c6f6d5;
-		color: #2f855a;
-	}
-
-	.status-error {
-		background: #fed7d7;
-		color: #c53030;
-	}
-
-	.collection-details {
-		display: flex;
-		gap: 1.5rem;
-		font-size: 0.875rem;
-		color: #718096;
-	}
-
-	.filters-card {
-		padding: 1.5rem;
-	}
-
-	.filters {
-		display: flex;
-		gap: 1rem;
-		flex-wrap: wrap;
-	}
-
-	.search-box {
-		flex: 1;
-		min-width: 300px;
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.search-box input {
-		flex: 1;
-		padding: 0.75rem;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-size: 0.875rem;
-	}
-
-	.search-box input:focus {
-		outline: none;
-		border-color: #667eea;
-	}
-
-	.search-box button {
-		padding: 0.75rem 1.5rem;
-		background: #667eea;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.search-box button:hover {
-		background: #5a67d8;
-	}
-
-	.filter-select select {
-		padding: 0.75rem;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		background: white;
-		font-size: 0.875rem;
-		cursor: pointer;
-	}
-
-	.filter-select select:focus {
-		outline: none;
-		border-color: #667eea;
-	}
-
-	.card-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1.5rem;
-	}
-
-	h3 {
-		margin: 0;
-		font-size: 1.25rem;
-		color: #1a202c;
-	}
-
-	.package-count {
-		color: #718096;
-		font-size: 0.875rem;
-		font-weight: 500;
-	}
-
-	.loading {
-		text-align: center;
-		padding: 3rem;
-		color: #718096;
-	}
-
-	.empty-state {
-		text-align: center;
-		padding: 3rem;
-		color: #718096;
-	}
-
-	.packages-table {
-		overflow-x: auto;
-	}
-
-	table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	thead {
-		background: #f7fafc;
-	}
-
-	th {
-		text-align: left;
-		padding: 0.75rem 1rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: #718096;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	tbody tr {
-		border-bottom: 1px solid #e2e8f0;
-	}
-
-	tbody tr:hover {
-		background: #f7fafc;
-	}
-
-	td {
-		padding: 1rem;
-		font-size: 0.875rem;
-	}
-
-	.package-name {
-		font-weight: 600;
-		color: #1a202c;
-		font-family: 'Monaco', 'Courier New', monospace;
-	}
-
-	.package-version {
-		color: #4a5568;
-		font-family: 'Monaco', 'Courier New', monospace;
-	}
-
-	.package-description {
-		color: #718096;
-		max-width: 400px;
-	}
-
-	.package-date {
-		color: #718096;
-		font-size: 0.8125rem;
-	}
-
-	.badge {
-		display: inline-block;
-		padding: 0.25rem 0.75rem;
-		border-radius: 12px;
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	.badge-brew {
-		background: #fef5e7;
-		color: #d69e2e;
-	}
-
-	.badge-dpkg {
-		background: #e0f2fe;
-		color: #0284c7;
-	}
-
-	.badge-rpm {
-		background: #fee2e2;
-		color: #dc2626;
-	}
-
-	.badge-pacman {
-		background: #e0e7ff;
-		color: #4338ca;
-	}
-
-	.badge-default {
-		background: #e2e8f0;
-		color: #4a5568;
-	}
-
-	.pagination {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 1rem;
-		margin-top: 2rem;
-	}
-
-	.pagination-btn {
-		padding: 0.5rem 1rem;
-		background: #667eea;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.pagination-btn:hover:not(:disabled) {
-		background: #5a67d8;
-	}
-
-	.pagination-btn:disabled {
-		background: #cbd5e0;
-		cursor: not-allowed;
-	}
-
-	.pagination-info {
-		color: #718096;
-		font-size: 0.875rem;
-		font-weight: 500;
-	}
-</style>

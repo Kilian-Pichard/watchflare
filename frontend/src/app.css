@@ -6,66 +6,66 @@
 
 :root {
   /* Watchflare Design System - Light Theme */
-  --radius: 0.75rem;
+  --radius: 0.5rem; /* More minimal */
 
-  /* Base colors */
-  --background: oklch(1 0 0); /* Pure white */
-  --foreground: oklch(0.2 0.01 264); /* Almost black */
+  /* Base colors - Cream background */
+  --background: oklch(0.98 0.005 85); /* #FAFAF9 cream */
+  --foreground: oklch(0.2 0.01 120); /* Almost black with hint of green */
 
   /* Card colors */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.01 264);
+  --card: oklch(1 0 0); /* Pure white cards on cream bg */
+  --card-foreground: oklch(0.2 0.01 120);
 
   /* Popover colors */
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.01 264);
+  --popover-foreground: oklch(0.2 0.01 120);
 
-  /* Primary - Apple Blue (#3B82F6) */
-  --primary: oklch(0.62 0.19 255);
+  /* Primary - Military Green (#3A5235) */
+  --primary: oklch(0.35 0.08 145);
   --primary-foreground: oklch(1 0 0);
 
   /* Secondary */
-  --secondary: oklch(0.97 0.005 264);
-  --secondary-foreground: oklch(0.2 0.01 264);
+  --secondary: oklch(0.96 0.005 145);
+  --secondary-foreground: oklch(0.2 0.01 120);
 
-  /* Muted - Light gray */
-  --muted: oklch(0.96 0.002 264);
-  --muted-foreground: oklch(0.55 0.015 264);
+  /* Muted - Subtle gray with green tint */
+  --muted: oklch(0.95 0.003 145);
+  --muted-foreground: oklch(0.5 0.01 145);
 
-  /* Accent */
-  --accent: oklch(0.97 0.005 264);
-  --accent-foreground: oklch(0.2 0.01 264);
+  /* Accent - Light military green */
+  --accent: oklch(0.94 0.02 145);
+  --accent-foreground: oklch(0.2 0.01 120);
 
   /* Destructive - Red */
-  --destructive: oklch(0.62 0.24 27);
+  --destructive: oklch(0.55 0.22 27);
   --destructive-foreground: oklch(1 0 0);
 
-  /* Borders & Input */
-  --border: oklch(0.92 0.003 264);
-  --input: oklch(0.92 0.003 264);
-  --ring: oklch(0.62 0.19 255);
+  /* Borders & Input - Subtle */
+  --border: oklch(0.9 0.005 145);
+  --input: oklch(0.9 0.005 145);
+  --ring: oklch(0.35 0.08 145);
 
   /* Monitoring Status Colors */
-  --success: oklch(0.55 0.16 145); /* Green - 0-70% */
-  --warning: oklch(0.70 0.18 60); /* Orange - 70-90% */
-  --danger: oklch(0.62 0.24 27); /* Red - >90% */
+  --success: oklch(0.5 0.12 145); /* Military green - 0-70% */
+  --warning: oklch(0.65 0.15 60); /* Muted orange - 70-90% */
+  --danger: oklch(0.55 0.22 27); /* Muted red - >90% */
 
-  /* Chart Colors */
-  --chart-1: oklch(0.62 0.19 255); /* Blue - CPU */
-  --chart-2: oklch(0.55 0.16 145); /* Green - Memory */
-  --chart-3: oklch(0.58 0.20 295); /* Purple - Disk */
-  --chart-4: oklch(0.70 0.18 60); /* Orange - Load */
-  --chart-5: oklch(0.65 0.25 345); /* Pink - Network */
+  /* Chart Colors - Earthy, minimal palette */
+  --chart-1: oklch(0.35 0.08 145); /* Military green - CPU */
+  --chart-2: oklch(0.5 0.12 175); /* Teal - Memory */
+  --chart-3: oklch(0.45 0.10 120); /* Forest green - Disk */
+  --chart-4: oklch(0.6 0.12 90); /* Olive - Load */
+  --chart-5: oklch(0.55 0.08 200); /* Slate blue - Network */
 
-  /* Sidebar (optional) */
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.2 0.01 264);
-  --sidebar-primary: oklch(0.62 0.19 255);
+  /* Sidebar - Minimal, clean */
+  --sidebar: oklch(1 0 0); /* Pure white */
+  --sidebar-foreground: oklch(0.2 0.01 120);
+  --sidebar-primary: oklch(0.35 0.08 145); /* Military green */
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.97 0.005 264);
-  --sidebar-accent-foreground: oklch(0.2 0.01 264);
-  --sidebar-border: oklch(0.92 0.003 264);
-  --sidebar-ring: oklch(0.62 0.19 255);
+  --sidebar-accent: oklch(0.96 0.005 145);
+  --sidebar-accent-foreground: oklch(0.2 0.01 120);
+  --sidebar-border: oklch(0.9 0.005 145);
+  --sidebar-ring: oklch(0.35 0.08 145);
 }
 
 .dark {

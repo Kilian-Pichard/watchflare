@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
+	import Sidebar from '$lib/components/Sidebar.svelte';
 	import InstallInstructions from '$lib/components/InstallInstructions.svelte';
 
 	let name = '';
@@ -36,8 +37,6 @@
 			createdServer = response.server;
 			token = response.token;
 			agentKey = response.agent_key;
-
-			// Get backend host (for now using window.location, later can be from config)
 			backendHost = window.location.hostname;
 		} catch (err) {
 			error = err.message || 'Failed to create server';
@@ -55,485 +54,195 @@
 	<title>Add Server - Watchflare</title>
 </svelte:head>
 
-<div class="container">
-	<nav class="navbar">
-		<div class="nav-content">
-			<h1>Watchflare</h1>
-			<div class="nav-actions">
-				<a href="/" class="nav-link">Dashboard</a>
-				<a href="/servers" class="nav-link active">Servers</a>
-				<a href="/settings" class="nav-link">Settings</a>
-				<button on:click={handleLogout} class="logout-btn">Logout</button>
-			</div>
-		</div>
-	</nav>
+<div class="min-h-screen bg-background">
+	<Sidebar onLogout={handleLogout} />
 
-	<main class="main">
-		<div class="back-link">
-			<a href="/servers">← Back to Servers</a>
+	<main class="ml-64 min-h-screen p-8">
+		<!-- Back Link -->
+		<div class="mb-6">
+			<a
+				href="/servers"
+				class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+				</svg>
+				Back to Servers
+			</a>
 		</div>
 
 		{#if !success}
-			<div class="card">
-				<h2>Add New Server</h2>
+			<!-- Create Server Form -->
+			<div class="max-w-2xl">
+				<div class="mb-6">
+					<h1 class="text-2xl font-semibold text-foreground">Add New Server</h1>
+					<p class="text-sm text-muted-foreground mt-1">Configure a new server to monitor</p>
+				</div>
 
-				<form on:submit={handleSubmit}>
-					<div class="form-group">
-						<label for="name">
-							Server Name <span class="required">*</span>
-						</label>
-						<input
-							id="name"
-							type="text"
-							bind:value={name}
-							required
-							placeholder="e.g., web-server-01"
-						/>
+				<div class="rounded-lg border bg-card p-6">
+					<form onsubmit={handleSubmit}>
+						<!-- Server Name -->
+						<div class="mb-4">
+							<label for="name" class="block text-sm font-medium text-foreground mb-2">
+								Server Name <span class="text-destructive">*</span>
+							</label>
+							<input
+								id="name"
+								type="text"
+								bind:value={name}
+								required
+								placeholder="e.g., web-server-01"
+								class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+							/>
+						</div>
+
+						<!-- Configured IP -->
+						<div class="mb-4">
+							<label for="ip" class="block text-sm font-medium text-foreground mb-2">
+								Configured IP Address <span class="text-destructive">*</span>
+							</label>
+							<input
+								id="ip"
+								type="text"
+								bind:value={configuredIP}
+								required
+								placeholder="e.g., 192.168.1.100"
+								class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+							/>
+							<p class="mt-1 text-xs text-muted-foreground">
+								The IP address you expect this server to connect from
+							</p>
+						</div>
+
+						<!-- Allow Any IP -->
+						<div class="mb-6">
+							<label class="flex items-start gap-2 cursor-pointer">
+								<input
+									type="checkbox"
+									bind:checked={allowAnyIP}
+									class="mt-0.5 h-4 w-4 rounded border-gray-300"
+								/>
+								<div>
+									<span class="text-sm font-medium text-foreground">Allow registration from any IP address</span>
+									<p class="text-xs text-muted-foreground mt-0.5">
+										If enabled, the server can register from any IP address
+									</p>
+								</div>
+							</label>
+						</div>
+
+						<!-- Error Message -->
+						{#if error}
+							<div class="mb-4 rounded-lg border border-destructive bg-destructive/10 p-3">
+								<p class="text-sm text-destructive">{error}</p>
+							</div>
+						{/if}
+
+						<!-- Form Actions -->
+						<div class="flex gap-3">
+							<button
+								type="submit"
+								disabled={loading}
+								class="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								{loading ? 'Creating...' : 'Create Server'}
+							</button>
+							<button
+								type="button"
+								onclick={() => goto('/servers')}
+								class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+							>
+								Cancel
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		{:else}
+			<!-- Success State -->
+			<div class="max-w-3xl">
+				<!-- Success Header -->
+				<div class="mb-6 rounded-lg border border-success bg-success/10 p-4">
+					<div class="flex items-start gap-3">
+						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-success text-primary-foreground">
+							<svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+							</svg>
+						</div>
+						<div>
+							<h2 class="text-lg font-semibold text-success">Server Created Successfully!</h2>
+							<p class="text-sm text-muted-foreground mt-1">
+								Server "{createdServer.name}" has been created with status: {createdServer.status}
+							</p>
+						</div>
 					</div>
+				</div>
 
-					<div class="form-group">
-						<label for="ip">
-							Configured IP Address <span class="required">*</span>
-						</label>
-						<input
-							id="ip"
-							type="text"
-							bind:value={configuredIP}
-							required
-							placeholder="e.g., 192.168.1.100"
-						/>
-						<p class="help-text">The IP address you expect this server to connect from</p>
-					</div>
+				<!-- Tokens -->
+				<div class="mb-6 rounded-lg border bg-card p-6">
+					<h3 class="text-base font-semibold text-foreground mb-4">Credentials</h3>
 
-					<div class="form-group">
-						<label class="checkbox-label">
-							<input type="checkbox" bind:checked={allowAnyIP} />
-							<span>Allow registration from any IP address</span>
-						</label>
-						<p class="help-text checkbox-help">
-							If enabled, the server can register from any IP address
+					<!-- Registration Token -->
+					<div class="mb-4">
+						<label class="block text-sm font-medium text-foreground mb-2">Registration Token</label>
+						<div class="flex gap-2">
+							<input
+								type="text"
+								readonly
+								value={token}
+								class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
+							/>
+							<button
+								onclick={() => copyToClipboard(token)}
+								class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+							>
+								Copy
+							</button>
+						</div>
+						<p class="mt-2 text-xs font-medium text-warning">
+							⚠️ Save this token securely. It won't be shown again!
 						</p>
 					</div>
 
-					{#if error}
-						<div class="error-box">
-							<p>{error}</p>
-						</div>
-					{/if}
-
-					<div class="form-actions">
-						<button type="submit" class="btn-primary" disabled={loading}>
-							{loading ? 'Creating...' : 'Create Server'}
-						</button>
-						<button type="button" class="btn-secondary" on:click={() => goto('/servers')}>
-							Cancel
-						</button>
-					</div>
-				</form>
-			</div>
-		{:else}
-			<div class="card">
-				<div class="success-header">
-					<div class="success-icon">✓</div>
+					<!-- Agent Key -->
 					<div>
-						<h2>Server Created Successfully!</h2>
-						<p>Server "{createdServer.name}" has been created with status: {createdServer.status}</p>
-					</div>
-				</div>
-
-				<div class="token-section">
-					<div class="token-item">
-						<label>Registration Token</label>
-						<div class="input-with-button">
-							<input type="text" readonly value={token} class="code-input" />
-							<button class="copy-btn" on:click={() => copyToClipboard(token)}>Copy</button>
-						</div>
-						<p class="warning-text">⚠️ Save this token securely. It won't be shown again!</p>
-					</div>
-
-					<div class="token-item">
-						<label>Agent Key</label>
-						<div class="input-with-button">
-							<input type="text" readonly value={agentKey} class="code-input" />
-							<button class="copy-btn" on:click={() => copyToClipboard(agentKey)}>Copy</button>
+						<label class="block text-sm font-medium text-foreground mb-2">Agent Key</label>
+						<div class="flex gap-2">
+							<input
+								type="text"
+								readonly
+								value={agentKey}
+								class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
+							/>
+							<button
+								onclick={() => copyToClipboard(agentKey)}
+								class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+							>
+								Copy
+							</button>
 						</div>
 					</div>
 				</div>
 
-				<!-- Install Instructions Component -->
+				<!-- Install Instructions -->
 				<InstallInstructions server={createdServer} {token} {agentKey} {backendHost} />
 
-				<div class="form-actions">
-					<button class="btn-primary" on:click={() => goto(`/servers/${createdServer.id}`)}>
+				<!-- Actions -->
+				<div class="mt-6 flex gap-3">
+					<button
+						onclick={() => goto(`/servers/${createdServer.id}`)}
+						class="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+					>
 						View Server Details
 					</button>
-					<button class="btn-secondary" on:click={() => goto('/servers')}>Back to List</button>
+					<button
+						onclick={() => goto('/servers')}
+						class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+					>
+						Back to List
+					</button>
 				</div>
 			</div>
 		{/if}
 	</main>
 </div>
-
-<style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-		background: #f7fafc;
-	}
-
-	.container {
-		min-height: 100vh;
-	}
-
-	.navbar {
-		background: white;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		padding: 1rem 0;
-	}
-
-	.nav-content {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 0 2rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.navbar h1 {
-		margin: 0;
-		font-size: 1.5rem;
-		color: #667eea;
-	}
-
-	.nav-actions {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.nav-link {
-		color: #4a5568;
-		text-decoration: none;
-		font-weight: 500;
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		transition: background-color 0.2s;
-	}
-
-	.nav-link:hover {
-		background-color: #edf2f7;
-	}
-
-	.nav-link.active {
-		background-color: #edf2f7;
-		color: #667eea;
-	}
-
-	.logout-btn {
-		padding: 0.5rem 1rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.logout-btn:hover {
-		background: #c53030;
-	}
-
-	.main {
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 2rem;
-	}
-
-	.back-link {
-		margin-bottom: 1.5rem;
-	}
-
-	.back-link a {
-		color: #667eea;
-		text-decoration: none;
-		font-weight: 500;
-	}
-
-	.back-link a:hover {
-		color: #5a67d8;
-	}
-
-	.card {
-		background: white;
-		padding: 2.5rem;
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-	}
-
-	h2 {
-		margin: 0 0 1.5rem 0;
-		font-size: 1.75rem;
-		color: #1a202c;
-	}
-
-	.form-group {
-		margin-bottom: 1.5rem;
-	}
-
-	label {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #4a5568;
-		font-weight: 500;
-		font-size: 0.875rem;
-	}
-
-	.required {
-		color: #e53e3e;
-	}
-
-	input[type='text'],
-	select {
-		width: 100%;
-		padding: 0.75rem;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-size: 1rem;
-		transition: border-color 0.2s;
-		box-sizing: border-box;
-	}
-
-	input[type='text']:focus,
-	select:focus {
-		outline: none;
-		border-color: #667eea;
-	}
-
-	.help-text {
-		margin: 0.5rem 0 0 0;
-		font-size: 0.875rem;
-		color: #718096;
-	}
-
-	.checkbox-label {
-		display: flex;
-		align-items: center;
-		cursor: pointer;
-		font-weight: normal;
-	}
-
-	.checkbox-label input[type='checkbox'] {
-		width: auto;
-		margin-right: 0.5rem;
-	}
-
-	.checkbox-help {
-		margin-left: 1.5rem;
-	}
-
-	.error-box {
-		background: #fed7d7;
-		color: #c53030;
-		padding: 1rem;
-		border-radius: 6px;
-		border: 1px solid #fc8181;
-		margin-bottom: 1.5rem;
-	}
-
-	.error-box p {
-		margin: 0;
-	}
-
-	.form-actions {
-		display: flex;
-		gap: 1rem;
-		margin-top: 2rem;
-	}
-
-	.btn-primary {
-		flex: 1;
-		padding: 0.75rem 1.5rem;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: transform 0.2s;
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		transform: translateY(-1px);
-	}
-
-	.btn-primary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		padding: 0.75rem 1.5rem;
-		background: white;
-		color: #4a5568;
-		border: 2px solid #e2e8f0;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.btn-secondary:hover {
-		background: #f7fafc;
-	}
-
-	.success-header {
-		display: flex;
-		gap: 1rem;
-		margin-bottom: 2rem;
-		padding-bottom: 1.5rem;
-		border-bottom: 1px solid #e2e8f0;
-	}
-
-	.success-icon {
-		width: 3rem;
-		height: 3rem;
-		background: #c6f6d5;
-		color: #2f855a;
-		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1.5rem;
-		font-weight: bold;
-		flex-shrink: 0;
-	}
-
-	.success-header h2 {
-		margin: 0 0 0.25rem 0;
-		color: #2f855a;
-	}
-
-	.success-header p {
-		margin: 0;
-		color: #718096;
-		font-size: 0.875rem;
-	}
-
-	.token-section {
-		margin-bottom: 2rem;
-	}
-
-	.token-item {
-		margin-bottom: 1.5rem;
-	}
-
-	.token-item label {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #4a5568;
-		font-weight: 600;
-		font-size: 0.875rem;
-	}
-
-	.input-with-button {
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.code-input {
-		flex: 1;
-		padding: 0.75rem;
-		background: #f7fafc;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-family: 'Monaco', 'Courier New', monospace;
-		font-size: 0.875rem;
-	}
-
-	.copy-btn {
-		padding: 0.75rem 1rem;
-		background: #edf2f7;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.copy-btn:hover {
-		background: #e2e8f0;
-	}
-
-	.warning-text {
-		margin: 0.5rem 0 0 0;
-		color: #e53e3e;
-		font-size: 0.875rem;
-	}
-
-	.code-block-wrapper {
-		position: relative;
-	}
-
-	.code-block {
-		background: #1a202c;
-		color: #e2e8f0;
-		padding: 1rem;
-		border-radius: 6px;
-		overflow-x: auto;
-		font-family: 'Monaco', 'Courier New', monospace;
-		font-size: 0.875rem;
-		margin: 0;
-	}
-
-	.copy-btn-absolute {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		background: #2d3748;
-		color: white;
-		border: none;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	.copy-btn-absolute:hover {
-		background: #4a5568;
-	}
-
-	.info-box {
-		background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-		border-left: 4px solid #667eea;
-		padding: 1.5rem;
-		border-radius: 6px;
-		margin-bottom: 2rem;
-	}
-
-	.info-box h3 {
-		margin: 0 0 1rem 0;
-		color: #1a202c;
-		font-size: 1rem;
-		font-weight: 600;
-	}
-
-	.info-box ol {
-		margin: 0;
-		padding-left: 1.5rem;
-		color: #4a5568;
-	}
-
-	.info-box li {
-		margin-bottom: 0.5rem;
-		font-size: 0.875rem;
-	}
-
-	.info-box li:last-child {
-		margin-bottom: 0;
-	}
-</style>
