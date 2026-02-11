@@ -4,6 +4,7 @@
     import { page } from "$app/stores";
     import { mobileMenuOpen } from "$lib/stores/sidebar";
     import { get } from "svelte/store";
+    import SSEStatusBadge from './SSEStatusBadge.svelte';
 
     const { onLogout } = $props();
 
@@ -119,27 +120,35 @@
             {/each}
         </nav>
 
-        <!-- Logout Button -->
-        <div class="border-t p-4">
-            <button
-                onclick={onLogout}
-                class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-            >
-                <svg
-                    class="h-5 w-5 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+        <!-- SSE Connection Status + Logout -->
+        <div class="border-t">
+            <!-- SSE Status Badge -->
+            <div class="px-4 pt-4 pb-2">
+                <SSEStatusBadge />
+            </div>
+
+            <!-- Logout Button -->
+            <div class="px-4 pb-4">
+                <button
+                    onclick={onLogout}
+                    class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                 >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                    />
-                </svg>
-                <span>Logout</span>
-            </button>
+                    <svg
+                        class="h-5 w-5 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                        />
+                    </svg>
+                    <span>Logout</span>
+                </button>
+            </div>
         </div>
     </div>
 </aside>

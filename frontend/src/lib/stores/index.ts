@@ -38,3 +38,12 @@ export { toasts } from './toasts';
 
 // Sidebar store (already existed)
 export { sidebarCollapsed, mobileMenuOpen } from './sidebar';
+
+// SSE store
+export {
+	sseStore,
+	sseConnectionState,
+	sseIsConnected,
+	sseIsReconnecting,
+	sseLastError
+} from './sse';

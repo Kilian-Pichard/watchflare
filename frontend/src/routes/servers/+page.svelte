@@ -5,6 +5,7 @@
 	import * as api from '$lib/api.js';
 	import { toasts } from '$lib/stores/toasts';
 	import { sidebarCollapsed } from '$lib/stores/sidebar';
+	import { sseStore } from '$lib/stores/sse';
 	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
 	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -24,7 +25,7 @@
 	let error = '';
 	let showDeleteConfirm = false;
 	let serverToDelete = null;
-	let eventSource = null;
+	let sseUnsubscribe = null;
 
 	async function handleLogout() {
 		try {
@@ -36,17 +37,10 @@
 		}
 	}
 
-	function connectSSE() {
-		eventSource = new EventSource('http://localhost:8080/servers/events', {
-			withCredentials: true
-		});
-
-		eventSource.addEventListener('connected', (e) => {
-			const data = JSON.parse(e.data);
-		});
-
-		eventSource.addEventListener('server_update', (e) => {
-			const update = JSON.parse(e.data);
+	function handleSSEMessage(event) {
+		// Only handle server_update events
+		if (event.type === 'server_update') {
+			const update = event.data;
 
 			if (update.reactivated && update.hostname) {
 				toasts.add(
@@ -69,24 +63,16 @@
 				};
 				servers = [...servers];
 			}
-		});
-
-		eventSource.onerror = (err) => {
-			console.error('SSE error:', err);
-			setTimeout(() => {
-				if (eventSource) {
-					eventSource.close();
-					connectSSE();
-				}
-			}, 5000);
-		};
+		}
 	}
 
 	onMount(async () => {
 		try {
 			const response = await api.listServers();
 			servers = response.servers || [];
-			connectSSE();
+
+			// Connect to SSE
+			sseUnsubscribe = sseStore.connect(handleSSEMessage);
 		} catch (err) {
 			error = err.message || 'Failed to load servers';
 		} finally {
@@ -95,9 +81,8 @@
 	});
 
 	onDestroy(() => {
-		if (eventSource) {
-			eventSource.close();
-			eventSource = null;
+		if (sseUnsubscribe) {
+			sseUnsubscribe();
 		}
 	});
 

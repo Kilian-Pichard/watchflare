@@ -8,6 +8,7 @@
 	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { sidebarCollapsed } from '$lib/stores/sidebar';
+	import { sseStore } from '$lib/stores/sse';
 	import { formatBytes } from '$lib/utils';
 	import CPUChart from '$lib/components/CPUChart.svelte';
 	import MemoryChart from '$lib/components/MemoryChart.svelte';
@@ -22,10 +23,10 @@
 	let showChangeIP = $state(false);
 	let newIP = $state('');
 	let regeneratedToken = $state('');
-	let eventSource = null;
 	let packageStats = $state(null);
 	let metrics = $state([]);
-	let timeRange = $state('24h');
+	let timeRange = $state('1h');
+	let sseUnsubscribe = null;
 
 	const serverId = $derived($page.params.id);
 
@@ -39,13 +40,10 @@
 		}
 	}
 
-	function connectSSE() {
-		eventSource = new EventSource('http://localhost:8080/servers/events', {
-			withCredentials: true
-		});
-
-		eventSource.addEventListener('server_update', (e) => {
-			const update = JSON.parse(e.data);
+	function handleSSEMessage(event) {
+		// Handle server_update events for this specific server
+		if (event.type === 'server_update') {
+			const update = event.data;
 			if (server && update.id === server.id) {
 				server = {
 					...server,
@@ -57,27 +55,30 @@
 					last_seen: update.last_seen
 				};
 			}
-		});
+		}
 
-		eventSource.onerror = (err) => {
-			console.error('SSE error:', err);
-			setTimeout(() => {
-				if (eventSource) {
-					eventSource.close();
-					connectSSE();
+		// Handle metrics_update events for this specific server
+		if (event.type === 'metrics_update') {
+			const metric = event.data;
+			if (server && metric.server_id === server.id) {
+				// Add new metric to the array
+				metrics = [...metrics, metric];
+
+				// Keep only last 200 points to avoid memory issues
+				if (metrics.length > 200) {
+					metrics = metrics.slice(-200);
 				}
-			}, 5000);
-		};
+			}
+		}
 	}
 
 	onMount(() => {
-		connectSSE();
+		sseUnsubscribe = sseStore.connect(handleSSEMessage);
 	});
 
 	onDestroy(() => {
-		if (eventSource) {
-			eventSource.close();
-			eventSource = null;
+		if (sseUnsubscribe) {
+			sseUnsubscribe();
 		}
 	});
 

@@ -32,6 +32,13 @@
 		currentTimeRange = timeRange;
 	});
 
+	// Create a unique key based on the last metric's timestamp to force chart re-render
+	let chartKey = $derived(
+		aggregatedMetrics.length > 0
+			? aggregatedMetrics[aggregatedMetrics.length - 1].timestamp
+			: 'empty'
+	);
+
 	// Handle time range change from selector
 	function handleTimeRangeChange(newTimeRange: TimeRange) {
 		currentTimeRange = newTimeRange;
@@ -57,7 +64,9 @@
 					{formatPercent(stats.avgCPU)}
 				</span>
 			</div>
-			<CPUChart data={aggregatedMetrics} />
+			{#key chartKey}
+				<CPUChart data={aggregatedMetrics} />
+			{/key}
 		</div>
 
 		<!-- Memory Chart -->
@@ -68,7 +77,9 @@
 					{formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)}
 				</span>
 			</div>
-			<MemoryChart data={aggregatedMetrics} />
+			{#key chartKey}
+				<MemoryChart data={aggregatedMetrics} />
+			{/key}
 		</div>
 	</div>
 </div>

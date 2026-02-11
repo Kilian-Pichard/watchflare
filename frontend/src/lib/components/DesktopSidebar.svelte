@@ -1,6 +1,7 @@
 <script>
 	import { page } from '$app/stores';
 	import { sidebarCollapsed } from '$lib/stores/sidebar';
+	import SSEStatusBadge from './SSEStatusBadge.svelte';
 
 	const { onLogout } = $props();
 
@@ -81,30 +82,38 @@
 			{/each}
 		</nav>
 
-		<!-- Logout Button -->
-		<div class="border-t p-4">
-			<button
-				onclick={onLogout}
-				class="flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 {$sidebarCollapsed ? 'justify-center' : 'gap-3'}"
-				title={$sidebarCollapsed ? 'Logout' : ''}
-			>
-				<svg
-					class="h-5 w-5 flex-shrink-0"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
+		<!-- SSE Connection Status + Logout -->
+		<div class="border-t">
+			<!-- SSE Status Badge -->
+			<div class="px-4 pt-4 pb-2">
+				<SSEStatusBadge collapsed={$sidebarCollapsed} />
+			</div>
+
+			<!-- Logout Button -->
+			<div class="px-4 pb-4">
+				<button
+					onclick={onLogout}
+					class="flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 {$sidebarCollapsed ? 'justify-center' : 'gap-3'}"
+					title={$sidebarCollapsed ? 'Logout' : ''}
 				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-					/>
-				</svg>
-				{#if !$sidebarCollapsed}
-					<span>Logout</span>
-				{/if}
-			</button>
+					<svg
+						class="h-5 w-5 flex-shrink-0"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+						/>
+					</svg>
+					{#if !$sidebarCollapsed}
+						<span>Logout</span>
+					{/if}
+				</button>
+			</div>
 		</div>
 
 		<!-- Collapse button when collapsed (at bottom) -->

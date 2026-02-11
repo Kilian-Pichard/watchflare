@@ -24,30 +24,28 @@ func NewAggregatedMetricsScheduler(interval time.Duration) *AggregatedMetricsSch
 
 // Start begins the scheduler - calculates and broadcasts aggregated metrics at regular intervals
 func (s *AggregatedMetricsScheduler) Start() {
-	// Calculate initial delay to align with interval boundaries
-	// For 30s interval: if current time is 07:10:23, wait 7s to start at 07:10:30
-	now := time.Now()
-	nextTick := now.Truncate(s.interval).Add(s.interval)
-	initialDelay := nextTick.Sub(now)
+	// Wait 2 seconds after each bucket boundary to ensure agents have sent their metrics
+	// This gives agents time to send (typically 50-500ms) while keeping latency minimal
+	const processingDelay = 2 * time.Second
 
-	log.Printf("Aggregated metrics scheduler starting in %v (next tick at %s)", initialDelay, nextTick.Format("15:04:05"))
+	log.Printf("Aggregated metrics scheduler starting with interval %v (processing delay: %v)", s.interval, processingDelay)
 
-	// Wait for initial alignment
-	time.Sleep(initialDelay)
-
-	// Create ticker that fires at aligned intervals
-	s.ticker = time.NewTicker(s.interval)
-
-	// Calculate and broadcast immediately on first aligned tick
-	s.calculateAndBroadcast()
-
-	// Then continue with ticker
+	// Run in a loop, recalculating alignment on each iteration
 	for {
+		// Calculate delay to next interval boundary + processing delay
+		now := time.Now()
+		nextBoundary := now.Truncate(s.interval).Add(s.interval)
+		nextTick := nextBoundary.Add(processingDelay)
+		delay := nextTick.Sub(now)
+
+		log.Printf("Next aggregated metrics calculation at %s (in %v)", nextTick.Format("15:04:05"), delay)
+
+		// Wait until the next aligned boundary + processing delay
 		select {
-		case <-s.ticker.C:
+		case <-time.After(delay):
+			// Calculate and broadcast
 			s.calculateAndBroadcast()
 		case <-s.stopChan:
-			s.ticker.Stop()
 			log.Println("Aggregated metrics scheduler stopped")
 			return
 		}
@@ -61,13 +59,16 @@ func (s *AggregatedMetricsScheduler) Stop() {
 
 // calculateAndBroadcast calculates aggregated metrics for the last interval and broadcasts via SSE
 func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
-	// Calculate time window: (now - interval, now]
-	// Using interval exclusion at start: timestamp > startTime AND timestamp <= endTime
-	endTime := time.Now()
-	startTime := endTime.Add(-s.interval)
+	// Calculate the bucket time for the interval that just completed
+	// Example: if now is 18:34:05, we calculate metrics for 18:34:00 bucket
+	// The bucket window is (18:33:30, 18:34:00]
+	now := time.Now()
+	bucketTime := now.Truncate(s.interval)
 
-	// Round endTime to bucket boundary (e.g., 07:10:30)
-	bucketTime := endTime.Truncate(s.interval)
+	// Calculate time window for the bucket
+	// For 30s interval: if bucket is 18:34:00, window is (18:33:30, 18:34:00]
+	endTime := bucketTime
+	startTime := bucketTime.Add(-s.interval)
 
 	// Query aggregated metrics for the interval
 	query := `

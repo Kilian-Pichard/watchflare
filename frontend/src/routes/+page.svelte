@@ -2,7 +2,6 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api';
-	import { connectSSE } from '$lib/sse';
 	import { formatPercent } from '$lib/utils';
 	import {
 		userStore,
@@ -17,6 +16,7 @@
 		dashboardStats,
 		alertsStore,
 		uiStore,
+		sseStore,
 		toasts,
 		sidebarCollapsed
 	} from '$lib/stores';
@@ -30,8 +30,8 @@
 	import RightSidebar from '$lib/components/RightSidebar.svelte';
 	import type { SSEEvent, TimeRange } from '$lib/types';
 
-	// SSE connection
-	let sseDisconnect: (() => void) | null = null;
+	// SSE unsubscribe function
+	let sseUnsubscribe: (() => void) | null = null;
 
 	// Derived states from stores
 	let loading = $state(true);
@@ -39,7 +39,6 @@
 	let user = $derived($currentUser);
 	let serversList = $derived($servers);
 	let metrics = $derived($metricsData);
-	let aggregated = $derived($aggregatedMetrics);
 	let stats = $derived($dashboardStats);
 	let droppedAlerts = $derived($alertsStore.droppedMetrics);
 	let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
@@ -107,8 +106,6 @@
 	}
 
 	function handleSSEMessage(event: SSEEvent) {
-		console.log('SSE event received:', event.type, event.data);
-
 		if (event.type === 'server_update') {
 			// Show toast notification if agent was reactivated
 			if (event.data.reactivated && event.data.hostname) {
@@ -125,7 +122,6 @@
 			// Update individual server metrics via store
 			metricsStore.updateServerMetrics(event.data.server_id, event.data);
 		} else if (event.type === 'aggregated_metrics_update') {
-			console.log('Aggregated metrics update received:', event.data);
 			// Add new aggregated metrics point via store
 			aggregatedStore.addMetricPoint(event.data);
 		}
@@ -135,9 +131,7 @@
 		loadData();
 
 		// Connect to SSE for server status updates and real-time aggregated metrics
-		sseDisconnect = connectSSE(handleSSEMessage, (error: Event) => {
-			console.error('SSE error:', error);
-		});
+		sseUnsubscribe = sseStore.connect(handleSSEMessage);
 
 		// Refresh dropped metrics every 1 hour
 		const droppedMetricsInterval = setInterval(() => alertsStore.load(), 3600000);
@@ -153,8 +147,9 @@
 	});
 
 	onDestroy(() => {
-		if (sseDisconnect) {
-			sseDisconnect();
+		// Unsubscribe from SSE
+		if (sseUnsubscribe) {
+			sseUnsubscribe();
 		}
 	});
 </script>
@@ -219,7 +214,7 @@
 			<DashboardStats {stats} />
 
 			<!-- Dashboard Charts -->
-			<DashboardCharts aggregatedMetrics={aggregated} {stats} {timeRange} onTimeRangeChange={handleTimeRangeChange} />
+			<DashboardCharts aggregatedMetrics={$aggregatedMetrics} {stats} {timeRange} onTimeRangeChange={handleTimeRangeChange} />
 
 			<!-- Servers Table -->
 			<div class="mb-6">
