@@ -1,16 +1,17 @@
 import { writable } from 'svelte/store';
+import type { Toast, ToastType, ToastStore } from '$lib/types';
 
-// Toast types: 'info', 'success', 'warning', 'error'
-function createToastStore() {
-	const { subscribe, update } = writable([]);
+// Toast store for managing toast notifications
+function createToastStore(): ToastStore {
+	const { subscribe, update } = writable<Toast[]>([]);
 
 	let nextId = 0;
 
 	return {
 		subscribe,
-		add: (message, type = 'info', duration = 5000) => {
+		add: (message: string, type: ToastType = 'info', duration: number = 5000): number => {
 			const id = nextId++;
-			const toast = { id, message, type };
+			const toast: Toast = { id, message, type };
 
 			update(toasts => [...toasts, toast]);
 
@@ -23,10 +24,10 @@ function createToastStore() {
 
 			return id;
 		},
-		remove: (id) => {
+		remove: (id: number): void => {
 			update(toasts => toasts.filter(t => t.id !== id));
 		},
-		clear: () => {
+		clear: (): void => {
 			update(() => []);
 		}
 	};

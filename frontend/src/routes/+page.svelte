@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import { goto } from "$app/navigation";
     import {
@@ -10,30 +10,38 @@
         getServerMetrics,
     } from "$lib/api";
     import { connectSSE } from "$lib/sse";
-    import { formatBytes, formatPercent } from "$lib/utils";
+    import { formatPercent } from "$lib/utils";
     import { toasts } from "$lib/stores/toasts";
     import { sidebarCollapsed } from "$lib/stores/sidebar";
     import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
     import MobileSidebar from "$lib/components/MobileSidebar.svelte";
     import Header from "$lib/components/Header.svelte";
     import ServerTable from "$lib/components/ServerTable.svelte";
-    import StatsCard from "$lib/components/StatsCard.svelte";
+    import DashboardStats from "$lib/components/dashboard/DashboardStats.svelte";
+    import DashboardCharts from "$lib/components/dashboard/DashboardCharts.svelte";
+    import DroppedMetricsAlert from "$lib/components/dashboard/DroppedMetricsAlert.svelte";
     import RightSidebar from "$lib/components/RightSidebar.svelte";
-    import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
-    import CPUChart from "$lib/components/CPUChart.svelte";
-    import MemoryChart from "$lib/components/MemoryChart.svelte";
+    import type {
+        User,
+        Server,
+        Metric,
+        AggregatedMetric,
+        DroppedMetric,
+        TimeRange,
+        ServerWithMetrics
+    } from "$lib/types";
 
     // State
-    let user = $state(null);
-    let servers = $state([]);
-    let timeRange = $state("24h");
-    let loading = $state(true);
-    let metricsData = $state({}); // { serverId: [metrics] }
-    let sseDisconnect = null;
-    let droppedMetricsAlerts = $state([]);
-    let aggregatedMetrics = $state([]);
-    let aggregatedMetrics24h = $state([]); // Metrics for 24h trend calculation
-    let rightSidebarOpen = $state(false); // Right sidebar toggle state
+    let user = $state<User | null>(null);
+    let servers = $state<ServerWithMetrics[]>([]);
+    let timeRange = $state<TimeRange>("24h");
+    let loading = $state<boolean>(true);
+    let metricsData = $state<Record<string, Metric[]>>({}); // { serverId: [metrics] }
+    let sseDisconnect: (() => void) | null = null;
+    let droppedMetricsAlerts = $state<DroppedMetric[]>([]);
+    let aggregatedMetrics = $state<AggregatedMetric[]>([]);
+    let aggregatedMetrics24h = $state<AggregatedMetric[]>([]); // Metrics for 24h trend calculation
+    let rightSidebarOpen = $state<boolean>(false); // Right sidebar toggle state
 
     // Computed aggregates - uses last point from backend aggregated metrics
     let stats = $derived.by(() => {
@@ -92,19 +100,6 @@
         };
     });
 
-    function formatDuration(nanoseconds) {
-        const seconds = nanoseconds / 1_000_000_000;
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-
-        if (hours > 0) {
-            return `${hours}h${minutes > 0 ? ` ${minutes}min` : ""}`;
-        } else if (minutes > 0) {
-            return `${minutes}min`;
-        } else {
-            return `${Math.floor(seconds)}s`;
-        }
-    }
 
     async function handleLogout() {
         try {
@@ -330,93 +325,18 @@
             </div>
 
             <!-- Dropped Metrics Alerts -->
-            {#if droppedMetricsAlerts.length > 0}
-                <div class="mb-6 rounded-lg border border-warning bg-warning/5 p-4">
-                    <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-warning">
-                        <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                        </svg>
-                        Dropped Metrics
-                    </h3>
-                    {#each droppedMetricsAlerts as alert}
-                        <div class="mb-2 last:mb-0 rounded-md bg-background p-3">
-                            <p class="text-sm font-medium">
-                                <strong>{alert.hostname}</strong> dropped <strong>{alert.total_dropped} metrics</strong>
-                            </p>
-                            <p class="text-xs text-muted-foreground mt-1">
-                                Backend unavailable for {formatDuration(alert.downtime_duration)}
-                                ({new Date(alert.first_dropped_at).toLocaleString()} → {new Date(alert.last_dropped_at).toLocaleString()})
-                            </p>
-                        </div>
-                    {/each}
-                </div>
-            {/if}
+            <DroppedMetricsAlert alerts={droppedMetricsAlerts} />
 
-            <!-- 4 Stats Cards -->
-            <div class="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatsCard
-                    title="Active Servers"
-                    value="{stats.onlineServers}/{stats.totalServers}"
-                    trend={0}
-                    trendLabel="Server"
-                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>'
-                />
-                <StatsCard
-                    title="Avg CPU Load"
-                    value="{stats.avgCPU.toFixed(1)}%"
-                    trend={stats.cpuTrend}
-                    trendLabel="vs 24h ago"
-                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>'
-                />
-                <StatsCard
-                    title="Memory Usage"
-                    value="{stats.avgMemory.toFixed(1)}%"
-                    trend={stats.memoryTrend}
-                    trendLabel="vs 24h ago"
-                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>'
-                />
-                <StatsCard
-                    title="Disk Usage"
-                    value="{stats.avgDisk.toFixed(1)}%"
-                    trend={stats.diskTrend}
-                    trendLabel="vs 24h ago"
-                    icon='<svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>'
-                />
-            </div>
+            <!-- Dashboard Stats Cards -->
+            <DashboardStats {stats} />
 
-            <!-- Central Charts (CPU + Memory only) -->
-            <div class="mb-6">
-                <div class="mb-4 flex items-center justify-between">
-                    <h2 class="text-lg font-semibold">Global Metrics</h2>
-                    <TimeRangeSelector
-                        bind:value={timeRange}
-                        onValueChange={handleTimeRangeChange}
-                    />
-                </div>
-                <div class="grid gap-4 lg:grid-cols-2">
-                    <!-- CPU Chart -->
-                    <div class="rounded-lg border bg-card p-4">
-                        <div class="mb-3 flex items-center justify-between">
-                            <h3 class="text-sm font-medium">CPU Usage</h3>
-                            <span class="text-xs text-muted-foreground">
-                                {formatPercent(stats.avgCPU)}
-                            </span>
-                        </div>
-                        <CPUChart data={aggregatedMetrics} />
-                    </div>
-
-                    <!-- Memory Chart -->
-                    <div class="rounded-lg border bg-card p-4">
-                        <div class="mb-3 flex items-center justify-between">
-                            <h3 class="text-sm font-medium">Memory Usage</h3>
-                            <span class="text-xs text-muted-foreground">
-                                {formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)}
-                            </span>
-                        </div>
-                        <MemoryChart data={aggregatedMetrics} />
-                    </div>
-                </div>
-            </div>
+            <!-- Dashboard Charts -->
+            <DashboardCharts
+                {aggregatedMetrics}
+                {stats}
+                {timeRange}
+                onTimeRangeChange={handleTimeRangeChange}
+            />
 
             <!-- Servers Table -->
             <div class="mb-6">

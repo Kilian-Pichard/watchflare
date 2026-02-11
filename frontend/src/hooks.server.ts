@@ -1,15 +1,21 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, type Handle } from '@sveltejs/kit';
 
 const PUBLIC_ROUTES = ['/login', '/register'];
 
+interface SetupStatusCache {
+	value: boolean | null;
+	timestamp: number;
+	ttl: number;
+}
+
 // Cache setup status (it rarely changes)
-let setupStatusCache = {
+let setupStatusCache: SetupStatusCache = {
 	value: null,
 	timestamp: 0,
 	ttl: 60000 // 1 minute cache
 };
 
-async function checkSetupRequired() {
+async function checkSetupRequired(): Promise<boolean> {
 	const now = Date.now();
 
 	// Return cached value if still valid
@@ -19,7 +25,7 @@ async function checkSetupRequired() {
 
 	try {
 		const response = await fetch('http://localhost:8080/auth/setup-required');
-		const data = await response.json();
+		const data = await response.json() as { setup_required: boolean };
 
 		// Update cache
 		setupStatusCache.value = data.setup_required;
@@ -33,7 +39,7 @@ async function checkSetupRequired() {
 	}
 }
 
-export async function handle({ event, resolve }) {
+export const handle: Handle = async ({ event, resolve }) => {
 	const token = event.cookies.get('jwt_token');
 	const pathname = event.url.pathname;
 
@@ -63,4 +69,4 @@ export async function handle({ event, resolve }) {
 	}
 
 	return await resolve(event);
-}
+};
