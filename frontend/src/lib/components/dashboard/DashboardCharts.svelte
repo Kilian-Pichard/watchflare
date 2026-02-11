@@ -20,18 +20,23 @@
 		aggregatedMetrics: AggregatedMetric[];
 		stats: Stats;
 		timeRange: TimeRange;
-		onTimeRangeChange: () => void;
+		onTimeRangeChange: (newTimeRange: TimeRange) => void;
 	} = $props();
 
 	// Bind timeRange for two-way binding
 	let currentTimeRange = $state(timeRange);
 
-	// Watch for changes
+	// Watch for changes and sync with parent
 	$effect(() => {
-		if (currentTimeRange !== timeRange) {
-			onTimeRangeChange();
-		}
+		// Sync from parent to local
+		currentTimeRange = timeRange;
 	});
+
+	// Handle time range change from selector
+	function handleTimeRangeChange(newTimeRange: TimeRange) {
+		currentTimeRange = newTimeRange;
+		onTimeRangeChange(newTimeRange);
+	}
 </script>
 
 <!-- Central Charts (CPU + Memory only) -->
@@ -40,7 +45,7 @@
 		<h2 class="text-lg font-semibold">Global Metrics</h2>
 		<TimeRangeSelector
 			bind:value={currentTimeRange}
-			onValueChange={onTimeRangeChange}
+			onValueChange={handleTimeRangeChange}
 		/>
 	</div>
 	<div class="grid gap-4 lg:grid-cols-2">

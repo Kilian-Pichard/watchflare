@@ -1,350 +1,233 @@
 <script lang="ts">
-    import { onMount, onDestroy } from "svelte";
-    import { goto } from "$app/navigation";
-    import {
-        logout,
-        getCurrentUser,
-        listServers,
-        getDroppedMetrics,
-        getAggregatedMetrics,
-        getServerMetrics,
-    } from "$lib/api";
-    import { connectSSE } from "$lib/sse";
-    import { formatPercent } from "$lib/utils";
-    import { toasts } from "$lib/stores/toasts";
-    import { sidebarCollapsed } from "$lib/stores/sidebar";
-    import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
-    import MobileSidebar from "$lib/components/MobileSidebar.svelte";
-    import Header from "$lib/components/Header.svelte";
-    import ServerTable from "$lib/components/ServerTable.svelte";
-    import DashboardStats from "$lib/components/dashboard/DashboardStats.svelte";
-    import DashboardCharts from "$lib/components/dashboard/DashboardCharts.svelte";
-    import DroppedMetricsAlert from "$lib/components/dashboard/DroppedMetricsAlert.svelte";
-    import RightSidebar from "$lib/components/RightSidebar.svelte";
-    import type {
-        User,
-        Server,
-        Metric,
-        AggregatedMetric,
-        DroppedMetric,
-        TimeRange,
-        ServerWithMetrics
-    } from "$lib/types";
+	import { onMount, onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { logout } from '$lib/api';
+	import { connectSSE } from '$lib/sse';
+	import { formatPercent } from '$lib/utils';
+	import {
+		userStore,
+		currentUser,
+		serversStore,
+		servers,
+		metricsStore,
+		metricsData,
+		aggregatedStore,
+		aggregatedMetrics,
+		currentTimeRange,
+		dashboardStats,
+		alertsStore,
+		uiStore,
+		toasts,
+		sidebarCollapsed
+	} from '$lib/stores';
+	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
+	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
+	import Header from '$lib/components/Header.svelte';
+	import ServerTable from '$lib/components/ServerTable.svelte';
+	import DashboardStats from '$lib/components/dashboard/DashboardStats.svelte';
+	import DashboardCharts from '$lib/components/dashboard/DashboardCharts.svelte';
+	import DroppedMetricsAlert from '$lib/components/dashboard/DroppedMetricsAlert.svelte';
+	import RightSidebar from '$lib/components/RightSidebar.svelte';
+	import type { SSEEvent, TimeRange } from '$lib/types';
 
-    // State
-    let user = $state<User | null>(null);
-    let servers = $state<ServerWithMetrics[]>([]);
-    let timeRange = $state<TimeRange>("24h");
-    let loading = $state<boolean>(true);
-    let metricsData = $state<Record<string, Metric[]>>({}); // { serverId: [metrics] }
-    let sseDisconnect: (() => void) | null = null;
-    let droppedMetricsAlerts = $state<DroppedMetric[]>([]);
-    let aggregatedMetrics = $state<AggregatedMetric[]>([]);
-    let aggregatedMetrics24h = $state<AggregatedMetric[]>([]); // Metrics for 24h trend calculation
-    let rightSidebarOpen = $state<boolean>(false); // Right sidebar toggle state
+	// SSE connection
+	let sseDisconnect: (() => void) | null = null;
 
-    // Computed aggregates - uses last point from backend aggregated metrics
-    let stats = $derived.by(() => {
-        const lastPoint = aggregatedMetrics.length > 0
-            ? aggregatedMetrics[aggregatedMetrics.length - 1]
-            : null;
+	// Derived states from stores
+	let loading = $state(true);
+	let timeRange = $derived($currentTimeRange);
+	let user = $derived($currentUser);
+	let serversList = $derived($servers);
+	let metrics = $derived($metricsData);
+	let aggregated = $derived($aggregatedMetrics);
+	let stats = $derived($dashboardStats);
+	let droppedAlerts = $derived($alertsStore.droppedMetrics);
+	let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
 
-        // Calculate trend by comparing current to first point from 24h data (true 24h trend)
-        const firstPoint24h = aggregatedMetrics24h.length > 0
-            ? aggregatedMetrics24h[0]
-            : null;
+	async function handleLogout() {
+		try {
+			await logout();
+			// Clear all stores
+			userStore.clear();
+			serversStore.clear();
+			metricsStore.clear();
+			aggregatedStore.clear();
+			alertsStore.clear();
+			goto('/login');
+		} catch (err) {
+			console.error('Logout failed:', err);
+			goto('/login');
+		}
+	}
 
-        const totalServers = servers.length;
-        const onlineServers = servers.filter((s) => s.server.status === "online").length;
-        const avgCPU = lastPoint?.cpu_usage_percent || 0;
-        const totalMemory = lastPoint?.memory_total_bytes || 0;
-        const usedMemory = lastPoint?.memory_used_bytes || 0;
-        const totalDisk = lastPoint?.disk_total_bytes || 0;
-        const usedDisk = lastPoint?.disk_used_bytes || 0;
+	function toggleRightSidebar() {
+		uiStore.toggleRightSidebar();
+	}
 
-        // Calculate trends (comparing current to 24h ago)
-        const cpuTrend = firstPoint24h && firstPoint24h.cpu_usage_percent > 0
-            ? ((avgCPU - firstPoint24h.cpu_usage_percent) / firstPoint24h.cpu_usage_percent) * 100
-            : 0;
+	async function loadData() {
+		try {
+			loading = true;
 
-        const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
-        const compareMemoryPercent = firstPoint24h && firstPoint24h.memory_total_bytes > 0
-            ? (firstPoint24h.memory_used_bytes / firstPoint24h.memory_total_bytes) * 100
-            : memoryPercent;
-        const memoryTrend = compareMemoryPercent > 0
-            ? ((memoryPercent - compareMemoryPercent) / compareMemoryPercent) * 100
-            : 0;
+			// Load user preferences
+			await userStore.load();
 
-        const diskPercent = totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0;
-        const compareDiskPercent = firstPoint24h && firstPoint24h.disk_total_bytes > 0
-            ? (firstPoint24h.disk_used_bytes / firstPoint24h.disk_total_bytes) * 100
-            : diskPercent;
-        const diskTrend = compareDiskPercent > 0
-            ? ((diskPercent - compareDiskPercent) / compareDiskPercent) * 100
-            : 0;
+			// Get time range from user preferences (migrate old 6h to 12h)
+			const userTimeRange = $currentUser?.default_time_range || '24h';
+			const migratedTimeRange = userTimeRange === '6h' ? '12h' : userTimeRange;
+			aggregatedStore.setTimeRange(migratedTimeRange);
 
-        return {
-            totalServers,
-            onlineServers,
-            offlineServers: totalServers - onlineServers,
-            avgCPU,
-            avgMemory: memoryPercent,
-            avgDisk: diskPercent,
-            totalMemory,
-            usedMemory,
-            totalDisk,
-            usedDisk,
-            cpuTrend: isFinite(cpuTrend) ? cpuTrend : 0,
-            memoryTrend: isFinite(memoryTrend) ? memoryTrend : 0,
-            diskTrend: isFinite(diskTrend) ? diskTrend : 0,
-        };
-    });
+			// Load servers
+			await serversStore.load();
 
+			// Load metrics for each server (for table display)
+			const serverIds = $servers.map(item => item.server.id);
+			await metricsStore.loadForServers(serverIds, '1h');
 
-    async function handleLogout() {
-        try {
-            await logout();
-            goto("/login");
-        } catch (err) {
-            console.error("Logout failed:", err);
-            goto("/login");
-        }
-    }
+			// Load dropped metrics alerts
+			await alertsStore.load();
 
-    function toggleRightSidebar() {
-        rightSidebarOpen = !rightSidebarOpen;
-    }
+			// Load aggregated metrics (for stats cards and charts)
+			await aggregatedStore.load(migratedTimeRange);
 
-    async function loadData() {
-        try {
-            loading = true;
+			// Load 24h metrics for trend calculation
+			await aggregatedStore.load24h();
+		} catch (err) {
+			console.error('Failed to load data:', err);
+			// Error will trigger redirect in apiRequest
+		} finally {
+			loading = false;
+		}
+	}
 
-            // Load user preferences
-            const userData = await getCurrentUser();
-            if (!userData || !userData.user) {
-                console.error("No user data received");
-                return;
-            }
-            user = userData.user;
-            // Migrate old 6h preference to 12h
-            const userTimeRange = user.default_time_range || "24h";
-            timeRange = userTimeRange === "6h" ? "12h" : userTimeRange;
+	async function handleTimeRangeChange(newTimeRange: TimeRange) {
+		// Update the store with new time range
+		aggregatedStore.setTimeRange(newTimeRange);
+		// Load new data
+		await aggregatedStore.load(newTimeRange);
+	}
 
-            // Load servers
-            const serversData = await listServers();
-            servers = serversData.servers.map((server) => ({
-                server,
-            }));
+	function handleSSEMessage(event: SSEEvent) {
+		console.log('SSE event received:', event.type, event.data);
 
-            // Load metrics for each server (for table display)
-            await loadServerMetrics();
+		if (event.type === 'server_update') {
+			// Show toast notification if agent was reactivated
+			if (event.data.reactivated && event.data.hostname) {
+				toasts.add(
+					`Agent "${event.data.hostname}" was reactivated (same physical server detected via UUID)`,
+					'info',
+					8000 // 8 seconds
+				);
+			}
 
-            // Load dropped metrics alerts
-            await loadDroppedMetrics();
+			// Update server status via store
+			serversStore.updateStatus(event.data.id, event.data.status, event.data.last_seen);
+		} else if (event.type === 'metrics_update') {
+			// Update individual server metrics via store
+			metricsStore.updateServerMetrics(event.data.server_id, event.data);
+		} else if (event.type === 'aggregated_metrics_update') {
+			console.log('Aggregated metrics update received:', event.data);
+			// Add new aggregated metrics point via store
+			aggregatedStore.addMetricPoint(event.data);
+		}
+	}
 
-            // Load aggregated metrics (for stats cards and charts)
-            await loadAggregatedMetrics();
+	onMount(() => {
+		loadData();
 
-            // Load 24h metrics for trend calculation
-            await loadAggregatedMetrics24h();
-        } catch (err) {
-            console.error("Failed to load data:", err);
-            // Error will trigger redirect in apiRequest
-        } finally {
-            loading = false;
-        }
-    }
+		// Connect to SSE for server status updates and real-time aggregated metrics
+		sseDisconnect = connectSSE(handleSSEMessage, (error: Event) => {
+			console.error('SSE error:', error);
+		});
 
-    async function loadServerMetrics() {
-        try {
-            const promises = servers.map(async ({ server }) => {
-                try {
-                    const data = await getServerMetrics(server.id, { time_range: "1h" });
-                    metricsData[server.id] = data.metrics || [];
-                } catch (err) {
-                    console.error(`Failed to load metrics for ${server.hostname}:`, err);
-                    metricsData[server.id] = [];
-                }
-            });
-            await Promise.all(promises);
-        } catch (err) {
-            console.error("Failed to load server metrics:", err);
-        }
-    }
+		// Refresh dropped metrics every 1 hour
+		const droppedMetricsInterval = setInterval(() => alertsStore.load(), 3600000);
 
-    async function loadDroppedMetrics() {
-        try {
-            const data = await getDroppedMetrics();
-            droppedMetricsAlerts = data || [];
-        } catch (err) {
-            console.error("Failed to load dropped metrics:", err);
-        }
-    }
+		// Refresh 24h metrics for trend calculation every 5 minutes
+		const trend24hInterval = setInterval(() => aggregatedStore.load24h(), 300000);
 
-    async function loadAggregatedMetrics() {
-        try {
-            const data = await getAggregatedMetrics(timeRange);
-            aggregatedMetrics = data.metrics || [];
-        } catch (err) {
-            console.error("Failed to load aggregated metrics:", err);
-        }
-    }
+		// Cleanup on unmount
+		return () => {
+			clearInterval(droppedMetricsInterval);
+			clearInterval(trend24hInterval);
+		};
+	});
 
-    async function loadAggregatedMetrics24h() {
-        try {
-            const data = await getAggregatedMetrics("24h");
-            aggregatedMetrics24h = data.metrics || [];
-        } catch (err) {
-            console.error("Failed to load 24h aggregated metrics for trends:", err);
-        }
-    }
-
-    function handleTimeRangeChange() {
-        loadAggregatedMetrics();
-    }
-
-    function handleSSEMessage(event) {
-        console.log("SSE event received:", event.type, event.data);
-
-        if (event.type === "server_update") {
-            // Show toast notification if agent was reactivated
-            if (event.data.reactivated && event.data.hostname) {
-                toasts.add(
-                    `Agent "${event.data.hostname}" was reactivated (same physical server detected via UUID)`,
-                    'info',
-                    8000 // 8 seconds
-                );
-            }
-
-            // Update server status
-            const serverIndex = servers.findIndex(
-                (s) => s.server.id === event.data.id,
-            );
-            if (serverIndex !== -1) {
-                servers[serverIndex].server.status = event.data.status;
-                servers[serverIndex].server.last_seen = event.data.last_seen;
-            }
-        } else if (event.type === "metrics_update") {
-            // Update individual server metrics for table display
-            const serverId = event.data.server_id;
-            if (!metricsData[serverId]) {
-                metricsData[serverId] = [];
-            }
-            metricsData[serverId] = [...metricsData[serverId], event.data];
-
-            // Keep only last 50 points per server
-            if (metricsData[serverId].length > 50) {
-                metricsData[serverId] = metricsData[serverId].slice(-50);
-            }
-        } else if (event.type === "aggregated_metrics_update") {
-            console.log("Aggregated metrics update received:", event.data);
-            // Add new aggregated metrics point in real-time
-            const newPoint = event.data;
-            aggregatedMetrics = [...aggregatedMetrics, newPoint];
-
-            console.log("Updated aggregatedMetrics, new length:", aggregatedMetrics.length);
-
-            // Keep only last 200 points to avoid memory issues
-            if (aggregatedMetrics.length > 200) {
-                aggregatedMetrics = aggregatedMetrics.slice(-200);
-            }
-        }
-    }
-
-    onMount(() => {
-        loadData();
-
-        // Connect to SSE for server status updates and real-time aggregated metrics
-        sseDisconnect = connectSSE(handleSSEMessage, (error) => {
-            console.error("SSE error:", error);
-        });
-
-        // Refresh dropped metrics every 1 hour
-        const droppedMetricsInterval = setInterval(loadDroppedMetrics, 3600000);
-
-        // Refresh 24h metrics for trend calculation every 5 minutes
-        const trend24hInterval = setInterval(loadAggregatedMetrics24h, 300000);
-
-        // Cleanup on unmount
-        return () => {
-            clearInterval(droppedMetricsInterval);
-            clearInterval(trend24hInterval);
-        };
-    });
-
-    onDestroy(() => {
-        if (sseDisconnect) {
-            sseDisconnect();
-        }
-    });
+	onDestroy(() => {
+		if (sseDisconnect) {
+			sseDisconnect();
+		}
+	});
 </script>
 
 <svelte:head>
-    <title>Dashboard - Watchflare</title>
+	<title>Dashboard - Watchflare</title>
 </svelte:head>
 
 <div class="min-h-screen bg-background">
-    <!-- Header -->
-    <Header />
+	<!-- Header -->
+	<Header />
 
-    <!-- Desktop Sidebar -->
-    <DesktopSidebar onLogout={handleLogout} />
+	<!-- Desktop Sidebar -->
+	<DesktopSidebar onLogout={handleLogout} />
 
-    <!-- Mobile Sidebar -->
-    <MobileSidebar onLogout={handleLogout} />
+	<!-- Mobile Sidebar -->
+	<MobileSidebar onLogout={handleLogout} />
 
-    <!-- Right Sidebar -->
-    <RightSidebar {stats} {servers} isOpen={rightSidebarOpen} onToggle={toggleRightSidebar} />
+	<!-- Right Sidebar -->
+	<RightSidebar {stats} servers={serversList} isOpen={rightSidebarOpen} onToggle={toggleRightSidebar} />
 
-    <!-- Main Content -->
-    <main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} {rightSidebarOpen ? 'xl:mr-80' : 'mr-0'}">
-        {#if loading}
-            <div class="flex items-center justify-center py-20">
-                <p class="text-muted-foreground">Loading dashboard...</p>
-            </div>
-        {:else}
-            <!-- Header with Welcome + Add Server -->
-            <div class="mb-6 flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-semibold text-foreground">
-                        Welcome back, <span class="text-primary">{user?.email?.split('@')[0] || 'User'}</span>
-                    </h1>
-                    <p class="text-sm text-muted-foreground mt-1">
-                        Global uptime at <span class="font-medium text-foreground">{formatPercent((stats.onlineServers / stats.totalServers) * 100)}</span> in the last 24h
-                    </p>
-                </div>
-                <button
-                    onclick={() => goto('/servers/new')}
-                    class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Add Server
-                </button>
-            </div>
+	<!-- Main Content -->
+	<main
+		class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed
+			? 'lg:ml-16'
+			: 'lg:ml-64'} {rightSidebarOpen ? 'xl:mr-80' : 'mr-0'}"
+	>
+		{#if loading}
+			<div class="flex items-center justify-center py-20">
+				<p class="text-muted-foreground">Loading dashboard...</p>
+			</div>
+		{:else}
+			<!-- Header with Welcome + Add Server -->
+			<div class="mb-6 flex items-center justify-between">
+				<div>
+					<h1 class="text-2xl font-semibold text-foreground">
+						Welcome back, <span class="text-primary"
+							>{user?.email?.split('@')[0] || 'User'}</span
+						>
+					</h1>
+					<p class="text-sm text-muted-foreground mt-1">
+						Global uptime at <span class="font-medium text-foreground"
+							>{formatPercent((stats.onlineServers / stats.totalServers) * 100)}</span
+						> in the last 24h
+					</p>
+				</div>
+				<button
+					onclick={() => goto('/servers/new')}
+					class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+					</svg>
+					Add Server
+				</button>
+			</div>
 
-            <!-- Dropped Metrics Alerts -->
-            <DroppedMetricsAlert alerts={droppedMetricsAlerts} />
+			<!-- Dropped Metrics Alerts -->
+			<DroppedMetricsAlert alerts={droppedAlerts} />
 
-            <!-- Dashboard Stats Cards -->
-            <DashboardStats {stats} />
+			<!-- Dashboard Stats Cards -->
+			<DashboardStats {stats} />
 
-            <!-- Dashboard Charts -->
-            <DashboardCharts
-                {aggregatedMetrics}
-                {stats}
-                {timeRange}
-                onTimeRangeChange={handleTimeRangeChange}
-            />
+			<!-- Dashboard Charts -->
+			<DashboardCharts aggregatedMetrics={aggregated} {stats} {timeRange} onTimeRangeChange={handleTimeRangeChange} />
 
-            <!-- Servers Table -->
-            <div class="mb-6">
-                <div class="mb-4 flex items-center justify-between">
-                    <h2 class="text-lg font-semibold">Server Summary</h2>
-                </div>
-                <ServerTable {servers} {metricsData} />
-            </div>
-        {/if}
-    </main>
+			<!-- Servers Table -->
+			<div class="mb-6">
+				<div class="mb-4 flex items-center justify-between">
+					<h2 class="text-lg font-semibold">Server Summary</h2>
+				</div>
+				<ServerTable servers={serversList} metricsData={metrics} />
+			</div>
+		{/if}
+	</main>
 </div>

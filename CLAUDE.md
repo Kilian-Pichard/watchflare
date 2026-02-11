@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.3.0
+**Current version**: 0.4.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -29,6 +29,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.4.0` - Centralized state management: 7 new stores (user, servers, metrics, aggregated, alerts, ui), refactored +page.svelte (-120 lines), fixed TimeRangeSelector reactivity
 - `0.3.0` - Complete TypeScript migration: converted all .js to .ts, centralized types, improved error handling with ApiError class, refactored dashboard components
 - `0.2.1` - Responsive improvements: fixed header, separate mobile/desktop sidebars with smooth animations
 - `0.2.0` - Dashboard layout improvements: collapsible sidebars, stats cards with trends, right panel with alerts
