@@ -15,11 +15,13 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.7.1
+**Current version**: 0.7.2
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
 - `0.x.x` - Bug fixes, minor improvements, small features
+
+**Rule**: Every commit MUST bump the version (major, minor, or patch). Update `frontend/package.json` and this file accordingly.
 
 **v1.0 criteria** (not yet reached):
 - All planned features implemented
@@ -29,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.7.2` - Expand API tests with fetch mocking: login, register, CRUD servers, changePassword, metrics (82 tests)
 - `0.7.1` - Frontend unit tests with Vitest: validation schemas, utility functions, API error handling (67 tests)
 - `0.7.0` - Zod form validation (login, register, add server, change password), server list pagination (20/page), dashboard lazy loading (SSE-only for individual metrics), fix 401 redirect loop on auth pages
 - `0.6.2` - Fix aggregated charts: bucket labels now represent end time (08:40 = avg 08:30-08:40), exclude incomplete buckets, fill CA materialization gap with raw metrics, auto-reload on bucket completion

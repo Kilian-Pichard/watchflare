@@ -1,6 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ApiError } from './api';
 
+// Mock fetch globally
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
+// Mock window.location for auth redirect tests
+const mockLocation = { href: '' };
+vi.stubGlobal('window', { location: mockLocation });
+
+function jsonResponse(data: unknown, status = 200, statusText = 'OK') {
+	return Promise.resolve({
+		ok: status >= 200 && status < 300,
+		status,
+		statusText,
+		json: () => Promise.resolve(data)
+	});
+}
+
+function networkError(message = 'Failed to fetch') {
+	return Promise.reject(new Error(message));
+}
+
+function nonJsonResponse(status: number, statusText: string) {
+	return Promise.resolve({
+		ok: status >= 200 && status < 300,
+		status,
+		statusText,
+		json: () => Promise.reject(new SyntaxError('Unexpected token'))
+	});
+}
+
+beforeEach(() => {
+	mockFetch.mockReset();
+	mockLocation.href = '';
+});
+
 describe('ApiError', () => {
 	it('creates error with message from data.error', () => {
 		const err = new ApiError(400, 'Bad Request', { error: 'Invalid input' });
@@ -44,5 +79,208 @@ describe('ApiError', () => {
 			expect(new ApiError(502, 'Bad Gateway').isServerError).toBe(true);
 			expect(new ApiError(499, 'Client').isServerError).toBe(false);
 		});
+	});
+});
+
+describe('login', () => {
+	it('sends POST with email and password', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ token: 'jwt123' }));
+		const { login } = await import('./api');
+
+		await login('test@example.com', 'password123');
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/auth/login',
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
+				credentials: 'include'
+			})
+		);
+	});
+
+	it('returns response data on success', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ token: 'jwt123', user: { id: 1 } }));
+		const { login } = await import('./api');
+
+		const result = await login('test@example.com', 'password123');
+		expect(result).toEqual({ token: 'jwt123', user: { id: 1 } });
+	});
+
+	it('throws ApiError on invalid credentials', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ error: 'invalid credentials' }, 401, 'Unauthorized'));
+		const { login } = await import('./api');
+
+		try {
+			await login('test@example.com', 'wrong');
+			expect.unreachable('should have thrown');
+		} catch (err) {
+			expect(err).toBeInstanceOf(ApiError);
+			expect((err as ApiError).message).toBe('invalid credentials');
+		}
+	});
+
+	it('does not redirect on 401 (skipAuthRedirect)', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ error: 'invalid credentials' }, 401, 'Unauthorized'));
+		const { login } = await import('./api');
+
+		await login('test@example.com', 'wrong').catch(() => {});
+		expect(mockLocation.href).toBe('');
+	});
+});
+
+describe('register', () => {
+	it('sends POST with email and password', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ token: 'jwt123' }));
+		const { register } = await import('./api');
+
+		await register('new@example.com', 'longpassword12');
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/auth/register',
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({ email: 'new@example.com', password: 'longpassword12' })
+			})
+		);
+	});
+
+	it('does not redirect on 401 (skipAuthRedirect)', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ error: 'unauthorized' }, 401, 'Unauthorized'));
+		const { register } = await import('./api');
+
+		await register('new@example.com', 'pass').catch(() => {});
+		expect(mockLocation.href).toBe('');
+	});
+});
+
+describe('listServers', () => {
+	it('fetches servers without params', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ servers: [], total: 0 }));
+		const { listServers } = await import('./api');
+
+		await listServers();
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/servers',
+			expect.objectContaining({ credentials: 'include' })
+		);
+	});
+
+	it('adds pagination query params', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ servers: [], total: 0 }));
+		const { listServers } = await import('./api');
+
+		await listServers({ page: 2, perPage: 10 });
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/servers?page=2&per_page=10',
+			expect.anything()
+		);
+	});
+});
+
+describe('createServer', () => {
+	it('sends POST with server data', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ server: { id: '1' }, token: 'wf_reg_...' }));
+		const { createServer } = await import('./api');
+
+		await createServer('web-01', '192.168.1.1', false);
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/servers',
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({ name: 'web-01', configured_ip: '192.168.1.1', allow_any_ip: false })
+			})
+		);
+	});
+});
+
+describe('deleteServer', () => {
+	it('sends DELETE request', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ message: 'deleted' }));
+		const { deleteServer } = await import('./api');
+
+		await deleteServer('abc-123');
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/servers/abc-123',
+			expect.objectContaining({ method: 'DELETE' })
+		);
+	});
+});
+
+describe('changePassword', () => {
+	it('sends PUT with current and new password', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ message: 'ok' }));
+		const { changePassword } = await import('./api');
+
+		await changePassword('oldpass', 'newpass12345');
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/auth/change-password',
+			expect.objectContaining({
+				method: 'PUT',
+				body: JSON.stringify({ current_password: 'oldpass', new_password: 'newpass12345' })
+			})
+		);
+	});
+});
+
+describe('getServerMetrics', () => {
+	it('fetches metrics with time_range param', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ metrics: [] }));
+		const { getServerMetrics } = await import('./api');
+
+		await getServerMetrics('srv-1', { time_range: '24h' });
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'http://localhost:8080/servers/srv-1/metrics?time_range=24h',
+			expect.anything()
+		);
+	});
+});
+
+describe('error handling (via login)', () => {
+	it('throws ApiError on network error', async () => {
+		mockFetch.mockReturnValueOnce(networkError('Network failure'));
+		const { login } = await import('./api');
+
+		try {
+			await login('test@example.com', 'pass');
+			expect.unreachable('should have thrown');
+		} catch (err) {
+			expect(err).toBeInstanceOf(ApiError);
+			expect((err as ApiError).status).toBe(0);
+			expect((err as ApiError).message).toBe('Network failure');
+		}
+	});
+
+	it('throws ApiError on non-JSON error response', async () => {
+		mockFetch.mockReturnValueOnce(nonJsonResponse(500, 'Internal Server Error'));
+		const { login } = await import('./api');
+
+		try {
+			await login('test@example.com', 'pass');
+			expect.unreachable('should have thrown');
+		} catch (err) {
+			expect(err).toBeInstanceOf(ApiError);
+			expect((err as ApiError).status).toBe(500);
+		}
+	});
+
+	it('throws ApiError with server error message', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ error: 'rate limited' }, 429, 'Too Many Requests'));
+		const { login } = await import('./api');
+
+		try {
+			await login('test@example.com', 'pass');
+			expect.unreachable('should have thrown');
+		} catch (err) {
+			expect(err).toBeInstanceOf(ApiError);
+			expect((err as ApiError).message).toBe('rate limited');
+			expect((err as ApiError).status).toBe(429);
+		}
 	});
 });
