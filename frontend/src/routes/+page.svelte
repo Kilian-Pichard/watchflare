@@ -78,9 +78,8 @@
 			// Load servers
 			await serversStore.load();
 
-			// Load metrics for each server (for table display)
-			const serverIds = $servers.map(item => item.server.id);
-			await metricsStore.loadForServers(serverIds, '1h');
+			// Individual server metrics are provided by SSE in real-time
+			// (ServerTable only needs the latest point per server)
 
 			// Load dropped metrics alerts
 			await alertsStore.load();

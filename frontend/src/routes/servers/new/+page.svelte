@@ -1,8 +1,9 @@
-<script>
+<script lang="ts">
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
 	import { sidebarCollapsed } from '$lib/stores/sidebar';
+	import { createServerSchema, validateForm } from '$lib/validation';
 	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
 	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -12,6 +13,7 @@
 	let configuredIP = '';
 	let allowAnyIP = false;
 	let error = '';
+	let fieldErrors: Record<string, string> = {};
 	let loading = false;
 	let success = false;
 	let createdServer = null;
@@ -32,6 +34,14 @@
 	async function handleSubmit(e) {
 		e.preventDefault();
 		error = '';
+		fieldErrors = {};
+
+		const result = validateForm(createServerSchema, { name, configuredIP, allowAnyIP });
+		if (!result.success) {
+			fieldErrors = result.errors;
+			return;
+		}
+
 		loading = true;
 
 		try {
@@ -100,10 +110,10 @@
 								id="name"
 								type="text"
 								bind:value={name}
-								required
 								placeholder="e.g., web-server-01"
-								class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+								class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary {fieldErrors.name ? 'border-destructive' : ''}"
 							/>
+							{#if fieldErrors.name}<p class="mt-1 text-xs text-destructive">{fieldErrors.name}</p>{/if}
 						</div>
 
 						<!-- Configured IP -->
@@ -115,10 +125,10 @@
 								id="ip"
 								type="text"
 								bind:value={configuredIP}
-								required
 								placeholder="e.g., 192.168.1.100"
-								class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+								class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary {fieldErrors.configuredIP ? 'border-destructive' : ''}"
 							/>
+							{#if fieldErrors.configuredIP}<p class="mt-1 text-xs text-destructive">{fieldErrors.configuredIP}</p>{/if}
 							<p class="mt-1 text-xs text-muted-foreground">
 								The IP address you expect this server to connect from
 							</p>

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/services"
@@ -95,16 +96,33 @@ func CreateAgent(c *gin.Context) {
 	})
 }
 
-// ListServers returns all servers
+// ListServers returns servers with optional pagination
 func ListServers(c *gin.Context) {
-	servers, err := services.ListServers()
+	page := 1
+	perPage := 0 // 0 = no pagination (backward compatible)
+
+	if p := c.Query("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+			page = v
+		}
+	}
+	if pp := c.Query("per_page"); pp != "" {
+		if v, err := strconv.Atoi(pp); err == nil && v > 0 {
+			perPage = v
+		}
+	}
+
+	servers, total, err := services.ListServers(page, perPage)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"servers": servers,
+		"servers":  servers,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
 	})
 }
 

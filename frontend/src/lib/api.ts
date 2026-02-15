@@ -85,7 +85,7 @@ async function handleAuthError(): Promise<never> {
 }
 
 // Make API request with credentials (cookies sent automatically)
-async function apiRequest<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
+async function apiRequest<T>(endpoint: string, options: ApiRequestOptions = {}, skipAuthRedirect = false): Promise<T> {
 	const headers = {
 		'Content-Type': 'application/json',
 		...options.headers
@@ -123,8 +123,8 @@ async function apiRequest<T>(endpoint: string, options: ApiRequestOptions = {}):
 	}
 
 	if (!response.ok) {
-		// Handle authentication errors
-		if (response.status === 401) {
+		// Handle authentication errors (skip for auth endpoints like login/register)
+		if (response.status === 401 && !skipAuthRedirect) {
 			await handleAuthError();
 		}
 
@@ -144,14 +144,14 @@ export async function register(email: string, password: string): Promise<Registe
 	return apiRequest<RegisterResponse>('/auth/register', {
 		method: 'POST',
 		body: JSON.stringify({ email, password })
-	});
+	}, true);
 }
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
 	return apiRequest<LoginResponse>('/auth/login', {
 		method: 'POST',
 		body: JSON.stringify({ email, password })
-	});
+	}, true);
 }
 
 export async function logout(): Promise<{ message: string }> {
@@ -171,8 +171,12 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 // Server API calls
-export async function listServers(): Promise<ListServersResponse> {
-	return apiRequest<ListServersResponse>('/servers');
+export async function listServers(params?: { page?: number; perPage?: number }): Promise<ListServersResponse> {
+	const queryParams = new URLSearchParams();
+	if (params?.page) queryParams.append('page', params.page.toString());
+	if (params?.perPage) queryParams.append('per_page', params.perPage.toString());
+	const query = queryParams.toString();
+	return apiRequest<ListServersResponse>(`/servers${query ? '?' + query : ''}`);
 }
 
 export async function getServer(id: string): Promise<GetServerResponse> {

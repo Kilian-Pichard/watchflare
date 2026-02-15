@@ -228,6 +228,9 @@ export interface GetServerResponse {
 
 export interface ListServersResponse {
 	servers: Server[];
+	total: number;
+	page: number;
+	per_page: number;
 }
 
 export interface GetMetricsResponse {

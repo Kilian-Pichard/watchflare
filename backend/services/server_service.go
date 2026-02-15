@@ -61,10 +61,19 @@ func CreateAgent(name, configuredIP string, allowAnyIP bool) (*models.Server, st
 }
 
 // ListServers returns all servers with real-time status from cache
-func ListServers() ([]models.Server, error) {
+func ListServers(page, perPage int) ([]models.Server, int64, error) {
+	var total int64
+	if err := database.DB.Model(&models.Server{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
 	var servers []models.Server
-	if err := database.DB.Find(&servers).Error; err != nil {
-		return nil, err
+	query := database.DB.Order("created_at DESC")
+	if perPage > 0 {
+		query = query.Offset((page - 1) * perPage).Limit(perPage)
+	}
+	if err := query.Find(&servers).Error; err != nil {
+		return nil, 0, err
 	}
 
 	// Merge with cache data for real-time status (cache may have more recent status than DB)
@@ -75,6 +84,30 @@ func ListServers() ([]models.Server, error) {
 			servers[i].Status = cachedData.Status
 			servers[i].LastSeen = &cachedData.LastSeen
 			// Also update IPs if they changed
+			if cachedData.IPv4Address != "" {
+				servers[i].IPAddressV4 = &cachedData.IPv4Address
+			}
+			if cachedData.IPv6Address != "" {
+				servers[i].IPAddressV6 = &cachedData.IPv6Address
+			}
+		}
+	}
+
+	return servers, total, nil
+}
+
+// ListAllServers returns all servers without pagination (for dashboard/SSE)
+func ListAllServers() ([]models.Server, error) {
+	var servers []models.Server
+	if err := database.DB.Find(&servers).Error; err != nil {
+		return nil, err
+	}
+
+	heartbeatCache := cache.GetCache()
+	for i := range servers {
+		if cachedData, ok := heartbeatCache.Get(servers[i].AgentID); ok {
+			servers[i].Status = cachedData.Status
+			servers[i].LastSeen = &cachedData.LastSeen
 			if cachedData.IPv4Address != "" {
 				servers[i].IPAddressV4 = &cachedData.IPv4Address
 			}

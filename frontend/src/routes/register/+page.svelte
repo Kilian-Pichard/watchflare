@@ -1,18 +1,22 @@
-<script>
+<script lang="ts">
 	import { register } from '$lib/api';
 	import { goto } from '$app/navigation';
+	import { registerSchema, validateForm } from '$lib/validation';
 
 	let email = '';
 	let password = '';
 	let confirmPassword = '';
 	let error = '';
+	let fieldErrors: Record<string, string> = {};
 	let loading = false;
 
 	async function handleRegister() {
 		error = '';
+		fieldErrors = {};
 
-		if (password !== confirmPassword) {
-			error = 'Passwords do not match';
+		const result = validateForm(registerSchema, { email, password, confirmPassword });
+		if (!result.success) {
+			fieldErrors = result.errors;
 			return;
 		}
 
@@ -55,11 +59,11 @@
 						id="email"
 						type="email"
 						bind:value={email}
-						required
 						placeholder="admin@watchflare.io"
 						disabled={loading}
-						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.email ? 'border-destructive' : ''}"
 					/>
+					{#if fieldErrors.email}<p class="mt-1 text-xs text-destructive">{fieldErrors.email}</p>{/if}
 				</div>
 
 				<!-- Password -->
@@ -71,13 +75,12 @@
 						id="password"
 						type="password"
 						bind:value={password}
-						required
-						minlength="8"
 						placeholder="••••••••"
 						disabled={loading}
-						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.password ? 'border-destructive' : ''}"
 					/>
-					<p class="mt-1 text-xs text-muted-foreground">Minimum 8 characters</p>
+					{#if fieldErrors.password}<p class="mt-1 text-xs text-destructive">{fieldErrors.password}</p>{/if}
+					<p class="mt-1 text-xs text-muted-foreground">Minimum 12 characters</p>
 				</div>
 
 				<!-- Confirm Password -->
@@ -89,12 +92,11 @@
 						id="confirmPassword"
 						type="password"
 						bind:value={confirmPassword}
-						required
-						minlength="8"
 						placeholder="••••••••"
 						disabled={loading}
-						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.confirmPassword ? 'border-destructive' : ''}"
 					/>
+					{#if fieldErrors.confirmPassword}<p class="mt-1 text-xs text-destructive">{fieldErrors.confirmPassword}</p>{/if}
 				</div>
 
 				<!-- Error Message -->
