@@ -62,7 +62,29 @@ function createAggregatedStore() {
 		// Update metrics (add new point from SSE)
 		addMetricPoint(metric: AggregatedMetric): void {
 			update(state => {
-				let updatedMetrics = [...state.metrics, metric];
+				// Determine bucket size in ms based on current time range
+				const bucketMs: Record<TimeRange, number> = {
+					'1h': 30 * 1000,        // 30s
+					'12h': 10 * 60 * 1000,  // 10min
+					'24h': 15 * 60 * 1000,  // 15min
+					'7d': 2 * 60 * 60 * 1000, // 2h
+					'30d': 8 * 60 * 60 * 1000  // 8h
+				};
+				const bucket = bucketMs[state.timeRange] || 30 * 1000;
+				const metricTime = new Date(metric.timestamp).getTime();
+				const snappedTime = new Date(Math.floor(metricTime / bucket) * bucket).toISOString();
+				const snappedMetric = { ...metric, timestamp: snappedTime };
+
+				let updatedMetrics = [...state.metrics];
+				const lastPoint = updatedMetrics[updatedMetrics.length - 1];
+
+				if (lastPoint && lastPoint.timestamp === snappedTime) {
+					// Same bucket: replace last point with fresher data
+					updatedMetrics[updatedMetrics.length - 1] = snappedMetric;
+				} else {
+					// New bucket: add new point
+					updatedMetrics.push(snappedMetric);
+				}
 
 				// Keep only last 200 points to avoid memory issues
 				if (updatedMetrics.length > 200) {
