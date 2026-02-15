@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -9,6 +10,47 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// buildAggregatedQuery builds a cross-server aggregation query that combines
+// data from a continuous aggregate with raw metrics for the recent gap period.
+// Timestamps are shifted by +bucketInterval so they represent the END of each bucket
+// (e.g. label "08:40" = average of data from 08:30 to 08:40).
+// Args: $1=adjustedStart, $2=gapStart (CA exclusive), $3=gapStart (raw inclusive), $4=currentBucket (raw exclusive).
+func buildAggregatedQuery(aggregateTable, bucketInterval string) string {
+	return fmt.Sprintf(`
+		WITH per_server_data AS (
+			SELECT m.bucket + INTERVAL '%s' as ts, m.server_id, m.cpu_usage_percent,
+				   m.memory_total_bytes, m.memory_used_bytes,
+				   m.disk_total_bytes, m.disk_used_bytes
+			FROM %s m
+			WHERE m.bucket > $1 AND m.bucket < $2
+
+			UNION ALL
+
+			SELECT time_bucket('%s', m.timestamp) + INTERVAL '%s' as ts, m.server_id,
+				   AVG(m.cpu_usage_percent) as cpu_usage_percent,
+				   AVG(m.memory_total_bytes) as memory_total_bytes,
+				   AVG(m.memory_used_bytes) as memory_used_bytes,
+				   AVG(m.disk_total_bytes) as disk_total_bytes,
+				   AVG(m.disk_used_bytes) as disk_used_bytes
+			FROM metrics m
+			WHERE m.timestamp >= $3 AND m.timestamp < $4
+			GROUP BY time_bucket('%s', m.timestamp), m.server_id
+		)
+		SELECT
+			d.ts as timestamp,
+			COALESCE(AVG(d.cpu_usage_percent), 0) as cpu_usage_percent,
+			COALESCE(SUM(d.memory_total_bytes), 0)::BIGINT as memory_total_bytes,
+			COALESCE(SUM(d.memory_used_bytes), 0)::BIGINT as memory_used_bytes,
+			COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN d.disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
+			COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN d.disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
+		FROM per_server_data d
+		JOIN servers s ON d.server_id = s.id
+		WHERE s.status = 'online'
+		GROUP BY d.ts
+		ORDER BY d.ts ASC
+	`, bucketInterval, aggregateTable, bucketInterval, bucketInterval, bucketInterval)
+}
 
 // CreateAgentRequest represents the create agent request body
 type CreateAgentRequest struct {
@@ -298,100 +340,57 @@ func GetAggregatedMetrics(c *gin.Context) {
 		queryArgs = []interface{}{startTime, endTime}
 
 	case "12h":
-		// Use 10-minute per-server continuous aggregate, aggregate cross-server in query
+		// Use 10-minute continuous aggregate + raw metrics for recent gap
+		// Raw covers 2 buckets to compensate for CA end_offset materialization delay
 		duration = 12 * time.Hour
+		bucketDuration := 10 * time.Minute
 		endTime := time.Now()
 		startTime := endTime.Add(-duration)
+		currentBucket := endTime.Truncate(bucketDuration)            // start of incomplete bucket (excluded)
+		gapStart := currentBucket.Add(-2 * bucketDuration)           // 2 buckets: covers CA end_offset gap
+		adjustedStart := startTime.Add(-bucketDuration)              // include edge bucket after +interval shift
 
-		query = `
-			SELECT
-				m.bucket as timestamp,
-				COALESCE(AVG(m.cpu_usage_percent), 0) as cpu_usage_percent,
-				COALESCE(SUM(m.memory_total_bytes), 0)::BIGINT as memory_total_bytes,
-				COALESCE(SUM(m.memory_used_bytes), 0)::BIGINT as memory_used_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
-			FROM metrics_10min m
-			JOIN servers s ON m.server_id = s.id
-			WHERE s.status = 'online'
-			  AND m.bucket > $1
-			  AND m.bucket <= $2
-			GROUP BY m.bucket
-			ORDER BY m.bucket ASC
-		`
-		queryArgs = []interface{}{startTime, endTime}
+		query = buildAggregatedQuery("metrics_10min", "10 minutes")
+		queryArgs = []interface{}{adjustedStart, gapStart, gapStart, currentBucket}
 
 	case "24h":
-		// Use 15-minute per-server continuous aggregate
+		// Use 15-minute continuous aggregate + raw metrics for recent gap
 		duration = 24 * time.Hour
+		bucketDuration := 15 * time.Minute
 		endTime := time.Now()
 		startTime := endTime.Add(-duration)
+		currentBucket := endTime.Truncate(bucketDuration)
+		gapStart := currentBucket.Add(-2 * bucketDuration)
+		adjustedStart := startTime.Add(-bucketDuration)
 
-		query = `
-			SELECT
-				m.bucket as timestamp,
-				COALESCE(AVG(m.cpu_usage_percent), 0) as cpu_usage_percent,
-				COALESCE(SUM(m.memory_total_bytes), 0)::BIGINT as memory_total_bytes,
-				COALESCE(SUM(m.memory_used_bytes), 0)::BIGINT as memory_used_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
-			FROM metrics_15min m
-			JOIN servers s ON m.server_id = s.id
-			WHERE s.status = 'online'
-			  AND m.bucket > $1
-			  AND m.bucket <= $2
-			GROUP BY m.bucket
-			ORDER BY m.bucket ASC
-		`
-		queryArgs = []interface{}{startTime, endTime}
+		query = buildAggregatedQuery("metrics_15min", "15 minutes")
+		queryArgs = []interface{}{adjustedStart, gapStart, gapStart, currentBucket}
 
 	case "7d":
-		// Use 2-hour per-server continuous aggregate
+		// Use 2-hour continuous aggregate + raw metrics for recent gap
 		duration = 7 * 24 * time.Hour
+		bucketDuration := 2 * time.Hour
 		endTime := time.Now()
 		startTime := endTime.Add(-duration)
+		currentBucket := endTime.Truncate(bucketDuration)
+		gapStart := currentBucket.Add(-2 * bucketDuration)
+		adjustedStart := startTime.Add(-bucketDuration)
 
-		query = `
-			SELECT
-				m.bucket as timestamp,
-				COALESCE(AVG(m.cpu_usage_percent), 0) as cpu_usage_percent,
-				COALESCE(SUM(m.memory_total_bytes), 0)::BIGINT as memory_total_bytes,
-				COALESCE(SUM(m.memory_used_bytes), 0)::BIGINT as memory_used_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
-			FROM metrics_2h m
-			JOIN servers s ON m.server_id = s.id
-			WHERE s.status = 'online'
-			  AND m.bucket > $1
-			  AND m.bucket <= $2
-			GROUP BY m.bucket
-			ORDER BY m.bucket ASC
-		`
-		queryArgs = []interface{}{startTime, endTime}
+		query = buildAggregatedQuery("metrics_2h", "2 hours")
+		queryArgs = []interface{}{adjustedStart, gapStart, gapStart, currentBucket}
 
 	case "30d":
-		// Use 8-hour per-server continuous aggregate
+		// Use 8-hour continuous aggregate + raw metrics for recent gap
 		duration = 30 * 24 * time.Hour
+		bucketDuration := 8 * time.Hour
 		endTime := time.Now()
 		startTime := endTime.Add(-duration)
+		currentBucket := endTime.Truncate(bucketDuration)
+		gapStart := currentBucket.Add(-2 * bucketDuration)
+		adjustedStart := startTime.Add(-bucketDuration)
 
-		query = `
-			SELECT
-				m.bucket as timestamp,
-				COALESCE(AVG(m.cpu_usage_percent), 0) as cpu_usage_percent,
-				COALESCE(SUM(m.memory_total_bytes), 0)::BIGINT as memory_total_bytes,
-				COALESCE(SUM(m.memory_used_bytes), 0)::BIGINT as memory_used_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
-				COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
-			FROM metrics_8h m
-			JOIN servers s ON m.server_id = s.id
-			WHERE s.status = 'online'
-			  AND m.bucket > $1
-			  AND m.bucket <= $2
-			GROUP BY m.bucket
-			ORDER BY m.bucket ASC
-		`
-		queryArgs = []interface{}{startTime, endTime}
+		query = buildAggregatedQuery("metrics_8h", "8 hours")
+		queryArgs = []interface{}{adjustedStart, gapStart, gapStart, currentBucket}
 
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time_range"})

@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.6.1
+**Current version**: 0.6.2
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -29,6 +29,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.6.2` - Fix aggregated charts: bucket labels now represent end time (08:40 = avg 08:30-08:40), exclude incomplete buckets, fill CA materialization gap with raw metrics, auto-reload on bucket completion
 - `0.6.1` - Fix SSE metrics polluting charts on 12h/24h/7d/30d views by snapping to correct time buckets
 - `0.6.0` - Database optimization: global metrics endpoint now uses continuous aggregates (metrics_10min/15min/2h/8h) for 12h/24h/7d/30d time ranges, cross-server aggregation with JOIN + GROUP BY, raw metrics kept for 1h view
 - `0.5.0` - SSE optimization: centralized SSE manager with auto-reconnection, connection pooling across pages, fixed aggregated metrics scheduler (2s latency vs 27s), real-time chart updates with {#key} reactivity, SSE status indicator in sidebar

@@ -23,27 +23,36 @@ function createAggregatedStore() {
 		error: null
 	});
 
+	// Bucket sizes in ms for each time range (must match backend intervals)
+	const bucketMs: Record<string, number> = {
+		'12h': 10 * 60 * 1000,
+		'24h': 15 * 60 * 1000,
+		'7d': 2 * 60 * 60 * 1000,
+		'30d': 8 * 60 * 60 * 1000
+	};
+
+	// Extracted as local function so addMetricPoint can call it
+	async function load(timeRange: TimeRange): Promise<void> {
+		update(state => ({ ...state, loading: true, error: null, timeRange }));
+
+		try {
+			const data = await getAggregatedMetrics(timeRange);
+
+			update(state => ({
+				...state,
+				metrics: data.metrics || [],
+				loading: false
+			}));
+		} catch (err) {
+			const error = err instanceof Error ? err.message : 'Failed to load aggregated metrics';
+			update(state => ({ ...state, loading: false, error }));
+			console.error('Failed to load aggregated metrics:', err);
+		}
+	}
+
 	return {
 		subscribe,
-
-		// Load aggregated metrics for current time range
-		async load(timeRange: TimeRange): Promise<void> {
-			update(state => ({ ...state, loading: true, error: null, timeRange }));
-
-			try {
-				const data = await getAggregatedMetrics(timeRange);
-
-				update(state => ({
-					...state,
-					metrics: data.metrics || [],
-					loading: false
-				}));
-			} catch (err) {
-				const error = err instanceof Error ? err.message : 'Failed to load aggregated metrics';
-				update(state => ({ ...state, loading: false, error }));
-				console.error('Failed to load aggregated metrics:', err);
-			}
-		},
+		load,
 
 		// Load 24h metrics for trend calculation
 		async load24h(): Promise<void> {
@@ -61,41 +70,41 @@ function createAggregatedStore() {
 
 		// Update metrics (add new point from SSE)
 		addMetricPoint(metric: AggregatedMetric): void {
+			let shouldReload = false;
+			let reloadTimeRange: TimeRange = '1h';
+
 			update(state => {
-				// Determine bucket size in ms based on current time range
-				const bucketMs: Record<TimeRange, number> = {
-					'1h': 30 * 1000,        // 30s
-					'12h': 10 * 60 * 1000,  // 10min
-					'24h': 15 * 60 * 1000,  // 15min
-					'7d': 2 * 60 * 60 * 1000, // 2h
-					'30d': 8 * 60 * 60 * 1000  // 8h
-				};
-				const bucket = bucketMs[state.timeRange] || 30 * 1000;
-				const metricTime = new Date(metric.timestamp).getTime();
-				const snappedTime = new Date(Math.floor(metricTime / bucket) * bucket).toISOString();
-				const snappedMetric = { ...metric, timestamp: snappedTime };
-
-				let updatedMetrics = [...state.metrics];
-				const lastPoint = updatedMetrics[updatedMetrics.length - 1];
-
-				if (lastPoint && lastPoint.timestamp === snappedTime) {
-					// Same bucket: replace last point with fresher data
-					updatedMetrics[updatedMetrics.length - 1] = snappedMetric;
-				} else {
-					// New bucket: add new point
-					updatedMetrics.push(snappedMetric);
+				if (state.timeRange === '1h') {
+					// 1h view: add real-time 30s points
+					let updatedMetrics = [...state.metrics, metric];
+					if (updatedMetrics.length > 200) {
+						updatedMetrics = updatedMetrics.slice(-200);
+					}
+					return { ...state, metrics: updatedMetrics };
 				}
 
-				// Keep only last 200 points to avoid memory issues
-				if (updatedMetrics.length > 200) {
-					updatedMetrics = updatedMetrics.slice(-200);
+				// For non-1h ranges: check if a new completed bucket exists
+				const bucket = bucketMs[state.timeRange];
+				if (bucket && !state.loading) {
+					const now = Date.now();
+					// Last completed bucket end (= labels use bucket end)
+					const lastCompleteBucketEnd = Math.floor(now / bucket) * bucket;
+					const lastPoint = state.metrics[state.metrics.length - 1];
+					const lastPointTime = lastPoint ? new Date(lastPoint.timestamp).getTime() : 0;
+
+					if (lastCompleteBucketEnd > lastPointTime) {
+						// New completed bucket available - reload from API
+						shouldReload = true;
+						reloadTimeRange = state.timeRange;
+					}
 				}
 
-				return {
-					...state,
-					metrics: updatedMetrics
-				};
+				return state;
 			});
+
+			if (shouldReload) {
+				load(reloadTimeRange);
+			}
 		},
 
 		// Change time range
