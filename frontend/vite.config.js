@@ -5,6 +5,11 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 
+	test: {
+		include: ['src/**/*.test.ts'],
+		environment: 'node'
+	},
+
 	server: {
 		port: 5173,
 
