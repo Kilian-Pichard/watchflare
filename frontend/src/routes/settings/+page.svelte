@@ -1,7 +1,7 @@
 <script lang="ts">
     import { logout, changePassword } from "$lib/api";
     import { goto } from "$app/navigation";
-    import { sidebarCollapsed } from "$lib/stores/sidebar";
+    import { sidebarCollapsed, sidebarTransitioning } from "$lib/stores/sidebar";
     import { changePasswordSchema, validateForm } from "$lib/validation";
     import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
     import MobileSidebar from "$lib/components/MobileSidebar.svelte";
@@ -76,7 +76,7 @@
     <main
         class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed
             ? 'lg:ml-16'
-            : 'lg:ml-64'}"
+            : 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}"
     >
         <!-- Header -->
         <div class="mb-6">
@@ -87,7 +87,7 @@
         </div>
 
         <!-- Change Password Card -->
-        <div class="max-w-2xl rounded-lg border bg-card p-6">
+        <div class="max-w-2xl rounded-lg border bg-card p-4 sm:p-6">
             <h2 class="text-lg font-semibold text-foreground mb-6">
                 Change Password
             </h2>

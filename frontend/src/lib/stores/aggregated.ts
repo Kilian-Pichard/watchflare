@@ -144,8 +144,9 @@ export const dashboardStats = derived(
 		const firstPoint24h =
 			$aggregated.metrics24h.length > 0 ? $aggregated.metrics24h[0] : null;
 
-		const totalServers = $servers.servers.length;
-		const onlineServers = $servers.servers.filter(
+		const activeServers = $servers.servers.filter(s => s.server.status !== 'pending');
+		const totalServers = activeServers.length;
+		const onlineServers = activeServers.filter(
 			s => s.server.status === 'online'
 		).length;
 		const avgCPU = lastPoint?.cpu_usage_percent || 0;

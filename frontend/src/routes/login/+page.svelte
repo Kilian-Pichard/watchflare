@@ -70,7 +70,7 @@
         </div>
 
         <!-- Login Card -->
-        <div class="rounded-lg border bg-card p-8 shadow-sm">
+        <div class="rounded-lg border bg-card p-4 sm:p-8 shadow-sm">
             <h2 class="text-lg font-semibold text-foreground mb-6">
                 Login to your account
             </h2>

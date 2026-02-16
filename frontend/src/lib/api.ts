@@ -171,10 +171,23 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 // Server API calls
-export async function listServers(params?: { page?: number; perPage?: number }): Promise<ListServersResponse> {
+export async function listServers(params?: {
+	page?: number;
+	perPage?: number;
+	sort?: string;
+	order?: 'asc' | 'desc';
+	status?: string;
+	search?: string;
+	environment?: string;
+}): Promise<ListServersResponse> {
 	const queryParams = new URLSearchParams();
 	if (params?.page) queryParams.append('page', params.page.toString());
 	if (params?.perPage) queryParams.append('per_page', params.perPage.toString());
+	if (params?.sort) queryParams.append('sort', params.sort);
+	if (params?.order) queryParams.append('order', params.order);
+	if (params?.status) queryParams.append('status', params.status);
+	if (params?.search) queryParams.append('search', params.search);
+	if (params?.environment) queryParams.append('environment', params.environment);
 	const query = queryParams.toString();
 	return apiRequest<ListServersResponse>(`/servers${query ? '?' + query : ''}`);
 }

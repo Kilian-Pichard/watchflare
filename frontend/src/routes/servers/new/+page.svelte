@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
-	import { sidebarCollapsed } from '$lib/stores/sidebar';
+	import { sidebarCollapsed, sidebarTransitioning } from '$lib/stores/sidebar';
 	import { createServerSchema, validateForm } from '$lib/validation';
 	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
 	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
@@ -77,7 +77,7 @@
 	<!-- Mobile Sidebar -->
 	<MobileSidebar onLogout={handleLogout} />
 
-	<main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}">
+	<main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}">
 		<!-- Back Link -->
 		<div class="mb-6">
 			<a
@@ -99,7 +99,7 @@
 					<p class="text-sm text-muted-foreground mt-1">Configure a new server to monitor</p>
 				</div>
 
-				<div class="rounded-lg border bg-card p-6">
+				<div class="rounded-lg border bg-card p-4 sm:p-6">
 					<form onsubmit={handleSubmit}>
 						<!-- Server Name -->
 						<div class="mb-4">
@@ -199,7 +199,7 @@
 				</div>
 
 				<!-- Tokens -->
-				<div class="mb-6 rounded-lg border bg-card p-6">
+				<div class="mb-6 rounded-lg border bg-card p-4 sm:p-6">
 					<h3 class="text-base font-semibold text-foreground mb-4">Credentials</h3>
 
 					<!-- Registration Token -->

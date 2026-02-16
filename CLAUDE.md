@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.7.2
+**Current version**: 0.8.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.8.0` - Responsive redesign: harmonized breakpoints (sm/md/lg/xl), overlay alerts panel with bell badge, smooth sidebar collapse transition with text clipping, backend server sort/filter/search, mobile-first layouts on all pages
 - `0.7.2` - Expand API tests with fetch mocking: login, register, CRUD servers, changePassword, metrics (82 tests)
 - `0.7.1` - Frontend unit tests with Vitest: validation schemas, utility functions, API error handling (67 tests)
 - `0.7.0` - Zod form validation (login, register, add server, change password), server list pagination (20/page), dashboard lazy loading (SSE-only for individual metrics), fix 401 redirect loop on auth pages
@@ -65,6 +66,8 @@ Watchflare is a self-hosted server monitoring platform with three components:
 ---
 
 ## Build & Run Commands
+
+**Rule**: Always use named output binaries when building Go projects: `go build -o watchflare-backend` (backend) and `go build -o watchflare-agent` (agent). Never use bare `go build` or `go build ./...` for production builds.
 
 ### Backend
 ```bash

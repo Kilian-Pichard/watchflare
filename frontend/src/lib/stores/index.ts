@@ -37,7 +37,7 @@ export { uiStore } from './ui';
 export { toasts } from './toasts';
 
 // Sidebar store (already existed)
-export { sidebarCollapsed, mobileMenuOpen } from './sidebar';
+export { sidebarCollapsed, mobileMenuOpen, sidebarTransitioning } from './sidebar';
 
 // SSE store
 export {

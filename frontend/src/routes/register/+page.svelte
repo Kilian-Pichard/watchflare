@@ -46,7 +46,7 @@
 		</div>
 
 		<!-- Register Card -->
-		<div class="rounded-lg border bg-card p-8 shadow-sm">
+		<div class="rounded-lg border bg-card p-4 sm:p-8 shadow-sm">
 			<h2 class="text-lg font-semibold text-foreground mb-6">Create your admin account</h2>
 
 			<form onsubmit={(e) => { e.preventDefault(); handleRegister(); }}>

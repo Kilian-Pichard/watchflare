@@ -38,10 +38,10 @@
 </script>
 
 <div
-	class="flex items-center rounded-lg px-3 py-2 text-xs {collapsed ? 'justify-center' : 'gap-2'}"
+	class="flex items-center gap-2 rounded-lg px-3 py-2 text-xs overflow-hidden"
 	title={collapsed ? getStateLabel(connectionState) : ''}
 >
-	<span class="relative flex h-2 w-2">
+	<span class="relative flex h-2 w-2 flex-shrink-0">
 		<span
 			class="absolute inline-flex h-full w-full rounded-full opacity-75 {isReconnecting
 				? 'animate-ping'
@@ -50,7 +50,5 @@
 		<span class="relative inline-flex h-2 w-2 rounded-full {getStateColor(connectionState)}">
 		</span>
 	</span>
-	{#if !collapsed}
-		<span class="text-muted-foreground">{getStateLabel(connectionState)}</span>
-	{/if}
+	<span class="text-muted-foreground whitespace-nowrap">{getStateLabel(connectionState)}</span>
 </div>

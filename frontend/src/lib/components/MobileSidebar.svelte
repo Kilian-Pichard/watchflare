@@ -80,7 +80,7 @@
 {/if}
 
 <aside
-    class="fixed left-0 top-0 z-40 lg:hidden h-screen w-64 border-r bg-sidebar overflow-y-auto transition-transform duration-300 {$mobileMenuOpen
+    class="fixed left-0 top-0 z-40 lg:hidden h-screen w-4/5 max-w-64 border-r bg-sidebar overflow-y-auto transition-transform duration-300 {$mobileMenuOpen
         ? 'translate-x-0'
         : '-translate-x-full'}"
 >

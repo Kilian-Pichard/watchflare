@@ -19,7 +19,7 @@
 </script>
 
 {#if chartData.length > 0}
-    <div class="h-64">
+    <div class="h-48 sm:h-64">
         <ChartUI.Container config={chartConfig} class="h-full w-full">
             <LineChart
                 data={chartData}

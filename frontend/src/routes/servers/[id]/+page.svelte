@@ -7,7 +7,7 @@
 	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
 	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import { sidebarCollapsed } from '$lib/stores/sidebar';
+	import { sidebarCollapsed, sidebarTransitioning } from '$lib/stores/sidebar';
 	import { sseStore } from '$lib/stores/sse';
 	import { formatBytes } from '$lib/utils';
 	import CPUChart from '$lib/components/CPUChart.svelte';
@@ -232,7 +232,7 @@
 	<!-- Mobile Sidebar -->
 	<MobileSidebar onLogout={handleLogout} />
 
-	<main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}">
+	<main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}">
 		<!-- Back Link -->
 		<div class="mb-6">
 			<a
@@ -256,10 +256,10 @@
 			</div>
 		{:else if server}
 			<!-- Header -->
-			<div class="mb-6 flex items-start justify-between">
+			<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<div class="flex items-center gap-3 mb-2">
-						<h1 class="text-2xl font-semibold text-foreground">{server.name}</h1>
+					<div class="flex items-center gap-3 mb-2 flex-wrap">
+						<h1 class="text-xl sm:text-2xl font-semibold text-foreground">{server.name}</h1>
 						<span
 							class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
 						>
@@ -271,22 +271,22 @@
 						<p class="text-sm text-muted-foreground">{server.hostname}</p>
 					{/if}
 				</div>
-				<div class="flex gap-2">
+				<div class="flex flex-wrap gap-2">
 					<button
 						onclick={() => showChangeIP = true}
-						class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+						class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
 					>
 						Change IP
 					</button>
 					<button
 						onclick={() => showRegenerateConfirm = true}
-						class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+						class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
 					>
 						Regenerate Token
 					</button>
 					<button
 						onclick={() => showDeleteConfirm = true}
-						class="rounded-lg border border-destructive bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20"
+						class="rounded-lg border border-destructive bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 whitespace-nowrap"
 					>
 						Delete
 					</button>
@@ -351,7 +351,7 @@
 			{/if}
 
 			<!-- Server Info Grid -->
-			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
 				<div class="rounded-lg border bg-card p-4">
 					<p class="text-xs text-muted-foreground mb-1">Operating System</p>
 					<p class="text-sm font-medium text-foreground">{server.os || '-'}</p>
@@ -372,7 +372,7 @@
 
 			<!-- Current Metrics -->
 			{#if latestMetric}
-				<div class="grid gap-4 md:grid-cols-3 mb-6">
+				<div class="grid gap-4 sm:grid-cols-3 mb-6">
 					<div class="rounded-lg border bg-card p-4">
 						<div class="flex items-center justify-between mb-2">
 							<p class="text-sm font-medium text-foreground">CPU Usage</p>
@@ -444,7 +444,7 @@
 					/>
 				</div>
 
-				<div class="grid gap-4 lg:grid-cols-3">
+				<div class="grid gap-4 xl:grid-cols-3">
 					<div class="rounded-lg border bg-card p-4">
 						<h3 class="text-sm font-medium text-foreground mb-3">CPU Usage</h3>
 						<CPUChart data={metrics} />
@@ -470,7 +470,7 @@
 		onclick={() => showDeleteConfirm = false}
 	>
 		<div
-			class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+			class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
 			onclick={(e) => e.stopPropagation()}
 		>
 			<h3 class="text-lg font-semibold text-foreground mb-3">Confirm Delete</h3>
@@ -503,7 +503,7 @@
 		onclick={() => { showRegenerateConfirm = false; regeneratedToken = ''; }}
 	>
 		<div
-			class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+			class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
 			onclick={(e) => e.stopPropagation()}
 		>
 			{#if !regeneratedToken}
@@ -565,7 +565,7 @@
 		onclick={() => { showChangeIP = false; newIP = ''; }}
 	>
 		<div
-			class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+			class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
 			onclick={(e) => e.stopPropagation()}
 		>
 			<h3 class="text-lg font-semibold text-foreground mb-3">Change Configured IP</h3>

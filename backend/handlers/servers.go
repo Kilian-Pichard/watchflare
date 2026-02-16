@@ -96,23 +96,30 @@ func CreateAgent(c *gin.Context) {
 	})
 }
 
-// ListServers returns servers with optional pagination
+// ListServers returns servers with optional pagination, sorting and filtering
 func ListServers(c *gin.Context) {
-	page := 1
-	perPage := 0 // 0 = no pagination (backward compatible)
+	params := services.ServerListParams{
+		Page:        1,
+		PerPage:     0, // 0 = no pagination (backward compatible)
+		Sort:        c.Query("sort"),
+		Order:       c.Query("order"),
+		Status:      c.Query("status"),
+		Search:      c.Query("search"),
+		Environment: c.Query("environment"),
+	}
 
 	if p := c.Query("page"); p != "" {
 		if v, err := strconv.Atoi(p); err == nil && v > 0 {
-			page = v
+			params.Page = v
 		}
 	}
 	if pp := c.Query("per_page"); pp != "" {
 		if v, err := strconv.Atoi(pp); err == nil && v > 0 {
-			perPage = v
+			params.PerPage = v
 		}
 	}
 
-	servers, total, err := services.ListServers(page, perPage)
+	servers, total, err := services.ListServers(params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -121,8 +128,8 @@ func ListServers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"servers":  servers,
 		"total":    total,
-		"page":     page,
-		"per_page": perPage,
+		"page":     params.Page,
+		"per_page": params.PerPage,
 	})
 }
 

@@ -1,10 +1,7 @@
 <script>
-	const { stats, servers, isOpen, onToggle } = $props();
+	import { fade } from 'svelte/transition';
 
-	// Calculate resource usage percentages
-	const avgCpuPercent = $derived(stats.avgCPU || 0);
-	const avgMemoryPercent = $derived(stats.avgMemory || 0);
-	const avgDiskPercent = $derived(stats.avgDisk || 0);
+	const { servers, isOpen, onClose } = $props();
 
 	// Generate alerts based on server status and metrics
 	const alerts = $derived(generateAlerts(servers));
@@ -13,7 +10,6 @@
 		const alerts = [];
 
 		servers.forEach(({ server, latestMetric }) => {
-			// Offline servers
 			if (server.status === 'offline') {
 				alerts.push({
 					type: 'critical',
@@ -23,7 +19,6 @@
 				});
 			}
 
-			// IP mismatch
 			if (server.status === 'ip_mismatch') {
 				alerts.push({
 					type: 'warning',
@@ -33,7 +28,6 @@
 				});
 			}
 
-			// High CPU
 			if (latestMetric && latestMetric.cpu_usage_percent > 90) {
 				alerts.push({
 					type: 'warning',
@@ -43,7 +37,6 @@
 				});
 			}
 
-			// High Memory
 			if (latestMetric && latestMetric.memory_total_bytes > 0) {
 				const memPercent = (latestMetric.memory_used_bytes / latestMetric.memory_total_bytes) * 100;
 				if (memPercent > 90) {
@@ -57,7 +50,7 @@
 			}
 		});
 
-		return alerts.slice(0, 5); // Limit to 5 most recent alerts
+		return alerts.slice(0, 10);
 	}
 
 	function getAlertIcon(type) {
@@ -75,109 +68,64 @@
 	}
 </script>
 
-<!-- Toggle Button -->
-<button
-	onclick={onToggle}
-	class="fixed right-0 top-20 z-40 flex h-10 w-10 items-center justify-center rounded-l-lg border border-r-0 bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground {isOpen ? 'xl:translate-x-[-320px]' : ''}"
-	aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
->
-	{#if isOpen}
-		<!-- Chevron Right (close) -->
-		<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-		</svg>
-	{:else}
-		<!-- Chevron Left (open) -->
-		<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-		</svg>
-	{/if}
-</button>
+{#if isOpen}
+	<!-- Backdrop -->
+	<div
+		transition:fade={{ duration: 200 }}
+		class="fixed inset-0 z-40 bg-black/50"
+		onclick={onClose}
+	></div>
 
-<!-- Sidebar -->
-<aside class="fixed right-0 top-0 z-30 h-screen w-80 border-l bg-sidebar p-6 overflow-y-auto transition-transform duration-300 {isOpen ? 'translate-x-0' : 'translate-x-full'} hidden xl:block">
-	<!-- Resource Usage -->
-	<div class="mb-8">
-		<h3 class="text-sm font-semibold text-foreground mb-4">Global Resource Usage</h3>
-
-		<!-- CPU -->
-		<div class="mb-4">
-			<div class="flex items-center justify-between mb-2">
-				<span class="text-xs text-muted-foreground">CPU Load</span>
-				<span class="text-xs font-medium text-foreground">{avgCpuPercent.toFixed(1)}%</span>
-			</div>
-			<div class="h-2 rounded-full bg-muted overflow-hidden">
-				<div
-					class="h-full bg-primary transition-all duration-300"
-					style="width: {avgCpuPercent}%"
-				></div>
+	<!-- Panel -->
+	<aside class="fixed right-0 top-0 z-50 h-screen w-80 max-w-[85vw] bg-sidebar border-l shadow-lg overflow-y-auto">
+		<!-- Header -->
+		<div class="flex items-center justify-between border-b px-6 py-4">
+			<h2 class="text-sm font-semibold text-foreground">Active Alerts</h2>
+			<div class="flex items-center gap-2">
+				{#if alerts.length > 0}
+					<span class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-medium text-primary-foreground">
+						{alerts.length}
+					</span>
+				{/if}
+				<button
+					onclick={onClose}
+					class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+					aria-label="Close alerts"
+				>
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
 			</div>
 		</div>
 
-		<!-- Memory -->
-		<div class="mb-4">
-			<div class="flex items-center justify-between mb-2">
-				<span class="text-xs text-muted-foreground">Memory</span>
-				<span class="text-xs font-medium text-foreground">{avgMemoryPercent.toFixed(1)}%</span>
-			</div>
-			<div class="h-2 rounded-full bg-muted overflow-hidden">
-				<div
-					class="h-full bg-[var(--chart-2)] transition-all duration-300"
-					style="width: {avgMemoryPercent}%"
-				></div>
-			</div>
-		</div>
-
-		<!-- Disk -->
-		<div>
-			<div class="flex items-center justify-between mb-2">
-				<span class="text-xs text-muted-foreground">Disk I/O</span>
-				<span class="text-xs font-medium text-foreground">{avgDiskPercent.toFixed(1)}%</span>
-			</div>
-			<div class="h-2 rounded-full bg-muted overflow-hidden">
-				<div
-					class="h-full bg-[var(--chart-3)] transition-all duration-300"
-					style="width: {avgDiskPercent}%"
-				></div>
-			</div>
-		</div>
-	</div>
-
-	<!-- Alerts -->
-	<div>
-		<div class="flex items-center justify-between mb-4">
-			<h3 class="text-sm font-semibold text-foreground">Recent Alerts</h3>
-			{#if alerts.length > 0}
-				<span class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-medium text-primary-foreground">
-					{alerts.length}
-				</span>
-			{/if}
-		</div>
-
-		{#if alerts.length === 0}
-			<div class="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
-				<svg class="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-				</svg>
-				<p class="text-xs text-muted-foreground">No alerts</p>
-			</div>
-		{:else}
-			<div class="space-y-2">
-				{#each alerts as alert}
-					<div class="rounded-lg border p-3 {getAlertColor(alert.type)}">
-						<div class="flex items-start gap-2">
-							<div class="mt-0.5">
-								{@html getAlertIcon(alert.type)}
-							</div>
-							<div class="flex-1 min-w-0">
-								<p class="text-xs font-medium mb-0.5">{alert.server}</p>
-								<p class="text-xs opacity-90">{alert.message}</p>
-								<p class="text-xs opacity-60 mt-1">{alert.time}</p>
+		<!-- Alerts list -->
+		<div class="p-6">
+			{#if alerts.length === 0}
+				<div class="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
+					<svg class="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+					</svg>
+					<p class="text-xs text-muted-foreground">No alerts</p>
+				</div>
+			{:else}
+				<div class="space-y-2">
+					{#each alerts as alert}
+						<div class="rounded-lg border p-3 {getAlertColor(alert.type)}">
+							<div class="flex items-start gap-2">
+								<div class="mt-0.5">
+									{@html getAlertIcon(alert.type)}
+								</div>
+								<div class="flex-1 min-w-0">
+									<p class="text-xs font-medium mb-0.5">{alert.server}</p>
+									<p class="text-xs opacity-90">{alert.message}</p>
+									<p class="text-xs opacity-60 mt-1">{alert.time}</p>
+								</div>
 							</div>
 						</div>
-					</div>
-				{/each}
-			</div>
-		{/if}
-	</div>
-</aside>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</aside>
+{/if}

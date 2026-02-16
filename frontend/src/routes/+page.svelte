@@ -18,7 +18,8 @@
 		uiStore,
 		sseStore,
 		toasts,
-		sidebarCollapsed
+		sidebarCollapsed,
+		sidebarTransitioning
 	} from '$lib/stores';
 	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
 	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
@@ -28,6 +29,7 @@
 	import DashboardCharts from '$lib/components/dashboard/DashboardCharts.svelte';
 	import DroppedMetricsAlert from '$lib/components/dashboard/DroppedMetricsAlert.svelte';
 	import RightSidebar from '$lib/components/RightSidebar.svelte';
+	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
 	import type { SSEEvent, TimeRange } from '$lib/types';
 
 	// SSE unsubscribe function
@@ -42,6 +44,29 @@
 	let stats = $derived($dashboardStats);
 	let droppedAlerts = $derived($alertsStore.droppedMetrics);
 	let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
+
+	// Count active alerts for header badge
+	let alertCount = $derived(() => {
+		let count = 0;
+		for (const { server, latestMetric } of serversList) {
+			if (server.status === 'offline') count++;
+			if (server.status === 'ip_mismatch') count++;
+			if (latestMetric?.cpu_usage_percent > 90) count++;
+			if (latestMetric?.memory_total_bytes > 0) {
+				const memPct = (latestMetric.memory_used_bytes / latestMetric.memory_total_bytes) * 100;
+				if (memPct > 90) count++;
+			}
+		}
+		return count;
+	});
+
+	// Local time range state for the selector
+	let selectedTimeRange = $state<TimeRange>('24h');
+
+	// Sync from store
+	$effect(() => {
+		selectedTimeRange = timeRange;
+	});
 
 	async function handleLogout() {
 		try {
@@ -59,8 +84,10 @@
 		}
 	}
 
-	function toggleRightSidebar() {
-		uiStore.toggleRightSidebar();
+	async function loadServerMetrics(serverIds: string[], timeRangeValue: TimeRange) {
+		if (serverIds.length > 0) {
+			await metricsStore.loadForServers(serverIds, timeRangeValue);
+		}
 	}
 
 	async function loadData() {
@@ -74,21 +101,23 @@
 			const userTimeRange = $currentUser?.default_time_range || '24h';
 			const migratedTimeRange = userTimeRange === '6h' ? '12h' : userTimeRange;
 			aggregatedStore.setTimeRange(migratedTimeRange);
+			selectedTimeRange = migratedTimeRange as TimeRange;
 
-			// Load servers
+			// Load servers and get IDs directly from API response
 			await serversStore.load();
 
-			// Individual server metrics are provided by SSE in real-time
-			// (ServerTable only needs the latest point per server)
+			// Load dropped metrics alerts, aggregated metrics, and per-server metrics in parallel
+			let serverIds: string[] = [];
+			serversStore.subscribe(state => {
+				serverIds = state.servers.map(s => s.server.id);
+			})();
 
-			// Load dropped metrics alerts
-			await alertsStore.load();
-
-			// Load aggregated metrics (for stats cards and charts)
-			await aggregatedStore.load(migratedTimeRange);
-
-			// Load 24h metrics for trend calculation
-			await aggregatedStore.load24h();
+			await Promise.all([
+				loadServerMetrics(serverIds, migratedTimeRange as TimeRange),
+				alertsStore.load(),
+				aggregatedStore.load(migratedTimeRange),
+				aggregatedStore.load24h()
+			]);
 		} catch (err) {
 			console.error('Failed to load data:', err);
 			// Error will trigger redirect in apiRequest
@@ -98,10 +127,21 @@
 	}
 
 	async function handleTimeRangeChange(newTimeRange: TimeRange) {
+		selectedTimeRange = newTimeRange;
 		// Update the store with new time range
 		aggregatedStore.setTimeRange(newTimeRange);
-		// Load new data
-		await aggregatedStore.load(newTimeRange);
+
+		// Get server IDs from store
+		let serverIds: string[] = [];
+		serversStore.subscribe(state => {
+			serverIds = state.servers.map(s => s.server.id);
+		})();
+
+		// Load aggregated data and per-server metrics in parallel
+		await Promise.all([
+			aggregatedStore.load(newTimeRange),
+			loadServerMetrics(serverIds, newTimeRange)
+		]);
 	}
 
 	function handleSSEMessage(event: SSEEvent) {
@@ -159,7 +199,7 @@
 
 <div class="min-h-screen bg-background">
 	<!-- Header -->
-	<Header />
+	<Header showAlerts alertCount={alertCount()} />
 
 	<!-- Desktop Sidebar -->
 	<DesktopSidebar onLogout={handleLogout} />
@@ -167,24 +207,24 @@
 	<!-- Mobile Sidebar -->
 	<MobileSidebar onLogout={handleLogout} />
 
-	<!-- Right Sidebar -->
-	<RightSidebar {stats} servers={serversList} isOpen={rightSidebarOpen} onToggle={toggleRightSidebar} />
+	<!-- Alerts Panel (overlay) -->
+	<RightSidebar servers={serversList} isOpen={rightSidebarOpen} onClose={() => uiStore.setRightSidebar(false)} />
 
 	<!-- Main Content -->
 	<main
 		class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed
 			? 'lg:ml-16'
-			: 'lg:ml-64'} {rightSidebarOpen ? 'xl:mr-80' : 'mr-0'}"
+			: 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}"
 	>
 		{#if loading}
 			<div class="flex items-center justify-center py-20">
 				<p class="text-muted-foreground">Loading dashboard...</p>
 			</div>
 		{:else}
-			<!-- Header with Welcome + Add Server -->
-			<div class="mb-6 flex items-center justify-between">
+			<!-- Header with Welcome + Time Range + Add Server -->
+			<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div>
-					<h1 class="text-2xl font-semibold text-foreground">
+					<h1 class="text-xl sm:text-2xl font-semibold text-foreground">
 						Welcome back, <span class="text-primary"
 							>{user?.email?.split('@')[0] || 'User'}</span
 						>
@@ -195,32 +235,41 @@
 						> in the last 24h
 					</p>
 				</div>
-				<button
-					onclick={() => goto('/servers/new')}
-					class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-				>
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-					</svg>
-					Add Server
-				</button>
+				<div class="flex items-center gap-3">
+					<TimeRangeSelector
+						bind:value={selectedTimeRange}
+						onValueChange={handleTimeRangeChange}
+					/>
+					<button
+						onclick={() => goto('/servers/new')}
+						class="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 whitespace-nowrap"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+						</svg>
+						Add Server
+					</button>
+				</div>
 			</div>
 
 			<!-- Dropped Metrics Alerts -->
 			<DroppedMetricsAlert alerts={droppedAlerts} />
 
+			<!-- Global Metrics Section -->
+			<h2 class="text-lg font-semibold mb-4">Global Metrics</h2>
+
 			<!-- Dashboard Stats Cards -->
 			<DashboardStats {stats} />
 
 			<!-- Dashboard Charts -->
-			<DashboardCharts aggregatedMetrics={$aggregatedMetrics} {stats} {timeRange} onTimeRangeChange={handleTimeRangeChange} />
+			<DashboardCharts aggregatedMetrics={$aggregatedMetrics} {stats} />
 
 			<!-- Servers Table -->
 			<div class="mb-6">
 				<div class="mb-4 flex items-center justify-between">
 					<h2 class="text-lg font-semibold">Server Summary</h2>
 				</div>
-				<ServerTable servers={serversList} metricsData={metrics} />
+				<ServerTable servers={serversList.filter(s => s.server.status !== 'pending')} metricsData={metrics} />
 			</div>
 		{/if}
 	</main>

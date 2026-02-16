@@ -1,11 +1,11 @@
 <script>
-	import { Button } from '$lib/components/ui/button';
 	import { TIME_RANGES } from '$lib/utils';
 	import { updatePreferences } from '$lib/api';
 
 	let { value = $bindable('24h'), onValueChange } = $props();
 
-	async function handleSelect(timeRange) {
+	async function handleChange(e) {
+		const timeRange = e.target.value;
 		value = timeRange;
 
 		// Save to user preferences
@@ -22,14 +22,12 @@
 	}
 </script>
 
-<div class="flex gap-2 flex-wrap">
+<select
+	{value}
+	onchange={handleChange}
+	class="rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+>
 	{#each TIME_RANGES as range}
-		<Button
-			variant={value === range.value ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => handleSelect(range.value)}
-		>
-			{range.label}
-		</Button>
+		<option value={range.value}>{range.label}</option>
 	{/each}
-</div>
+</select>

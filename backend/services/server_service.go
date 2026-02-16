@@ -60,40 +60,100 @@ func CreateAgent(name, configuredIP string, allowAnyIP bool) (*models.Server, st
 	return server, token, agentKey, nil
 }
 
-// ListServers returns all servers with real-time status from cache
-func ListServers(page, perPage int) ([]models.Server, int64, error) {
-	var total int64
-	if err := database.DB.Model(&models.Server{}).Count(&total).Error; err != nil {
+// ServerListParams holds parameters for listing servers with sort/filter
+type ServerListParams struct {
+	Page        int
+	PerPage     int
+	Sort        string
+	Order       string
+	Status      string
+	Search      string
+	Environment string
+}
+
+// allowedSortColumns is a whitelist of columns that can be used for sorting
+var allowedSortColumns = map[string]string{
+	"name":       "name",
+	"status":     "status",
+	"ip":         "ip_address_v4",
+	"last_seen":  "last_seen",
+	"created_at": "created_at",
+}
+
+// ListServers returns servers with sort, filter and pagination
+func ListServers(params ServerListParams) ([]models.Server, int64, error) {
+	query := database.DB.Model(&models.Server{})
+
+	// Apply search filter (name or hostname)
+	if params.Search != "" {
+		search := "%" + params.Search + "%"
+		query = query.Where("name ILIKE ? OR hostname ILIKE ?", search, search)
+	}
+
+	// Apply environment filter
+	if params.Environment != "" {
+		query = query.Where("environment_type = ?", params.Environment)
+	}
+
+	// Apply sorting with whitelist validation
+	sortColumn := "created_at"
+	if col, ok := allowedSortColumns[params.Sort]; ok {
+		sortColumn = col
+	}
+	sortOrder := "DESC"
+	if params.Order == "asc" {
+		sortOrder = "ASC"
+	}
+
+	// Status filter is applied after cache merge, so fetch all matching servers first
+	// (cache has the real-time status, DB status may be stale)
+	var allServers []models.Server
+	if err := query.Order(sortColumn + " " + sortOrder).Find(&allServers).Error; err != nil {
 		return nil, 0, err
 	}
 
-	var servers []models.Server
-	query := database.DB.Order("created_at DESC")
-	if perPage > 0 {
-		query = query.Offset((page - 1) * perPage).Limit(perPage)
-	}
-	if err := query.Find(&servers).Error; err != nil {
-		return nil, 0, err
-	}
-
-	// Merge with cache data for real-time status (cache may have more recent status than DB)
+	// Merge with cache data for real-time status
 	heartbeatCache := cache.GetCache()
-	for i := range servers {
-		if cachedData, ok := heartbeatCache.Get(servers[i].AgentID); ok {
-			// Update status and last_seen from cache if available
-			servers[i].Status = cachedData.Status
-			servers[i].LastSeen = &cachedData.LastSeen
-			// Also update IPs if they changed
+	for i := range allServers {
+		if cachedData, ok := heartbeatCache.Get(allServers[i].AgentID); ok {
+			allServers[i].Status = cachedData.Status
+			allServers[i].LastSeen = &cachedData.LastSeen
 			if cachedData.IPv4Address != "" {
-				servers[i].IPAddressV4 = &cachedData.IPv4Address
+				allServers[i].IPAddressV4 = &cachedData.IPv4Address
 			}
 			if cachedData.IPv6Address != "" {
-				servers[i].IPAddressV6 = &cachedData.IPv6Address
+				allServers[i].IPAddressV6 = &cachedData.IPv6Address
 			}
 		}
 	}
 
-	return servers, total, nil
+	// Apply status filter after cache merge (real-time status)
+	if params.Status != "" {
+		filtered := make([]models.Server, 0)
+		for _, s := range allServers {
+			if s.Status == params.Status {
+				filtered = append(filtered, s)
+			}
+		}
+		allServers = filtered
+	}
+
+	total := int64(len(allServers))
+
+	// Apply pagination in memory (after status filter)
+	if params.PerPage > 0 {
+		start := (params.Page - 1) * params.PerPage
+		if start >= int(total) {
+			return []models.Server{}, total, nil
+		}
+		end := start + params.PerPage
+		if end > int(total) {
+			end = int(total)
+		}
+		allServers = allServers[start:end]
+	}
+
+	return allServers, total, nil
 }
 
 // ListAllServers returns all servers without pagination (for dashboard/SSE)

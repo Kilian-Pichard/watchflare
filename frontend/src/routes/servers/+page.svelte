@@ -4,7 +4,7 @@
     import { logout } from "$lib/api.js";
     import * as api from "$lib/api.js";
     import { toasts } from "$lib/stores/toasts";
-    import { sidebarCollapsed } from "$lib/stores/sidebar";
+    import { sidebarCollapsed, sidebarTransitioning } from "$lib/stores/sidebar";
     import { sseStore } from "$lib/stores/sse";
     import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
     import MobileSidebar from "$lib/components/MobileSidebar.svelte";
@@ -22,6 +22,16 @@
     let serverToDelete: any = null;
     let sseUnsubscribe: (() => void) | null = null;
 
+    // Sort state
+    let sortColumn = "created_at";
+    let sortOrder: "asc" | "desc" = "desc";
+
+    // Filter state
+    let searchQuery = "";
+    let statusFilter = "";
+    let environmentFilter = "";
+    let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
     $: totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
     async function loadPage(p: number) {
@@ -31,6 +41,11 @@
             const response = await api.listServers({
                 page: p,
                 perPage: PER_PAGE,
+                sort: sortColumn,
+                order: sortOrder,
+                status: statusFilter || undefined,
+                search: searchQuery || undefined,
+                environment: environmentFilter || undefined,
             });
             servers = response.servers || [];
             total = response.total || 0;
@@ -41,6 +56,35 @@
             loading = false;
             initialLoading = false;
         }
+    }
+
+    function handleSort(column: string) {
+        if (sortColumn === column) {
+            sortOrder = sortOrder === "asc" ? "desc" : "asc";
+        } else {
+            sortColumn = column;
+            sortOrder = "asc";
+        }
+        loadPage(page);
+    }
+
+    function handleSearchInput(e: Event) {
+        const value = (e.target as HTMLInputElement).value;
+        searchQuery = value;
+        if (searchTimeout) clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            loadPage(1);
+        }, 300);
+    }
+
+    function handleStatusChange(e: Event) {
+        statusFilter = (e.target as HTMLSelectElement).value;
+        loadPage(1);
+    }
+
+    function handleEnvironmentChange(e: Event) {
+        environmentFilter = (e.target as HTMLSelectElement).value;
+        loadPage(1);
     }
 
     async function dismissReactivation(serverId: string) {
@@ -99,6 +143,7 @@
         if (sseUnsubscribe) {
             sseUnsubscribe();
         }
+        if (searchTimeout) clearTimeout(searchTimeout);
     });
 
     function getStatusClass(status: string) {
@@ -181,22 +226,55 @@
     <main
         class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed
             ? 'lg:ml-16'
-            : 'lg:ml-64'}"
+            : 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}"
     >
         <!-- Header -->
-        <div class="mb-6 flex items-center justify-between">
+        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-2xl font-semibold text-foreground">Servers</h1>
+                <h1 class="text-xl sm:text-2xl font-semibold text-foreground">Servers</h1>
                 <p class="text-sm text-muted-foreground mt-1">
                     Manage your monitored servers
                 </p>
             </div>
             <button
                 onclick={() => goto("/servers/new")}
-                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                class="self-start sm:self-auto rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
                 Add Server
             </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="mb-4 flex flex-wrap items-center gap-3">
+            <input
+                type="text"
+                placeholder="Search by name or hostname..."
+                value={searchQuery}
+                oninput={handleSearchInput}
+                class="rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 w-full sm:w-64"
+            />
+            <select
+                value={statusFilter}
+                onchange={handleStatusChange}
+                class="rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+                <option value="">All statuses</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+                <option value="pending">Pending</option>
+            </select>
+            <select
+                value={environmentFilter}
+                onchange={handleEnvironmentChange}
+                class="rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+                <option value="">All environments</option>
+                <option value="physical">Physical</option>
+                <option value="physical_with_containers">Physical + Containers</option>
+                <option value="vm">VM</option>
+                <option value="vm_with_containers">VM + Containers</option>
+                <option value="container">Container</option>
+            </select>
         </div>
 
         {#if initialLoading}
@@ -209,7 +287,7 @@
             >
                 <p class="text-sm text-destructive">{error}</p>
             </div>
-        {:else if servers.length === 0 && page === 1}
+        {:else if servers.length === 0 && page === 1 && !searchQuery && !statusFilter && !environmentFilter}
             <div
                 class="flex flex-col items-center justify-center rounded-lg border bg-card py-20 text-center"
             >
@@ -239,31 +317,84 @@
                     Add Your First Server
                 </button>
             </div>
+        {:else if servers.length === 0}
+            <div
+                class="flex flex-col items-center justify-center rounded-lg border bg-card py-12 text-center"
+            >
+                <p class="text-sm text-muted-foreground">No servers match your filters</p>
+            </div>
         {:else}
-            <div class="rounded-lg border bg-card">
-                <div class="overflow-x-auto">
-                    <table class="w-full">
+            <div class="rounded-lg border bg-card overflow-x-auto">
+                    <table class="w-full min-w-[800px]">
                         <thead>
                             <tr class="border-b bg-muted/30">
                                 <th
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
+                                    onclick={() => handleSort("name")}
                                 >
-                                    Name
+                                    <span class="inline-flex items-center gap-1">
+                                        Name
+                                        {#if sortColumn === "name"}
+                                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+                                                {#if sortOrder === "asc"}
+                                                    <path d="M6 2l4 5H2z" />
+                                                {:else}
+                                                    <path d="M6 10l4-5H2z" />
+                                                {/if}
+                                            </svg>
+                                        {/if}
+                                    </span>
                                 </th>
                                 <th
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
+                                    onclick={() => handleSort("status")}
                                 >
-                                    Status
+                                    <span class="inline-flex items-center gap-1">
+                                        Status
+                                        {#if sortColumn === "status"}
+                                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+                                                {#if sortOrder === "asc"}
+                                                    <path d="M6 2l4 5H2z" />
+                                                {:else}
+                                                    <path d="M6 10l4-5H2z" />
+                                                {/if}
+                                            </svg>
+                                        {/if}
+                                    </span>
                                 </th>
                                 <th
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
+                                    onclick={() => handleSort("ip")}
                                 >
-                                    IP Address
+                                    <span class="inline-flex items-center gap-1">
+                                        IP Address
+                                        {#if sortColumn === "ip"}
+                                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+                                                {#if sortOrder === "asc"}
+                                                    <path d="M6 2l4 5H2z" />
+                                                {:else}
+                                                    <path d="M6 10l4-5H2z" />
+                                                {/if}
+                                            </svg>
+                                        {/if}
+                                    </span>
                                 </th>
                                 <th
-                                    class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                                    class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
+                                    onclick={() => handleSort("last_seen")}
                                 >
-                                    Last Seen
+                                    <span class="inline-flex items-center gap-1 justify-end w-full">
+                                        Last Seen
+                                        {#if sortColumn === "last_seen"}
+                                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+                                                {#if sortOrder === "asc"}
+                                                    <path d="M6 2l4 5H2z" />
+                                                {:else}
+                                                    <path d="M6 10l4-5H2z" />
+                                                {/if}
+                                            </svg>
+                                        {/if}
+                                    </span>
                                 </th>
                                 <th
                                     class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider"
@@ -409,7 +540,6 @@
                             {/each}
                         </tbody>
                     </table>
-                </div>
 
                 <!-- Pagination -->
                 {#if totalPages > 1}
@@ -455,7 +585,7 @@
         onclick={cancelDelete}
     >
         <div
-            class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+            class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
             onclick={(e) => e.stopPropagation()}
         >
             <h3 class="text-lg font-semibold text-foreground mb-3">
