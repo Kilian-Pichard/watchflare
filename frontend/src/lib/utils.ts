@@ -82,15 +82,107 @@ export function formatUptime(seconds: number): string {
 	return `${minutes}m`;
 }
 
-// Get status color classes
-export function getStatusColor(percentage: number): string {
-	if (percentage >= 90) return 'text-red-500';
-	if (percentage >= 70) return 'text-orange-500';
-	return 'text-green-500';
+// Server status badge class
+export function getStatusClass(status: string): string {
+	switch (status) {
+		case 'online':
+			return 'bg-success/10 text-success border-success/20';
+		case 'pending':
+			return 'bg-warning/10 text-warning border-warning/20';
+		case 'ip_mismatch':
+			return 'bg-warning/10 text-warning border-warning/20';
+		case 'offline':
+		case 'expired':
+		default:
+			return 'bg-muted text-muted-foreground border-border';
+	}
 }
 
-export function getStatusBgColor(percentage: number): string {
-	if (percentage >= 90) return 'bg-red-500';
-	if (percentage >= 70) return 'bg-orange-500';
-	return 'bg-green-500';
+// Metric threshold class (CPU, memory, disk percentages)
+export function getMetricClass(percent: number): string {
+	if (percent >= 90) return 'text-danger font-semibold';
+	if (percent >= 70) return 'text-warning font-medium';
+	return 'text-foreground';
 }
+
+// Format timestamp as relative time ("5s ago", "3m ago", "2h ago", "1d ago")
+export function formatRelativeTime(dateString: string | null | undefined): string {
+	if (!dateString) return 'Never';
+	const date = new Date(dateString);
+	const now = new Date();
+	const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+	if (diff < 60) return `${diff}s ago`;
+	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+	return `${Math.floor(diff / 86400)}d ago`;
+}
+
+// Format date as locale string
+export function formatDateTime(dateString: string | null | undefined): string {
+	if (!dateString) return '-';
+	return new Date(dateString).toLocaleString('fr-FR');
+}
+
+// Count active alerts from server list
+export interface ServerWithLatestMetric {
+	server: { status: string; [key: string]: unknown };
+	latestMetric?: {
+		cpu_usage_percent: number;
+		memory_used_bytes: number;
+		memory_total_bytes: number;
+		[key: string]: unknown;
+	} | null;
+}
+
+export function countAlerts(servers: ServerWithLatestMetric[]): number {
+	let count = 0;
+	for (const { server, latestMetric } of servers) {
+		if (server.status === 'offline') count++;
+		if (server.status === 'ip_mismatch') count++;
+		if (latestMetric && latestMetric.cpu_usage_percent > 90) count++;
+		if (latestMetric && latestMetric.memory_total_bytes > 0) {
+			const memPct = (latestMetric.memory_used_bytes / latestMetric.memory_total_bytes) * 100;
+			if (memPct > 90) count++;
+		}
+	}
+	return count;
+}
+
+export interface Alert {
+	type: 'critical' | 'warning';
+	server: string;
+	message: string;
+	time: string;
+}
+
+export function generateAlerts(servers: ServerWithLatestMetric[]): Alert[] {
+	const alerts: Alert[] = [];
+
+	for (const { server, latestMetric } of servers) {
+		if (server.status === 'offline') {
+			alerts.push({ type: 'critical', server: server.name as string, message: 'Server is offline', time: 'Just now' });
+		}
+		if (server.status === 'ip_mismatch') {
+			alerts.push({ type: 'warning', server: server.name as string, message: 'IP address mismatch detected', time: 'Just now' });
+		}
+		if (latestMetric && latestMetric.cpu_usage_percent > 90) {
+			alerts.push({ type: 'warning', server: server.name as string, message: `High CPU usage: ${latestMetric.cpu_usage_percent.toFixed(1)}%`, time: 'Just now' });
+		}
+		if (latestMetric && latestMetric.memory_total_bytes > 0) {
+			const memPercent = (latestMetric.memory_used_bytes / latestMetric.memory_total_bytes) * 100;
+			if (memPercent > 90) {
+				alerts.push({ type: 'warning', server: server.name as string, message: `High memory usage: ${memPercent.toFixed(1)}%`, time: 'Just now' });
+			}
+		}
+	}
+
+	return alerts.slice(0, 10);
+}
+
+// Dev-only logger (silenced in production builds)
+export const logger = {
+	error: (...args: unknown[]) => { if (import.meta.env.DEV) console.error(...args); },
+	warn: (...args: unknown[]) => { if (import.meta.env.DEV) console.warn(...args); },
+	log: (...args: unknown[]) => { if (import.meta.env.DEV) console.log(...args); },
+};

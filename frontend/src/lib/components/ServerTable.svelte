@@ -1,5 +1,5 @@
 <script>
-	import { formatBytes, formatPercent } from '$lib/utils';
+	import { formatBytes, formatPercent, getStatusClass, getMetricClass, formatRelativeTime } from '$lib/utils';
 
 	const { servers, metricsData } = $props();
 
@@ -111,29 +111,6 @@
 		return sorted;
 	});
 
-	function getStatusClass(status) {
-		return status === 'online'
-			? 'bg-success/10 text-success border-success/20'
-			: 'bg-muted text-muted-foreground border-border';
-	}
-
-	function getMetricClass(percent) {
-		if (percent >= 90) return 'text-danger font-semibold';
-		if (percent >= 70) return 'text-warning font-medium';
-		return 'text-foreground';
-	}
-
-	function formatTimestamp(timestamp) {
-		if (!timestamp) return 'Never';
-		const date = new Date(timestamp);
-		const now = new Date();
-		const diff = Math.floor((now - date) / 1000); // seconds
-
-		if (diff < 60) return `${diff}s ago`;
-		if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-		if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-		return `${Math.floor(diff / 86400)}d ago`;
-	}
 </script>
 
 {#snippet sortIcon(column)}
@@ -339,7 +316,7 @@
 
 						<!-- Last Seen -->
 						<td class="px-4 py-3.5 text-right text-sm text-muted-foreground">
-							{formatTimestamp(server.last_seen)}
+							{formatRelativeTime(server.last_seen)}
 						</td>
 					</tr>
 				{/each}

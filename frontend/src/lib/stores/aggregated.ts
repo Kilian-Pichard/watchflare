@@ -2,6 +2,7 @@ import { writable, derived } from 'svelte/store';
 import type { AggregatedMetric, TimeRange } from '$lib/types';
 import { getAggregatedMetrics } from '$lib/api';
 import { serversStore } from './servers';
+import { logger } from '$lib/utils';
 
 interface AggregatedState {
 	// Current time range metrics
@@ -46,7 +47,7 @@ function createAggregatedStore() {
 		} catch (err) {
 			const error = err instanceof Error ? err.message : 'Failed to load aggregated metrics';
 			update(state => ({ ...state, loading: false, error }));
-			console.error('Failed to load aggregated metrics:', err);
+			logger.error('Failed to load aggregated metrics:', err);
 		}
 	}
 
@@ -64,7 +65,7 @@ function createAggregatedStore() {
 					metrics24h: data.metrics || []
 				}));
 			} catch (err) {
-				console.error('Failed to load 24h aggregated metrics for trends:', err);
+				logger.error('Failed to load 24h aggregated metrics for trends:', err);
 			}
 		},
 

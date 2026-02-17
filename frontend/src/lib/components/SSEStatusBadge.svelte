@@ -9,15 +9,15 @@
 	function getStateColor(state: string): string {
 		switch (state) {
 			case 'connected':
-				return 'bg-green-500';
+				return 'bg-success';
 			case 'connecting':
-				return 'bg-yellow-500';
+				return 'bg-warning';
 			case 'reconnecting':
-				return 'bg-orange-500';
+				return 'bg-warning';
 			case 'error':
-				return 'bg-red-500';
+				return 'bg-destructive';
 			default:
-				return 'bg-gray-500';
+				return 'bg-muted-foreground';
 		}
 	}
 

@@ -1,6 +1,7 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import * as api from '$lib/api.js';
+	import { logger } from '$lib/utils';
 
 	export let server;
 	export let token;
@@ -50,7 +51,7 @@
 				clearInterval(pollInterval);
 			}
 		} catch (err) {
-			console.error('Failed to poll server status:', err);
+			logger.error('Failed to poll server status:', err);
 		}
 	}
 

@@ -5,6 +5,7 @@
 	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
 	import { sidebarCollapsed, sidebarTransitioning } from '$lib/stores/sidebar';
+	import { logger } from '$lib/utils';
 	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
 	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -30,7 +31,7 @@
 			await logout();
 			goto('/login');
 		} catch (err) {
-			console.error('Logout failed:', err);
+			logger.error('Logout failed:', err);
 			goto('/login');
 		}
 	}

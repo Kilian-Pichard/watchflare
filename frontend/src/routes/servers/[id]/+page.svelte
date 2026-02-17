@@ -9,7 +9,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import { sidebarCollapsed, sidebarTransitioning } from '$lib/stores/sidebar';
 	import { sseStore } from '$lib/stores/sse';
-	import { formatBytes } from '$lib/utils';
+	import { formatBytes, getStatusClass, formatDateTime, logger } from '$lib/utils';
 	import CPUChart from '$lib/components/CPUChart.svelte';
 	import MemoryChart from '$lib/components/MemoryChart.svelte';
 	import DiskChart from '$lib/components/DiskChart.svelte';
@@ -35,7 +35,7 @@
 			await logout();
 			goto('/login');
 		} catch (err) {
-			console.error('Logout failed:', err);
+			logger.error('Logout failed:', err);
 			goto('/login');
 		}
 	}
@@ -99,7 +99,7 @@
 				try {
 					packageStats = await api.getPackageStats(serverId);
 				} catch (err) {
-					console.error('Failed to load package stats:', err);
+					logger.error('Failed to load package stats:', err);
 				}
 			}
 		} catch (err) {
@@ -114,7 +114,7 @@
 			const data = await api.getServerMetrics(serverId, { time_range: timeRange });
 			metrics = data.metrics || [];
 		} catch (err) {
-			console.error('Failed to load metrics:', err);
+			logger.error('Failed to load metrics:', err);
 		}
 	}
 
@@ -181,23 +181,6 @@
 		}
 	}
 
-	function formatDate(dateString) {
-		if (!dateString) return '-';
-		return new Date(dateString).toLocaleString('fr-FR');
-	}
-
-	function getStatusClass(status) {
-		switch (status) {
-			case 'online':
-				return 'bg-success/10 text-success border-success/20';
-			case 'offline':
-				return 'bg-muted text-muted-foreground border-border';
-			case 'pending':
-				return 'bg-warning/10 text-warning border-warning/20';
-			default:
-				return 'bg-muted text-muted-foreground border-border';
-		}
-	}
 
 	function copyToClipboard(text) {
 		navigator.clipboard.writeText(text);
@@ -216,11 +199,20 @@
 	);
 
 	const latestMetric = $derived(metrics.length > 0 ? metrics[metrics.length - 1] : null);
+
+	function handleEscape(e) {
+		if (e.key !== 'Escape') return;
+		if (showDeleteConfirm) { showDeleteConfirm = false; return; }
+		if (showRegenerateConfirm) { showRegenerateConfirm = false; regeneratedToken = ''; return; }
+		if (showChangeIP) { showChangeIP = false; newIP = ''; return; }
+	}
 </script>
 
 <svelte:head>
 	<title>{server?.name || 'Server'} - Watchflare</title>
 </svelte:head>
+
+<svelte:window onkeydown={handleEscape} />
 
 <div class="min-h-screen bg-background">
 	<!-- Header -->
@@ -334,7 +326,7 @@
 							<div>
 								<p class="text-sm font-medium text-foreground">Agent Reactivated</p>
 								<p class="text-sm text-muted-foreground mt-1">
-									Same physical server detected via UUID at {formatDate(server.reactivated_at)}
+									Same physical server detected via UUID at {formatDateTime(server.reactivated_at)}
 								</p>
 							</div>
 						</div>
@@ -366,7 +358,7 @@
 				</div>
 				<div class="rounded-lg border bg-card p-4">
 					<p class="text-xs text-muted-foreground mb-1">Last Seen</p>
-					<p class="text-sm font-medium text-foreground">{formatDate(server.last_seen)}</p>
+					<p class="text-sm font-medium text-foreground">{formatDateTime(server.last_seen)}</p>
 				</div>
 			</div>
 
@@ -465,12 +457,18 @@
 
 <!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		role="presentation"
 		onclick={() => showDeleteConfirm = false}
 	>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
 			class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 		>
 			<h3 class="text-lg font-semibold text-foreground mb-3">Confirm Delete</h3>
@@ -498,12 +496,18 @@
 
 <!-- Regenerate Token Modal -->
 {#if showRegenerateConfirm}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		role="presentation"
 		onclick={() => { showRegenerateConfirm = false; regeneratedToken = ''; }}
 	>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
 			class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 		>
 			{#if !regeneratedToken}
@@ -560,12 +564,18 @@
 
 <!-- Change IP Modal -->
 {#if showChangeIP}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		role="presentation"
 		onclick={() => { showChangeIP = false; newIP = ''; }}
 	>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
 			class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 		>
 			<h3 class="text-lg font-semibold text-foreground mb-3">Change Configured IP</h3>

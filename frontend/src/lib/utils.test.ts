@@ -3,8 +3,10 @@ import {
 	formatBytes,
 	formatPercent,
 	formatUptime,
-	getStatusColor,
-	getStatusBgColor,
+	getMetricClass,
+	getStatusClass,
+	formatRelativeTime,
+	formatDateTime,
 	getIntervalForTimeRange,
 	getTimeRangeTimestamps
 } from './utils';
@@ -75,39 +77,68 @@ describe('formatUptime', () => {
 	});
 });
 
-describe('getStatusColor', () => {
-	it('returns green below 70%', () => {
-		expect(getStatusColor(50)).toBe('text-green-500');
+describe('getMetricClass', () => {
+	it('returns foreground below 70%', () => {
+		expect(getMetricClass(50)).toBe('text-foreground');
 	});
 
-	it('returns orange at 70%', () => {
-		expect(getStatusColor(70)).toBe('text-orange-500');
+	it('returns warning at 70%', () => {
+		expect(getMetricClass(70)).toContain('text-warning');
 	});
 
-	it('returns orange between 70-89%', () => {
-		expect(getStatusColor(85)).toBe('text-orange-500');
+	it('returns warning between 70-89%', () => {
+		expect(getMetricClass(85)).toContain('text-warning');
 	});
 
-	it('returns red at 90%', () => {
-		expect(getStatusColor(90)).toBe('text-red-500');
+	it('returns danger at 90%', () => {
+		expect(getMetricClass(90)).toContain('text-danger');
 	});
 
-	it('returns red above 90%', () => {
-		expect(getStatusColor(99)).toBe('text-red-500');
+	it('returns danger above 90%', () => {
+		expect(getMetricClass(99)).toContain('text-danger');
 	});
 });
 
-describe('getStatusBgColor', () => {
-	it('returns green below 70%', () => {
-		expect(getStatusBgColor(50)).toBe('bg-green-500');
+describe('getStatusClass', () => {
+	it('returns success classes for online', () => {
+		expect(getStatusClass('online')).toContain('bg-success');
 	});
 
-	it('returns orange at 70%', () => {
-		expect(getStatusBgColor(70)).toBe('bg-orange-500');
+	it('returns muted classes for offline', () => {
+		expect(getStatusClass('offline')).toContain('bg-muted');
 	});
 
-	it('returns red at 90%', () => {
-		expect(getStatusBgColor(90)).toBe('bg-red-500');
+	it('returns warning classes for pending', () => {
+		expect(getStatusClass('pending')).toContain('bg-warning');
+	});
+
+	it('returns muted classes for unknown status', () => {
+		expect(getStatusClass('unknown')).toContain('bg-muted');
+	});
+});
+
+describe('formatRelativeTime', () => {
+	it('returns "Never" for null/undefined', () => {
+		expect(formatRelativeTime(null)).toBe('Never');
+		expect(formatRelativeTime(undefined)).toBe('Never');
+	});
+
+	it('returns seconds ago for recent timestamps', () => {
+		const now = new Date().toISOString();
+		expect(formatRelativeTime(now)).toBe('0s ago');
+	});
+});
+
+describe('formatDateTime', () => {
+	it('returns "-" for null/undefined', () => {
+		expect(formatDateTime(null)).toBe('-');
+		expect(formatDateTime(undefined)).toBe('-');
+	});
+
+	it('formats a valid date', () => {
+		const result = formatDateTime('2024-01-15T12:00:00Z');
+		expect(result).toBeTruthy();
+		expect(result).not.toBe('-');
 	});
 });
 

@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import type { DroppedMetric } from '$lib/types';
 import { getDroppedMetrics } from '$lib/api';
+import { logger } from '$lib/utils';
 
 interface AlertsState {
 	droppedMetrics: DroppedMetric[];
@@ -31,7 +32,7 @@ function createAlertsStore() {
 					loading: false
 				}));
 			} catch (err) {
-				console.error('Failed to load dropped metrics:', err);
+				logger.error('Failed to load dropped metrics:', err);
 
 				update(state => ({
 					...state,

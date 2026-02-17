@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { login } from "$lib/api";
+    import { login, checkSetupRequired } from "$lib/api";
     import { goto } from "$app/navigation";
     import { loginSchema, validateForm } from "$lib/validation";
 
@@ -11,19 +11,9 @@
     let loading = false;
 
     onMount(async () => {
-        try {
-            const response = await fetch(
-                "http://localhost:8080/auth/setup-required",
-                {
-                    credentials: "include",
-                },
-            );
-            const data = await response.json();
-            if (data.setup_required) {
-                goto("/register");
-            }
-        } catch (err) {
-            console.error("Failed to check setup status:", err);
+        const setupRequired = await checkSetupRequired();
+        if (setupRequired) {
+            goto("/register");
         }
     });
 

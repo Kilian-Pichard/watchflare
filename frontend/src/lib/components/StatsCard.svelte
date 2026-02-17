@@ -3,7 +3,7 @@
 
 	// Determine if trend is positive or negative
 	const isPositive = $derived(trend >= 0);
-	const trendColor = $derived(isPositive ? 'text-green-600' : 'text-red-600');
+	const trendColor = $derived(isPositive ? 'text-success' : 'text-destructive');
 	const trendIcon = $derived(isPositive ? '↑' : '↓');
 </script>
 
@@ -22,8 +22,11 @@
 			{/if}
 		</div>
 		{#if icon}
-			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-				{@html icon}
+			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+				{#if icon}
+					{@const Icon = icon}
+					<Icon class="h-5 w-5" />
+				{/if}
 			</div>
 		{/if}
 	</div>

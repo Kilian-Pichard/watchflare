@@ -1,5 +1,5 @@
 <script>
-	import { TIME_RANGES } from '$lib/utils';
+	import { TIME_RANGES, logger } from '$lib/utils';
 	import { updatePreferences } from '$lib/api';
 
 	let { value = $bindable('24h'), onValueChange } = $props();
@@ -12,7 +12,7 @@
 		try {
 			await updatePreferences(timeRange, undefined);
 		} catch (err) {
-			console.error('Failed to save time range preference:', err);
+			logger.error('Failed to save time range preference:', err);
 		}
 
 		// Trigger callback if provided

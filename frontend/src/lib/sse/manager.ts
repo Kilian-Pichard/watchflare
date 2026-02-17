@@ -1,6 +1,6 @@
 import type { SSEEvent, Metric } from '../types';
-
-const API_BASE_URL = 'http://localhost:8080';
+import { API_BASE_URL } from '../api';
+import { logger } from '../utils';
 
 /**
  * Connection states for SSE
@@ -107,7 +107,7 @@ export class SSEManager {
 
 			this.setupEventListeners();
 		} catch (err) {
-			console.error('Failed to create EventSource:', err);
+			logger.error('Failed to create EventSource:', err);
 			this.handleError(err instanceof Error ? err : new Error('Failed to connect'));
 		}
 	}
@@ -163,7 +163,7 @@ export class SSEManager {
 		if (!this.eventSource) return;
 
 		this.eventSource.addEventListener('open', () => {
-			console.log('SSE connection opened');
+			logger.log('SSE connection opened');
 			this.setState('connected');
 			this.retryCount = 0;
 			this.retryDelay = this.config.initialRetryDelay;
@@ -171,7 +171,7 @@ export class SSEManager {
 
 		this.eventSource.addEventListener('connected', (e: MessageEvent) => {
 			const data = JSON.parse(e.data) as { client_id: string };
-			console.log('SSE connected:', data.client_id);
+			logger.log('SSE connected:', data.client_id);
 		});
 
 		this.eventSource.addEventListener('server_update', (e: MessageEvent) => {
@@ -191,7 +191,7 @@ export class SSEManager {
 		});
 
 		this.eventSource.onerror = (error: Event) => {
-			console.error('SSE error:', error);
+			logger.error('SSE error:', error);
 			this.handleError(error);
 		};
 	}
@@ -254,7 +254,7 @@ export class SSEManager {
 		}
 
 		if (this.retryCount >= this.config.maxRetries) {
-			console.error('Max retry attempts reached');
+			logger.error('Max retry attempts reached');
 			this.setState('error');
 			this.shouldReconnect = false;
 			return;
@@ -272,7 +272,7 @@ export class SSEManager {
 			clearTimeout(this.retryTimer);
 		}
 
-		console.log(`Reconnecting in ${this.retryDelay}ms... (attempt ${this.retryCount + 1})`);
+		logger.log(`Reconnecting in ${this.retryDelay}ms... (attempt ${this.retryCount + 1})`);
 
 		this.retryTimer = setTimeout(() => {
 			this.retryCount++;
@@ -291,7 +291,7 @@ export class SSEManager {
 		if (this.state === state) return;
 
 		this.state = state;
-		console.log(`SSE state: ${state}`);
+		logger.log(`SSE state: ${state}`);
 
 		if (this.onStateChangeCallback) {
 			this.onStateChangeCallback(state);

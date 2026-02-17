@@ -1,6 +1,7 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import type { Metric } from '$lib/types';
 import { getServerMetrics } from '$lib/api';
+import { logger } from '$lib/utils';
 
 interface MetricsState {
 	// Map of server ID to array of metrics
@@ -36,7 +37,7 @@ function createMetricsStore() {
 					loading: { ...state.loading, [serverId]: false }
 				}));
 			} catch (err) {
-				console.error(`Failed to load metrics for server ${serverId}:`, err);
+				logger.error(`Failed to load metrics for server ${serverId}:`, err);
 
 				update(state => ({
 					...state,
@@ -73,11 +74,7 @@ function createMetricsStore() {
 
 		// Get metrics for a specific server
 		getForServer(serverId: string): Metric[] {
-			let result: Metric[] = [];
-			subscribe(state => {
-				result = state.data[serverId] || [];
-			})();
-			return result;
+			return get({ subscribe }).data[serverId] || [];
 		},
 
 		// Clear metrics for a specific server

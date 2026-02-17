@@ -16,7 +16,7 @@ import type {
 	MetricsQueryParams
 } from './types';
 
-const API_BASE_URL = 'http://localhost:8080';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 interface ApiRequestOptions extends RequestInit {
 	headers?: Record<string, string>;
@@ -51,7 +51,7 @@ export class ApiError extends Error {
 }
 
 // Check if initial setup is required (no users exist)
-async function checkSetupRequired(): Promise<boolean> {
+export async function checkSetupRequired(): Promise<boolean> {
 	try {
 		const response = await fetch(`${API_BASE_URL}/auth/setup-required`, {
 			credentials: 'include'
@@ -59,7 +59,7 @@ async function checkSetupRequired(): Promise<boolean> {
 		const data = await response.json();
 		return data.setup_required;
 	} catch (err) {
-		console.error('Failed to check setup status:', err);
+		if (import.meta.env.DEV) console.error('Failed to check setup status:', err);
 		return false;
 	}
 }

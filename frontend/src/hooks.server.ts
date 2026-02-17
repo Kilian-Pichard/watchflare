@@ -24,7 +24,8 @@ async function checkSetupRequired(): Promise<boolean> {
 	}
 
 	try {
-		const response = await fetch('http://localhost:8080/auth/setup-required');
+		const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+		const response = await fetch(`${apiUrl}/auth/setup-required`);
 		const data = await response.json() as { setup_required: boolean };
 
 		// Update cache
@@ -33,7 +34,7 @@ async function checkSetupRequired(): Promise<boolean> {
 
 		return data.setup_required;
 	} catch (error) {
-		console.error('Failed to check setup status:', error);
+		if (import.meta.env.DEV) console.error('Failed to check setup status:', error);
 		// Return cached value if available, otherwise false
 		return setupStatusCache.value !== null ? setupStatusCache.value : false;
 	}

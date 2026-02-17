@@ -5,6 +5,8 @@
     import * as api from "$lib/api.js";
     import { toasts } from "$lib/stores/toasts";
     import { sidebarCollapsed, sidebarTransitioning } from "$lib/stores/sidebar";
+    import { getStatusClass, formatRelativeTime, logger } from "$lib/utils";
+    import type { Server, SSEEvent } from "$lib/types";
     import { sseStore } from "$lib/stores/sse";
     import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
     import MobileSidebar from "$lib/components/MobileSidebar.svelte";
@@ -12,14 +14,14 @@
 
     const PER_PAGE = 20;
 
-    let servers: any[] = [];
+    let servers: Server[] = [];
     let total = 0;
     let page = 1;
     let initialLoading = true;
     let loading = false;
     let error = "";
     let showDeleteConfirm = false;
-    let serverToDelete: any = null;
+    let serverToDelete: Server | null = null;
     let sseUnsubscribe: (() => void) | null = null;
 
     // Sort state
@@ -50,8 +52,8 @@
             servers = response.servers || [];
             total = response.total || 0;
             page = p;
-        } catch (err: any) {
-            error = err.message || "Failed to load servers";
+        } catch (err: unknown) {
+            error = err instanceof Error ? err.message : "Failed to load servers";
         } finally {
             loading = false;
             initialLoading = false;
@@ -92,7 +94,7 @@
             await api.dismissReactivation(serverId);
             await loadPage(page);
         } catch (err) {
-            console.error("Failed to dismiss reactivation:", err);
+            logger.error("Failed to dismiss reactivation:", err);
         }
     }
 
@@ -101,12 +103,12 @@
             await logout();
             goto("/login");
         } catch (err) {
-            console.error("Logout failed:", err);
+            logger.error("Logout failed:", err);
             goto("/login");
         }
     }
 
-    function handleSSEMessage(event: any) {
+    function handleSSEMessage(event: SSEEvent) {
         if (event.type === "server_update") {
             const update = event.data;
 
@@ -146,34 +148,7 @@
         if (searchTimeout) clearTimeout(searchTimeout);
     });
 
-    function getStatusClass(status: string) {
-        switch (status) {
-            case "online":
-                return "bg-success/10 text-success border-success/20";
-            case "offline":
-                return "bg-muted text-muted-foreground border-border";
-            case "pending":
-                return "bg-warning/10 text-warning border-warning/20";
-            case "expired":
-                return "bg-muted text-muted-foreground border-border";
-            default:
-                return "bg-muted text-muted-foreground border-border";
-        }
-    }
-
-    function formatDate(dateString: string) {
-        if (!dateString) return "-";
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-        if (diff < 60) return `${diff}s ago`;
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-        return date.toLocaleDateString("fr-FR");
-    }
-
-    function hasIPMismatch(server: any) {
+    function hasIPMismatch(server: Server) {
         return (
             server.configured_ip &&
             server.ip_address_v4 &&
@@ -182,7 +157,7 @@
         );
     }
 
-    function openDeleteModal(server: any, e: Event) {
+    function openDeleteModal(server: Server, e: Event) {
         e.stopPropagation();
         serverToDelete = server;
         showDeleteConfirm = true;
@@ -201,8 +176,8 @@
             await loadPage(page);
             showDeleteConfirm = false;
             serverToDelete = null;
-        } catch (err: any) {
-            error = err.message || "Failed to delete server";
+        } catch (err: unknown) {
+            error = err instanceof Error ? err.message : "Failed to delete server";
             showDeleteConfirm = false;
             serverToDelete = null;
         }
@@ -212,6 +187,8 @@
 <svelte:head>
     <title>Servers - Watchflare</title>
 </svelte:head>
+
+<svelte:window onkeydown={e => e.key === 'Escape' && showDeleteConfirm && cancelDelete()} />
 
 <div class="min-h-screen bg-background">
     <!-- Header -->
@@ -510,7 +487,7 @@
                                     <td
                                         class="px-4 py-3.5 text-right text-sm text-muted-foreground"
                                     >
-                                        {formatDate(server.last_seen)}
+                                        {formatRelativeTime(server.last_seen)}
                                     </td>
                                     <td class="px-4 py-3.5 text-right">
                                         <div
@@ -580,12 +557,18 @@
 
 <!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        role="presentation"
         onclick={cancelDelete}
     >
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
             class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
+            role="dialog"
+            aria-modal="true"
+            tabindex="-1"
             onclick={(e) => e.stopPropagation()}
         >
             <h3 class="text-lg font-semibold text-foreground mb-3">

@@ -1,6 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import type { User, TimeRange } from '$lib/types';
 import { getCurrentUser, updatePreferences } from '$lib/api';
+import { logger } from '$lib/utils';
 
 interface UserState {
 	user: User | null;
@@ -58,7 +59,7 @@ function createUserStore() {
 					return state;
 				});
 			} catch (err) {
-				console.error('Failed to update preferences:', err);
+				logger.error('Failed to update preferences:', err);
 				throw err;
 			}
 		},

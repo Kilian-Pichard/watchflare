@@ -2,6 +2,7 @@
     import { logout, changePassword } from "$lib/api";
     import { goto } from "$app/navigation";
     import { sidebarCollapsed, sidebarTransitioning } from "$lib/stores/sidebar";
+    import { logger } from "$lib/utils";
     import { changePasswordSchema, validateForm } from "$lib/validation";
     import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
     import MobileSidebar from "$lib/components/MobileSidebar.svelte";
@@ -20,7 +21,7 @@
             await logout();
             goto("/login");
         } catch (err) {
-            console.error("Logout failed:", err);
+            logger.error("Logout failed:", err);
             goto("/login");
         }
     }

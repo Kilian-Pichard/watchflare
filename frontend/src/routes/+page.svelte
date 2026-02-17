@@ -2,7 +2,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { logout } from '$lib/api';
-	import { formatPercent } from '$lib/utils';
+	import { get } from 'svelte/store';
+	import { formatPercent, countAlerts, logger } from '$lib/utils';
 	import {
 		userStore,
 		currentUser,
@@ -46,27 +47,10 @@
 	let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
 
 	// Count active alerts for header badge
-	let alertCount = $derived(() => {
-		let count = 0;
-		for (const { server, latestMetric } of serversList) {
-			if (server.status === 'offline') count++;
-			if (server.status === 'ip_mismatch') count++;
-			if (latestMetric?.cpu_usage_percent > 90) count++;
-			if (latestMetric?.memory_total_bytes > 0) {
-				const memPct = (latestMetric.memory_used_bytes / latestMetric.memory_total_bytes) * 100;
-				if (memPct > 90) count++;
-			}
-		}
-		return count;
-	});
+	let alertCount = $derived(countAlerts(serversList));
 
-	// Local time range state for the selector
-	let selectedTimeRange = $state<TimeRange>('24h');
-
-	// Sync from store
-	$effect(() => {
-		selectedTimeRange = timeRange;
-	});
+	// Time range from store
+	let selectedTimeRange = $derived($currentTimeRange);
 
 	async function handleLogout() {
 		try {
@@ -79,7 +63,7 @@
 			alertsStore.clear();
 			goto('/login');
 		} catch (err) {
-			console.error('Logout failed:', err);
+			logger.error('Logout failed:', err);
 			goto('/login');
 		}
 	}
@@ -101,16 +85,12 @@
 			const userTimeRange = $currentUser?.default_time_range || '24h';
 			const migratedTimeRange = userTimeRange === '6h' ? '12h' : userTimeRange;
 			aggregatedStore.setTimeRange(migratedTimeRange);
-			selectedTimeRange = migratedTimeRange as TimeRange;
 
 			// Load servers and get IDs directly from API response
 			await serversStore.load();
 
 			// Load dropped metrics alerts, aggregated metrics, and per-server metrics in parallel
-			let serverIds: string[] = [];
-			serversStore.subscribe(state => {
-				serverIds = state.servers.map(s => s.server.id);
-			})();
+			const serverIds = get(serversStore).servers.map(s => s.server.id);
 
 			await Promise.all([
 				loadServerMetrics(serverIds, migratedTimeRange as TimeRange),
@@ -119,7 +99,7 @@
 				aggregatedStore.load24h()
 			]);
 		} catch (err) {
-			console.error('Failed to load data:', err);
+			logger.error('Failed to load data:', err);
 			// Error will trigger redirect in apiRequest
 		} finally {
 			loading = false;
@@ -127,15 +107,9 @@
 	}
 
 	async function handleTimeRangeChange(newTimeRange: TimeRange) {
-		selectedTimeRange = newTimeRange;
-		// Update the store with new time range
 		aggregatedStore.setTimeRange(newTimeRange);
 
-		// Get server IDs from store
-		let serverIds: string[] = [];
-		serversStore.subscribe(state => {
-			serverIds = state.servers.map(s => s.server.id);
-		})();
+		const serverIds = get(serversStore).servers.map(s => s.server.id);
 
 		// Load aggregated data and per-server metrics in parallel
 		await Promise.all([
@@ -199,7 +173,7 @@
 
 <div class="min-h-screen bg-background">
 	<!-- Header -->
-	<Header showAlerts alertCount={alertCount()} />
+	<Header showAlerts alertCount={alertCount} />
 
 	<!-- Desktop Sidebar -->
 	<DesktopSidebar onLogout={handleLogout} />
