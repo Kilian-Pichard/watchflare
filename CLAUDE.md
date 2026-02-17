@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.9.0
+**Current version**: 0.9.1
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.9.1` - Sidebar collapse UX: smooth width transition with text opacity animation, centered square icon backgrounds when collapsed (46x46px), Lucide nav icons, centered logo/SSE dot/logout when collapsed
 - `0.9.0` - Frontend optimization: configurable API URL, deduplicated utils (getStatusClass, formatRelativeTime, countAlerts, generateAlerts), replaced any types, CSS design tokens, fixed Svelte 5 anti-patterns, dev-only logger, Escape key on modals, Lucide icons replacing {@html}, removed unused svelte.config alias
 - `0.8.0` - Responsive redesign: harmonized breakpoints (sm/md/lg/xl), overlay alerts panel with bell badge, smooth sidebar collapse transition with text clipping, backend server sort/filter/search, mobile-first layouts on all pages
 - `0.7.2` - Expand API tests with fetch mocking: login, register, CRUD servers, changePassword, metrics (82 tests)

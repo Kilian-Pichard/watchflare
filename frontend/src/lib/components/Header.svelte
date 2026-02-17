@@ -17,7 +17,7 @@
 	}
 </script>
 
-<header class="fixed left-0 right-0 top-0 z-30 h-14 border-b bg-background {$sidebarCollapsed ? 'lg:left-16' : 'lg:left-64'} {$sidebarTransitioning ? 'transition-[left] duration-300 ease-in-out' : ''}">
+<header class="fixed left-0 right-0 top-0 z-30 h-14 border-b bg-background {$sidebarCollapsed ? 'lg:left-20' : 'lg:left-64'} {$sidebarTransitioning ? 'transition-[left] duration-300 ease-in-out' : ''}">
 	<div class="flex h-full items-center justify-between px-4">
 		<!-- Left: Mobile burger + Desktop left sidebar toggle -->
 		<div class="flex items-center gap-2">

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { sseConnectionState, sseIsReconnecting } from '$lib/stores/sse';
 
-	const { collapsed = false }: { collapsed?: boolean } = $props();
+	const { textClass = '' }: { textClass?: string } = $props();
 
 	const connectionState = $derived($sseConnectionState);
 	const isReconnecting = $derived($sseIsReconnecting);
@@ -38,8 +38,8 @@
 </script>
 
 <div
-	class="flex items-center gap-2 rounded-lg px-3 py-2 text-xs overflow-hidden"
-	title={collapsed ? getStateLabel(connectionState) : ''}
+	class="flex items-center rounded-lg px-[19px] py-2 text-xs"
+	title={getStateLabel(connectionState)}
 >
 	<span class="relative flex h-2 w-2 flex-shrink-0">
 		<span
@@ -50,5 +50,5 @@
 		<span class="relative inline-flex h-2 w-2 rounded-full {getStateColor(connectionState)}">
 		</span>
 	</span>
-	<span class="text-muted-foreground whitespace-nowrap">{getStateLabel(connectionState)}</span>
+	<span class="ml-3 text-muted-foreground whitespace-nowrap overflow-hidden {textClass}">{getStateLabel(connectionState)}</span>
 </div>

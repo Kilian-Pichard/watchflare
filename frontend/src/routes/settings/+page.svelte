@@ -76,7 +76,7 @@
 
     <main
         class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed
-            ? 'lg:ml-16'
+            ? 'lg:ml-20'
             : 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}"
     >
         <!-- Header -->
