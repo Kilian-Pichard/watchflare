@@ -2,12 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { logout } from '$lib/api.js';
 	import * as api from '$lib/api.js';
-	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
-	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
-	import Header from '$lib/components/Header.svelte';
-	import { sidebarCollapsed, sidebarTransitioning } from '$lib/stores/sidebar';
 	import { sseStore } from '$lib/stores/sse';
 	import { formatBytes, getStatusClass, formatDateTime, logger } from '$lib/utils';
 	import CPUChart from '$lib/components/CPUChart.svelte';
@@ -29,16 +24,6 @@
 	let sseUnsubscribe = null;
 
 	const serverId = $derived($page.params.id);
-
-	async function handleLogout() {
-		try {
-			await logout();
-			goto('/login');
-		} catch (err) {
-			logger.error('Logout failed:', err);
-			goto('/login');
-		}
-	}
 
 	function handleSSEMessage(event) {
 		// Handle server_update events for this specific server
@@ -214,18 +199,7 @@
 
 <svelte:window onkeydown={handleEscape} />
 
-<div class="min-h-screen bg-background">
-	<!-- Header -->
-	<Header title={server?.name} />
-
-	<!-- Desktop Sidebar -->
-	<DesktopSidebar onLogout={handleLogout} />
-
-	<!-- Mobile Sidebar -->
-	<MobileSidebar onLogout={handleLogout} />
-
-	<main class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}">
-		<!-- Back Link -->
+<!-- Back Link -->
 		<div class="mb-6">
 			<a
 				href="/servers"
@@ -452,8 +426,6 @@
 				</div>
 			</div>
 		{/if}
-	</main>
-</div>
 
 <!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}

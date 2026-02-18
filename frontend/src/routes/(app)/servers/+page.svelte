@@ -1,16 +1,11 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import { goto } from "$app/navigation";
-    import { logout } from "$lib/api.js";
     import * as api from "$lib/api.js";
     import { toasts } from "$lib/stores/toasts";
-    import { sidebarCollapsed, sidebarTransitioning } from "$lib/stores/sidebar";
     import { getStatusClass, formatRelativeTime, logger } from "$lib/utils";
     import type { Server, SSEEvent } from "$lib/types";
     import { sseStore } from "$lib/stores/sse";
-    import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
-    import MobileSidebar from "$lib/components/MobileSidebar.svelte";
-    import Header from "$lib/components/Header.svelte";
 
     const PER_PAGE = 20;
 
@@ -98,16 +93,6 @@
         }
     }
 
-    async function handleLogout() {
-        try {
-            await logout();
-            goto("/login");
-        } catch (err) {
-            logger.error("Logout failed:", err);
-            goto("/login");
-        }
-    }
-
     function handleSSEMessage(event: SSEEvent) {
         if (event.type === "server_update") {
             const update = event.data;
@@ -190,22 +175,7 @@
 
 <svelte:window onkeydown={e => e.key === 'Escape' && showDeleteConfirm && cancelDelete()} />
 
-<div class="min-h-screen bg-background">
-    <!-- Header -->
-    <Header title="Servers" />
-
-    <!-- Desktop Sidebar -->
-    <DesktopSidebar onLogout={handleLogout} />
-
-    <!-- Mobile Sidebar -->
-    <MobileSidebar onLogout={handleLogout} />
-
-    <main
-        class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed
-            ? 'lg:ml-20'
-            : 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}"
-    >
-        <!-- Header -->
+<!-- Header -->
         <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h1 class="text-xl sm:text-2xl font-semibold text-foreground">Servers</h1>
@@ -552,9 +522,6 @@
                 {/if}
             </div>
         {/if}
-    </main>
-</div>
-
 <!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->

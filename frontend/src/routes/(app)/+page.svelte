@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { logout } from '$lib/api';
 	import { get } from 'svelte/store';
-	import { formatPercent, countAlerts, logger } from '$lib/utils';
+	import { formatPercent, logger } from '$lib/utils';
 	import {
 		userStore,
 		currentUser,
@@ -16,20 +15,13 @@
 		currentTimeRange,
 		dashboardStats,
 		alertsStore,
-		uiStore,
 		sseStore,
-		toasts,
-		sidebarCollapsed,
-		sidebarTransitioning
+		toasts
 	} from '$lib/stores';
-	import DesktopSidebar from '$lib/components/DesktopSidebar.svelte';
-	import MobileSidebar from '$lib/components/MobileSidebar.svelte';
-	import Header from '$lib/components/Header.svelte';
 	import ServerTable from '$lib/components/ServerTable.svelte';
 	import DashboardStats from '$lib/components/dashboard/DashboardStats.svelte';
 	import DashboardCharts from '$lib/components/dashboard/DashboardCharts.svelte';
 	import DroppedMetricsAlert from '$lib/components/dashboard/DroppedMetricsAlert.svelte';
-	import RightSidebar from '$lib/components/RightSidebar.svelte';
 	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
 	import type { SSEEvent, TimeRange } from '$lib/types';
 
@@ -44,29 +36,9 @@
 	let metrics = $derived($metricsData);
 	let stats = $derived($dashboardStats);
 	let droppedAlerts = $derived($alertsStore.droppedMetrics);
-	let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
-
-	// Count active alerts for header badge
-	let alertCount = $derived(countAlerts(serversList));
 
 	// Time range from store
 	let selectedTimeRange = $derived($currentTimeRange);
-
-	async function handleLogout() {
-		try {
-			await logout();
-			// Clear all stores
-			userStore.clear();
-			serversStore.clear();
-			metricsStore.clear();
-			aggregatedStore.clear();
-			alertsStore.clear();
-			goto('/login');
-		} catch (err) {
-			logger.error('Logout failed:', err);
-			goto('/login');
-		}
-	}
 
 	async function loadServerMetrics(serverIds: string[], timeRangeValue: TimeRange) {
 		if (serverIds.length > 0) {
@@ -171,26 +143,7 @@
 	<title>Dashboard - Watchflare</title>
 </svelte:head>
 
-<div class="min-h-screen bg-background">
-	<!-- Header -->
-	<Header showAlerts alertCount={alertCount} />
-
-	<!-- Desktop Sidebar -->
-	<DesktopSidebar onLogout={handleLogout} />
-
-	<!-- Mobile Sidebar -->
-	<MobileSidebar onLogout={handleLogout} />
-
-	<!-- Alerts Panel (overlay) -->
-	<RightSidebar servers={serversList} isOpen={rightSidebarOpen} onClose={() => uiStore.setRightSidebar(false)} />
-
-	<!-- Main Content -->
-	<main
-		class="min-h-screen pt-16 p-4 md:p-8 md:pt-20 {$sidebarCollapsed
-			? 'lg:ml-20'
-			: 'lg:ml-64'} {$sidebarTransitioning ? 'transition-[margin] duration-300 ease-in-out' : ''}"
-	>
-		{#if loading}
+{#if loading}
 			<div class="flex items-center justify-center py-20">
 				<p class="text-muted-foreground">Loading dashboard...</p>
 			</div>
@@ -245,6 +198,4 @@
 				</div>
 				<ServerTable servers={serversList.filter(s => s.server.status !== 'pending')} metricsData={metrics} />
 			</div>
-		{/if}
-	</main>
-</div>
+	{/if}

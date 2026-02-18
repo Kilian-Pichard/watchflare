@@ -94,7 +94,7 @@
                         ? 'bg-primary text-primary-foreground'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent'}"
                 >
-                    <Icon class="h-5 w-5 flex-shrink-0" />
+                    <Icon class="h-5 w-5 shrink-0" />
                     <span>{item.label}</span>
                 </a>
             {/each}
@@ -113,7 +113,7 @@
                     onclick={onLogout}
                     class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                 >
-                    <LogOut class="h-5 w-5 flex-shrink-0" />
+                    <LogOut class="h-5 w-5 shrink-0" />
                     <span>Logout</span>
                 </button>
             </div>
