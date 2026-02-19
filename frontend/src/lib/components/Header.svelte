@@ -1,4 +1,5 @@
 <script>
+    import { goto } from "$app/navigation";
     import {
         mobileMenuOpen,
         sidebarCollapsed,
@@ -6,8 +7,12 @@
         sidebarTransitioning,
     } from "$lib/stores/sidebar";
     import { uiStore } from "$lib/stores";
+    import { Search, Plus } from "lucide-svelte";
+    import CommandPalette from "./CommandPalette.svelte";
 
-    const { title, showAlerts = false, alertCount = 0 } = $props();
+    const { alertCount = 0 } = $props();
+
+    let commandPaletteOpen = $state(false);
 
     function toggleMenu() {
         mobileMenuOpen.update((val) => !val);
@@ -20,24 +25,36 @@
     function toggleAlerts() {
         uiStore.toggleRightSidebar();
     }
+
+    function handleKeydown(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+            e.preventDefault();
+            commandPaletteOpen = true;
+        }
+    }
+
+    const isMac =
+        typeof navigator !== "undefined" && navigator.platform?.includes("Mac");
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <header
-    class="fixed left-0 right-0 top-0 z-30 h-fit py-4 px-2 md:px-4 bg-transparent {$sidebarCollapsed
+    class="fixed left-0 right-0 top-0 z-30 h-fit py-4 px-2 sm:px-4 bg-transparent {$sidebarCollapsed
         ? 'lg:left-20'
         : 'lg:left-64'} {$sidebarTransitioning
         ? 'transition-[left] duration-300 ease-in-out'
         : ''}"
 >
     <div
-        class="flex h-16 items-center justify-between px-4 bg-surface rounded-lg border"
+        class="flex h-16 items-center gap-3 px-4 py-3 bg-surface rounded-lg border"
     >
         <!-- Left: Mobile burger + Desktop left sidebar toggle -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0">
             <!-- Burger button (mobile only) -->
             <button
                 onclick={toggleMenu}
-                class="flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-muted lg:hidden"
+                class="flex h-9.5 w-9.5 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-muted lg:hidden"
                 aria-label="Toggle menu"
             >
                 {#if $mobileMenuOpen}
@@ -74,7 +91,7 @@
             <!-- Left sidebar toggle (desktop only) -->
             <button
                 onclick={toggleLeftSidebar}
-                class="hidden lg:flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                class="hidden lg:flex h-9.5 w-9.5 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={$sidebarCollapsed
                     ? "Expand sidebar"
                     : "Collapse sidebar"}
@@ -92,44 +109,78 @@
             </button>
         </div>
 
-        <!-- Center: Title / Logo -->
-        {#if title}
-            <h1 class="text-base font-semibold text-foreground">{title}</h1>
-        {:else}
-            <span class="text-lg font-bold text-primary">Watchflare</span>
-        {/if}
-
-        <!-- Right: Alerts button or spacer -->
-        <div class="flex items-center gap-2">
-            {#if showAlerts}
-                <button
-                    onclick={toggleAlerts}
-                    class="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    aria-label="Toggle alerts"
+        <!-- Search button -->
+        <button
+            onclick={() => (commandPaletteOpen = true)}
+            class="flex items-center justify-center sm:justify-start gap-2 w-9.5 h-9.5 sm:w-fit sm:h-full rounded-lg border bg-background px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+        >
+            <Search class="h-4 w-4 shrink-0" />
+            <span class="hidden md:inline">Search servers...</span>
+            <span class="hidden sm:inline md:hidden">Search...</span>
+            <div class="ml-auto hidden sm:flex items-center gap-0.5">
+                <kbd
+                    class="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
                 >
-                    <!-- Bell icon -->
-                    <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        stroke-width="2"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                        />
-                    </svg>
-                    {#if alertCount > 0}
-                        <span
-                            class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-destructive"
-                        ></span>
-                    {/if}
-                </button>
-            {:else}
-                <div class="w-9"></div>
-            {/if}
+                    {isMac ? "⌘" : "Ctrl"}
+                </kbd>
+                <kbd
+                    class="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                >
+                    K
+                </kbd>
+            </div>
+        </button>
+
+        <!-- Logo (mobile/tablet only, centered absolutely) -->
+        <a
+            href="/"
+            class="absolute left-1/2 -translate-x-1/2 lg:hidden flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground"
+            >W</a
+        >
+
+        <!-- Add Server + Alerts -->
+        <div class="flex items-center gap-3 shrink-0 ms-auto h-full">
+            <button
+                onclick={() => goto("/servers/new")}
+                class="hidden sm:flex items-center gap-1.5 h-9.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+                <Plus class="h-4 w-4" />
+                <span class="hidden sm:inline">Add Server</span>
+            </button>
+            <button
+                onclick={() => goto("/servers/new")}
+                class="flex sm:hidden items-center gap-1.5 h-9.5 w-9.5 xs:h-full xs:w-fit p-0 xs:px-4 py-1.5 justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
+                aria-label="Add Server"
+            >
+                <Plus class="h-4 w-4" />
+                <span class="hidden xs:inline sm:hidden">Add</span>
+            </button>
+            <button
+                onclick={toggleAlerts}
+                class="relative flex h-9.5 w-9.5 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Toggle alerts"
+            >
+                <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    stroke-width="2"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                    />
+                </svg>
+                {#if alertCount > 0}
+                    <span
+                        class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-destructive"
+                    ></span>
+                {/if}
+            </button>
         </div>
     </div>
 </header>
+
+<CommandPalette bind:open={commandPaletteOpen} />

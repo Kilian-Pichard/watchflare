@@ -1,6 +1,5 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
-    import { page } from "$app/stores";
     import { logout } from "$lib/api";
     import { countAlerts, logger } from "$lib/utils";
     import {
@@ -24,22 +23,6 @@
     let serversList = $derived($servers);
     let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
     let alertCount = $derived(countAlerts(serversList));
-    let isDashboard = $derived($page.url.pathname === "/");
-
-    const titleMap: Record<string, string> = {
-        "/servers": "Servers",
-        "/servers/new": "Add Server",
-        "/settings": "Settings",
-    };
-
-    let title = $derived.by(() => {
-        const path = $page.url.pathname;
-        if (path === "/") return "";
-        if (titleMap[path]) return titleMap[path];
-        if (path.match(/^\/servers\/[^/]+\/packages$/)) return "Packages";
-        if (path.match(/^\/servers\/[^/]+$/)) return "Server Details";
-        return "";
-    });
 
     async function handleLogout() {
         try {
@@ -58,18 +41,16 @@
 </script>
 
 <div class="min-h-screen bg-background">
-    <Header {title} showAlerts={isDashboard} {alertCount} />
+    <Header {alertCount} />
 
     <DesktopSidebar onLogout={handleLogout} />
     <MobileSidebar onLogout={handleLogout} />
 
-    {#if isDashboard}
-        <RightSidebar
-            servers={serversList}
-            isOpen={rightSidebarOpen}
-            onClose={() => uiStore.setRightSidebar(false)}
-        />
-    {/if}
+    <RightSidebar
+        servers={serversList}
+        isOpen={rightSidebarOpen}
+        onClose={() => uiStore.setRightSidebar(false)}
+    />
 
     <main
         class="min-h-screen pt-26 p-4 sm:p-8 sm:pt-28 {$sidebarCollapsed

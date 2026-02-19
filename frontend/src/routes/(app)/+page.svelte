@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { get } from 'svelte/store';
 	import { formatPercent, logger } from '$lib/utils';
 	import {
@@ -162,21 +161,10 @@
 						> in the last 24h
 					</p>
 				</div>
-				<div class="flex items-center gap-3">
-					<TimeRangeSelector
-						bind:value={selectedTimeRange}
-						onValueChange={handleTimeRangeChange}
-					/>
-					<button
-						onclick={() => goto('/servers/new')}
-						class="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 whitespace-nowrap"
-					>
-						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-						</svg>
-						Add Server
-					</button>
-				</div>
+				<TimeRangeSelector
+					bind:value={selectedTimeRange}
+					onValueChange={handleTimeRangeChange}
+				/>
 			</div>
 
 			<!-- Dropped Metrics Alerts -->

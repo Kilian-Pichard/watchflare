@@ -200,23 +200,13 @@
 />
 
 <!-- Header -->
-<div
-    class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
->
-    <div>
-        <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
-            Servers
-        </h1>
-        <p class="text-sm text-muted-foreground mt-1">
-            Manage your monitored servers
-        </p>
-    </div>
-    <button
-        onclick={() => goto("/servers/new")}
-        class="self-start sm:self-auto rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-    >
-        Add Server
-    </button>
+<div class="mb-6">
+    <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
+        Servers
+    </h1>
+    <p class="text-sm text-muted-foreground mt-1">
+        Manage your monitored servers
+    </p>
 </div>
 
 <!-- Filters -->
