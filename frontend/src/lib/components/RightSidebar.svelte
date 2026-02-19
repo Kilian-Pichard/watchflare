@@ -30,11 +30,12 @@
 	<!-- Panel -->
 	<div
 		transition:fly={{ x: 320, duration: 300 }}
-		class="fixed right-0 top-0 z-50 h-screen w-80 max-w-[85vw] bg-sidebar border-l shadow-lg overflow-y-auto"
+		class="fixed right-0 top-0 z-50 h-screen w-80 max-w-[85vw] py-4 pr-4 bg-transparent"
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
 	>
+		<div class="flex h-full flex-col overflow-y-auto bg-sidebar rounded-2xl border">
 		<!-- Header -->
 		<div class="flex items-center justify-between border-b px-6 py-4">
 			<h2 class="text-sm font-semibold text-foreground">Active Alerts</h2>
@@ -87,6 +88,7 @@
 					{/each}
 				</div>
 			{/if}
+		</div>
 		</div>
 	</div>
 {/if}
