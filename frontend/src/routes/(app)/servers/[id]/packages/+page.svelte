@@ -4,6 +4,7 @@
 	import * as api from '$lib/api.js';
 	import * as Select from '$lib/components/ui/select';
 
+	let server = null;
 	let packages = [];
 	let stats = null;
 	let collections = [];
@@ -29,7 +30,8 @@
 	async function loadData() {
 		loading = true;
 		try {
-			const [packagesData, statsData, collectionsData] = await Promise.all([
+			const [serverData, packagesData, statsData, collectionsData] = await Promise.all([
+				api.getServer(serverId),
 				api.getServerPackages(serverId, {
 					limit,
 					offset,
@@ -40,6 +42,7 @@
 				api.getPackageCollections(serverId, { limit: 10 })
 			]);
 
+			server = serverData.server;
 			packages = packagesData.packages || [];
 			totalCount = packagesData.total_count || 0;
 			stats = statsData;
@@ -103,7 +106,7 @@
 </script>
 
 <svelte:head>
-	<title>Packages - Watchflare</title>
+	<title>Packages{server ? ` - ${server.name}` : ''} - Watchflare</title>
 </svelte:head>
 
 <!-- Back Link -->
@@ -122,9 +125,19 @@
 <!-- Header -->
 <div class="mb-6">
 	<h1 class="text-2xl font-semibold text-foreground">Package Inventory</h1>
-	<p class="text-sm text-muted-foreground mt-1">
-		Installed packages and software on this server
-	</p>
+	{#if server}
+		<p class="text-sm text-muted-foreground mt-1 flex items-center flex-wrap gap-x-3">
+			<span>{server.name}</span>
+			{#if server.hostname}
+				<span class="text-border">|</span>
+				<span>{server.hostname}</span>
+			{/if}
+			{#if server.ip_address_v4 || server.configured_ip}
+				<span class="text-border">|</span>
+				<span>{server.ip_address_v4 || server.configured_ip}</span>
+			{/if}
+		</p>
+	{/if}
 </div>
 
 <!-- Error -->

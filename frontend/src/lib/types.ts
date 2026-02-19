@@ -35,8 +35,11 @@ export interface Server {
 	id: string;
 	name: string;
 	hostname: string;
-	os: string;
-	architecture: string;
+	platform: string | null;
+	platform_version: string | null;
+	platform_family: string | null;
+	architecture: string | null;
+	kernel: string | null;
 	ip_address_v4: string;
 	ip_address_v6: string | null;
 	configured_ip: string;
