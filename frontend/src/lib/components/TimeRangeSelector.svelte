@@ -1,33 +1,40 @@
 <script>
 	import { TIME_RANGES, logger } from '$lib/utils';
 	import { updatePreferences } from '$lib/api';
+	import * as Select from '$lib/components/ui/select';
 
 	let { value = $bindable('24h'), onValueChange } = $props();
 
-	async function handleChange(e) {
-		const timeRange = e.target.value;
-		value = timeRange;
+	let selectedLabel = $derived(
+		TIME_RANGES.find(r => r.value === value)?.label || value
+	);
+
+	async function handleChange(newValue) {
+		value = newValue;
 
 		// Save to user preferences
 		try {
-			await updatePreferences(timeRange, undefined);
+			await updatePreferences(newValue, undefined);
 		} catch (err) {
 			logger.error('Failed to save time range preference:', err);
 		}
 
 		// Trigger callback if provided
 		if (onValueChange) {
-			onValueChange(timeRange);
+			onValueChange(newValue);
 		}
 	}
 </script>
 
-<select
-	{value}
-	onchange={handleChange}
-	class="rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
->
-	{#each TIME_RANGES as range}
-		<option value={range.value}>{range.label}</option>
-	{/each}
-</select>
+<Select.Root type="single" {value} onValueChange={handleChange}>
+	<Select.Trigger items={TIME_RANGES.map(r => r.label)}>
+		<span>{selectedLabel}</span>
+	</Select.Trigger>
+	<Select.Content>
+		{#each TIME_RANGES as range}
+			<Select.Item value={range.value} label={range.label}>
+				{range.label}
+			</Select.Item>
+		{/each}
+	</Select.Content>
+</Select.Root>

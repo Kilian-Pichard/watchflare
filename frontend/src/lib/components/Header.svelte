@@ -30,7 +30,7 @@
         : ''}"
 >
     <div
-        class="flex h-16 items-center justify-between px-4 bg-sidebar rounded-lg border"
+        class="flex h-16 items-center justify-between px-4 bg-surface rounded-lg border"
     >
         <!-- Left: Mobile burger + Desktop left sidebar toggle -->
         <div class="flex items-center gap-2">

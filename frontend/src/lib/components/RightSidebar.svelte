@@ -35,7 +35,7 @@
 		aria-modal="true"
 		tabindex="-1"
 	>
-		<div class="flex h-full flex-col overflow-y-auto bg-sidebar rounded-2xl border">
+		<div class="flex h-full flex-col overflow-y-auto bg-surface rounded-2xl border">
 		<!-- Header -->
 		<div class="flex items-center justify-between border-b px-6 py-4">
 			<h2 class="text-sm font-semibold text-foreground">Active Alerts</h2>

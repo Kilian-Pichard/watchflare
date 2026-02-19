@@ -75,7 +75,7 @@
         ? 'translate-x-0'
         : '-translate-x-full'}"
 >
-    <div class="flex h-full flex-col bg-sidebar rounded-2xl border">
+    <div class="flex h-full flex-col bg-surface rounded-2xl border">
         <!-- Logo -->
         <div class="flex h-16 items-center border-b justify-between px-6">
             <h1 class="text-xl font-semibold text-foreground">Watchflare</h1>
@@ -92,7 +92,7 @@
                         item.href,
                     )
                         ? 'bg-primary text-primary-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent'}"
+                        : 'text-surface-foreground hover:bg-surface-accent'}"
                 >
                     <Icon class="h-5 w-5 shrink-0" />
                     <span>{item.label}</span>

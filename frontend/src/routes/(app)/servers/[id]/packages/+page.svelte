@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import * as api from '$lib/api.js';
+	import * as Select from '$lib/components/ui/select';
 
 	let packages = [];
 	let stats = null;
@@ -16,6 +17,8 @@
 	let showCollections = false;
 
 	$: serverId = $page.params.id;
+	$: managerLabel = selectedManager ? getManagerLabel(selectedManager) : 'All Package Managers';
+	$: managerItems = ['All Package Managers', ...(stats?.by_package_manager || []).map(pm => getManagerLabel(pm.package_manager))];
 	$: currentPage = Math.floor(offset / limit) + 1;
 	$: totalPages = Math.ceil(totalCount / limit);
 
@@ -53,7 +56,8 @@
 		await loadData();
 	}
 
-	async function handleFilterChange() {
+	async function handleFilterChange(value) {
+		selectedManager = value;
 		offset = 0;
 		await loadData();
 	}
@@ -162,16 +166,19 @@
 				class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
 			/>
 		</div>
-		<select
-			bind:value={selectedManager}
-			onchange={handleFilterChange}
-			class="rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-		>
-			<option value="">All Package Managers</option>
-			{#each stats?.by_package_manager || [] as pm}
-				<option value={pm.package_manager}>{getManagerLabel(pm.package_manager)}</option>
-			{/each}
-		</select>
+		<Select.Root type="single" value={selectedManager} onValueChange={handleFilterChange}>
+			<Select.Trigger items={managerItems}>
+				<span>{managerLabel}</span>
+			</Select.Trigger>
+			<Select.Content>
+				<Select.Item value="" label="All Package Managers">All Package Managers</Select.Item>
+				{#each stats?.by_package_manager || [] as pm}
+					<Select.Item value={pm.package_manager} label={getManagerLabel(pm.package_manager)}>
+						{getManagerLabel(pm.package_manager)}
+					</Select.Item>
+				{/each}
+			</Select.Content>
+		</Select.Root>
 		<button
 			onclick={handleSearch}
 			class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"

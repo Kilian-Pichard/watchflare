@@ -42,7 +42,7 @@
         : ''}"
 >
     <div
-        class="flex h-full flex-col overflow-hidden bg-sidebar rounded-2xl border"
+        class="flex h-full flex-col overflow-hidden bg-surface rounded-2xl border"
     >
         <!-- Logo -->
         <div class="flex h-16 items-center border-b px-2.75">
@@ -66,7 +66,7 @@
                         item.href,
                     )
                         ? 'bg-primary text-primary-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent'}"
+                        : 'text-surface-foreground hover:bg-surface-accent'}"
                     title={item.label}
                 >
                     <Icon class="h-5 w-5 shrink-0" />
