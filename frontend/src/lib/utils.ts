@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { TimeRange } from './types';
+import type { SSEEvent, TimeRange } from './types';
+import { toasts } from './stores/toasts';
 
 // Tailwind class name utility
 export function cn(...inputs: ClassValue[]) {
@@ -178,6 +179,17 @@ export function generateAlerts(servers: ServerWithLatestMetric[]): Alert[] {
 	}
 
 	return alerts.slice(0, 10);
+}
+
+// SSE reactivation toast (shared across pages)
+export function handleSSEReactivation(event: SSEEvent): void {
+	if (event.type === 'server_update' && event.data.reactivated && event.data.hostname) {
+		toasts.add(
+			`Agent "${event.data.hostname}" was reactivated (same physical server detected via UUID)`,
+			'info',
+			8000
+		);
+	}
 }
 
 // Dev-only logger (silenced in production builds)

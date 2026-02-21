@@ -9,6 +9,7 @@
         getStatusClass,
         formatDateTime,
         formatRelativeTime,
+        handleSSEReactivation,
         logger,
     } from "$lib/utils";
     import CPUChart from "$lib/components/CPUChart.svelte";
@@ -16,6 +17,8 @@
     import DiskChart from "$lib/components/DiskChart.svelte";
     import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
     import type { Server, Metric, PackageStats, SSEEvent, TimeRange } from "$lib/types";
+    import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+    import Modal from "$lib/components/Modal.svelte";
 
     let server: Server | null = $state(null);
     let loading = $state(true);
@@ -33,6 +36,8 @@
     const serverId = $derived($page.params.id);
 
     function handleSSEMessage(event: SSEEvent) {
+        handleSSEReactivation(event);
+
         // Handle server_update events for this specific server
         if (event.type === "server_update") {
             const update = event.data;
@@ -195,30 +200,20 @@
         metrics.length > 0 ? metrics[metrics.length - 1] : null,
     );
 
-    function handleEscape(e: KeyboardEvent) {
-        if (e.key !== "Escape") return;
-        if (showDeleteConfirm) {
-            showDeleteConfirm = false;
-            return;
-        }
-        if (showRegenerateConfirm) {
-            showRegenerateConfirm = false;
-            regeneratedToken = "";
-            return;
-        }
-        if (showChangeIP) {
-            showChangeIP = false;
-            newIP = "";
-            return;
-        }
+    function closeRegenerateModal() {
+        showRegenerateConfirm = false;
+        regeneratedToken = "";
+    }
+
+    function closeChangeIPModal() {
+        showChangeIP = false;
+        newIP = "";
     }
 </script>
 
 <svelte:head>
     <title>{server?.name || "Server"} - Watchflare</title>
 </svelte:head>
-
-<svelte:window onkeydown={handleEscape} />
 
 <!-- Back Link -->
 <div class="mb-6">
@@ -521,184 +516,114 @@
 {/if}
 
 <!-- Delete Confirmation Modal -->
-{#if showDeleteConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
-        role="presentation"
-        onclick={() => (showDeleteConfirm = false)}
-    >
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div
-            class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-            onclick={(e) => e.stopPropagation()}
-        >
-            <h3 class="text-lg font-semibold text-foreground mb-3">
-                Confirm Delete
-            </h3>
-            <p class="text-sm text-muted-foreground mb-4">
-                Are you sure you want to delete "{server?.name}"?
-            </p>
-            <p class="text-sm font-medium text-destructive mb-6">
-                This action cannot be undone.
-            </p>
-            <div class="flex gap-3 justify-end">
-                <button
-                    onclick={() => (showDeleteConfirm = false)}
-                    class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                >
-                    Cancel
-                </button>
-                <button
-                    onclick={handleDelete}
-                    class="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
-                >
-                    Delete Server
-                </button>
-            </div>
-        </div>
-    </div>
-{/if}
+<ConfirmDialog
+    open={showDeleteConfirm}
+    title="Confirm Delete"
+    onConfirm={handleDelete}
+    onClose={() => (showDeleteConfirm = false)}
+    confirmLabel="Delete Server"
+    confirmVariant="destructive"
+>
+    <p class="text-sm text-muted-foreground mb-4">
+        Are you sure you want to delete "{server?.name}"?
+    </p>
+    <p class="text-sm font-medium text-destructive">
+        This action cannot be undone.
+    </p>
+</ConfirmDialog>
 
 <!-- Regenerate Token Modal -->
-{#if showRegenerateConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
-        role="presentation"
-        onclick={() => {
-            showRegenerateConfirm = false;
-            regeneratedToken = "";
-        }}
-    >
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div
-            class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-            onclick={(e) => e.stopPropagation()}
-        >
-            {#if !regeneratedToken}
-                <h3 class="text-lg font-semibold text-foreground mb-3">
-                    Regenerate Token
-                </h3>
-                <p class="text-sm text-muted-foreground mb-6">
-                    This will invalidate the current registration token. The
-                    agent will need to re-register.
-                </p>
-                <div class="flex gap-3 justify-end">
-                    <button
-                        onclick={() => (showRegenerateConfirm = false)}
-                        class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onclick={handleRegenerateToken}
-                        class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    >
-                        Regenerate
-                    </button>
-                </div>
-            {:else}
-                <h3 class="text-lg font-semibold text-success mb-3">
-                    Token Regenerated
-                </h3>
-                <div class="mb-4">
-                    <label
-                        class="block text-sm font-medium text-foreground mb-2"
-                        >New Registration Token</label
-                    >
-                    <div class="flex gap-2">
-                        <input
-                            type="text"
-                            readonly
-                            value={regeneratedToken}
-                            class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
-                        />
-                        <button
-                            onclick={() => copyToClipboard(regeneratedToken)}
-                            class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                        >
-                            Copy
-                        </button>
-                    </div>
-                    <p class="mt-2 text-xs font-medium text-warning">
-                        ⚠️ Save this token securely. It won't be shown again!
-                    </p>
-                </div>
-                <button
-                    onclick={() => {
-                        showRegenerateConfirm = false;
-                        regeneratedToken = "";
-                    }}
-                    class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                    Close
-                </button>
-            {/if}
+<Modal open={showRegenerateConfirm} onClose={closeRegenerateModal}>
+    {#if !regeneratedToken}
+        <h3 class="text-lg font-semibold text-foreground mb-3">
+            Regenerate Token
+        </h3>
+        <p class="text-sm text-muted-foreground mb-6">
+            This will invalidate the current registration token. The
+            agent will need to re-register.
+        </p>
+        <div class="flex gap-3 justify-end">
+            <button
+                onclick={() => (showRegenerateConfirm = false)}
+                class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+                Cancel
+            </button>
+            <button
+                onclick={handleRegenerateToken}
+                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+                Regenerate
+            </button>
         </div>
-    </div>
-{/if}
-
-<!-- Change IP Modal -->
-{#if showChangeIP}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
-        role="presentation"
-        onclick={() => {
-            showChangeIP = false;
-            newIP = "";
-        }}
-    >
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div
-            class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-            onclick={(e) => e.stopPropagation()}
-        >
-            <h3 class="text-lg font-semibold text-foreground mb-3">
-                Change Configured IP
-            </h3>
-            <div class="mb-4">
-                <label
-                    for="newip"
-                    class="block text-sm font-medium text-foreground mb-2"
-                >
-                    New IP Address
-                </label>
+    {:else}
+        <h3 class="text-lg font-semibold text-success mb-3">
+            Token Regenerated
+        </h3>
+        <div class="mb-4">
+            <label
+                class="block text-sm font-medium text-foreground mb-2"
+                >New Registration Token</label
+            >
+            <div class="flex gap-2">
                 <input
-                    id="newip"
                     type="text"
-                    bind:value={newIP}
-                    placeholder="e.g., 192.168.1.100"
-                    class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    readonly
+                    value={regeneratedToken}
+                    class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
                 />
-            </div>
-            <div class="flex gap-3 justify-end">
                 <button
-                    onclick={() => {
-                        showChangeIP = false;
-                        newIP = "";
-                    }}
+                    onclick={() => copyToClipboard(regeneratedToken)}
                     class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 >
-                    Cancel
-                </button>
-                <button
-                    onclick={handleChangeIP}
-                    class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                    Update IP
+                    Copy
                 </button>
             </div>
+            <p class="mt-2 text-xs font-medium text-warning">
+                Save this token securely. It won't be shown again!
+            </p>
         </div>
+        <button
+            onclick={closeRegenerateModal}
+            class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+            Close
+        </button>
+    {/if}
+</Modal>
+
+<!-- Change IP Modal -->
+<Modal open={showChangeIP} onClose={closeChangeIPModal}>
+    <h3 class="text-lg font-semibold text-foreground mb-3">
+        Change Configured IP
+    </h3>
+    <div class="mb-4">
+        <label
+            for="newip"
+            class="block text-sm font-medium text-foreground mb-2"
+        >
+            New IP Address
+        </label>
+        <input
+            id="newip"
+            type="text"
+            bind:value={newIP}
+            placeholder="e.g., 192.168.1.100"
+            class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        />
     </div>
-{/if}
+    <div class="flex gap-3 justify-end">
+        <button
+            onclick={closeChangeIPModal}
+            class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        >
+            Cancel
+        </button>
+        <button
+            onclick={handleChangeIP}
+            class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+            Update IP
+        </button>
+    </div>
+</Modal>

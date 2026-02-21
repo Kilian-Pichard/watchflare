@@ -4,6 +4,7 @@
 	import * as api from '$lib/api.js';
 	import * as Select from '$lib/components/ui/select';
 	import type { Server, Package, PackageStats, PackageCollection } from '$lib/types';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let server: Server | null = $state(null);
 	let packages: Package[] = $state([]);
@@ -66,18 +67,9 @@
 		await loadData();
 	}
 
-	async function nextPage() {
-		if (offset + limit < totalCount) {
-			offset += limit;
-			await loadData();
-		}
-	}
-
-	async function prevPage() {
-		if (offset > 0) {
-			offset -= limit;
-			await loadData();
-		}
+	function handlePageChange(page: number) {
+		offset = (page - 1) * limit;
+		loadData();
 	}
 
 	function formatDate(dateString: string) {
@@ -317,29 +309,6 @@
 		</div>
 
 		<!-- Pagination -->
-		<div class="border-t bg-muted/10 px-4 py-3 flex items-center justify-between">
-			<div class="text-sm text-muted-foreground">
-				Showing {offset + 1} to {Math.min(offset + limit, totalCount)} of {totalCount} packages
-			</div>
-			<div class="flex gap-2">
-				<button
-					onclick={prevPage}
-					disabled={offset === 0}
-					class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-				>
-					Previous
-				</button>
-				<div class="flex items-center px-3 py-1.5 text-sm text-muted-foreground">
-					Page {currentPage} of {totalPages}
-				</div>
-				<button
-					onclick={nextPage}
-					disabled={offset + limit >= totalCount}
-					class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-				>
-					Next
-				</button>
-			</div>
-		</div>
+		<Pagination {currentPage} {totalPages} totalItems={totalCount} pageSize={limit} itemLabel="packages" onPageChange={handlePageChange} />
 	{/if}
 </div>

@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.12.0
+**Current version**: 0.15.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.15.0` - P1 deduplication: extracted Modal, ConfirmDialog, Pagination reusable components, refactored 5 modals and 2 paginations, shared handleSSEReactivation utility across 3 pages, removed unused toasts imports
 - `0.14.0` - P0 cleanup: all components migrated to Svelte 5 runes ($props, $state, $derived), TypeScript annotations on all .svelte files, InstallInstructions rewritten with Tailwind design tokens replacing 30 hardcoded colors, fixed PackageStats type to match backend
 - `0.13.0` - Redesign header: command palette search (Cmd+K), Add Server button, always-visible alerts, centered W logo on mobile linking to dashboard
 - `0.12.0` - Redesign server detail page: compact header card with inline info grid, live metrics in chart headers, packages section promoted with dedicated link

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import { formatPercent, logger } from '$lib/utils';
+	import { formatPercent, handleSSEReactivation, logger } from '$lib/utils';
 	import {
 		userStore,
 		currentUser,
@@ -14,8 +14,7 @@
 		currentTimeRange,
 		dashboardStats,
 		alertsStore,
-		sseStore,
-		toasts
+		sseStore
 	} from '$lib/stores';
 	import ServerTable from '$lib/components/ServerTable.svelte';
 	import DashboardStats from '$lib/components/dashboard/DashboardStats.svelte';
@@ -90,16 +89,9 @@
 	}
 
 	function handleSSEMessage(event: SSEEvent) {
-		if (event.type === 'server_update') {
-			// Show toast notification if agent was reactivated
-			if (event.data.reactivated && event.data.hostname) {
-				toasts.add(
-					`Agent "${event.data.hostname}" was reactivated (same physical server detected via UUID)`,
-					'info',
-					8000 // 8 seconds
-				);
-			}
+		handleSSEReactivation(event);
 
+		if (event.type === 'server_update') {
 			// Update server status via store
 			serversStore.updateStatus(event.data.id, event.data.status, event.data.last_seen);
 		} else if (event.type === 'metrics_update') {

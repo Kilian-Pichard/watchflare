@@ -2,11 +2,12 @@
     import { onMount, onDestroy } from "svelte";
     import { goto } from "$app/navigation";
     import * as api from "$lib/api.js";
-    import { toasts } from "$lib/stores/toasts";
-    import { getStatusClass, formatRelativeTime, logger } from "$lib/utils";
+    import { getStatusClass, formatRelativeTime, handleSSEReactivation, logger } from "$lib/utils";
     import type { Server, SSEEvent } from "$lib/types";
     import { sseStore } from "$lib/stores/sse";
     import * as Select from "$lib/components/ui/select";
+    import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+    import Pagination from "$lib/components/Pagination.svelte";
 
     const PER_PAGE = 20;
 
@@ -121,16 +122,10 @@
     }
 
     function handleSSEMessage(event: SSEEvent) {
+        handleSSEReactivation(event);
+
         if (event.type === "server_update") {
             const update = event.data;
-
-            if (update.reactivated && update.hostname) {
-                toasts.add(
-                    `Agent "${update.hostname}" was reactivated (same physical server detected via UUID)`,
-                    "info",
-                    8000,
-                );
-            }
 
             const serverIndex = servers.findIndex((s) => s.id === update.id);
             if (serverIndex !== -1) {
@@ -200,10 +195,6 @@
 <svelte:head>
     <title>Servers - Watchflare</title>
 </svelte:head>
-
-<svelte:window
-    onkeydown={(e) => e.key === "Escape" && showDeleteConfirm && cancelDelete()}
-/>
 
 <!-- Header -->
 <div class="mb-6">
@@ -527,87 +518,31 @@
         </table>
 
         <!-- Pagination -->
-        {#if totalPages > 1}
-            <div class="flex items-center justify-between border-t px-4 py-3">
-                <p class="text-sm text-muted-foreground">
-                    {(page - 1) * PER_PAGE + 1}-{Math.min(
-                        page * PER_PAGE,
-                        total,
-                    )} of {total} servers
-                </p>
-                <div class="flex items-center gap-2">
-                    <button
-                        onclick={() => loadPage(page - 1)}
-                        disabled={page <= 1}
-                        class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Previous
-                    </button>
-                    <span class="text-sm text-muted-foreground">
-                        {page} / {totalPages}
-                    </span>
-                    <button
-                        onclick={() => loadPage(page + 1)}
-                        disabled={page >= totalPages}
-                        class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Next
-                    </button>
-                </div>
-            </div>
-        {/if}
+        <Pagination currentPage={page} {totalPages} totalItems={total} pageSize={PER_PAGE} itemLabel="servers" onPageChange={loadPage} />
     </div>
 {/if}
 <!-- Delete Confirmation Modal -->
-{#if showDeleteConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
-        role="presentation"
-        onclick={cancelDelete}
-    >
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div
-            class="w-full max-w-md rounded-lg border bg-card p-4 sm:p-6 shadow-lg mx-4 sm:mx-0"
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-            onclick={(e) => e.stopPropagation()}
-        >
-            <h3 class="text-lg font-semibold text-foreground mb-3">
-                Confirm Delete
-            </h3>
-            <p class="text-sm text-muted-foreground mb-4">
-                Are you sure you want to delete the server "{serverToDelete?.name}"?
+<ConfirmDialog
+    open={showDeleteConfirm}
+    title="Confirm Delete"
+    onConfirm={handleDelete}
+    onClose={cancelDelete}
+    confirmLabel="Delete Server"
+    confirmVariant="destructive"
+>
+    <p class="text-sm text-muted-foreground mb-4">
+        Are you sure you want to delete the server "{serverToDelete?.name}"?
+    </p>
+    {#if serverToDelete?.status === "online"}
+        <div class="mb-4 rounded-md border border-primary/20 bg-primary/5 p-3">
+            <p class="text-sm text-foreground">
+                Note: This will remove the server from the database, but
+                the agent will remain installed on the server. You will
+                need to uninstall it manually.
             </p>
-            {#if serverToDelete?.status === "online"}
-                <div
-                    class="mb-4 rounded-md border border-primary/20 bg-primary/5 p-3"
-                >
-                    <p class="text-sm text-foreground">
-                        Note: This will remove the server from the database, but
-                        the agent will remain installed on the server. You will
-                        need to uninstall it manually.
-                    </p>
-                </div>
-            {/if}
-            <p class="text-sm font-medium text-destructive mb-6">
-                This action cannot be undone.
-            </p>
-            <div class="flex gap-3 justify-end">
-                <button
-                    onclick={cancelDelete}
-                    class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                >
-                    Cancel
-                </button>
-                <button
-                    onclick={handleDelete}
-                    class="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
-                >
-                    Delete Server
-                </button>
-            </div>
         </div>
-    </div>
-{/if}
+    {/if}
+    <p class="text-sm font-medium text-destructive">
+        This action cannot be undone.
+    </p>
+</ConfirmDialog>
