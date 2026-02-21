@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
@@ -15,8 +15,9 @@
     import MemoryChart from "$lib/components/MemoryChart.svelte";
     import DiskChart from "$lib/components/DiskChart.svelte";
     import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
+    import type { Server, Metric, PackageStats, SSEEvent, TimeRange } from "$lib/types";
 
-    let server = $state(null);
+    let server: Server | null = $state(null);
     let loading = $state(true);
     let error = $state("");
     let showDeleteConfirm = $state(false);
@@ -24,14 +25,14 @@
     let showChangeIP = $state(false);
     let newIP = $state("");
     let regeneratedToken = $state("");
-    let packageStats = $state(null);
-    let metrics = $state([]);
-    let timeRange = $state("1h");
-    let sseUnsubscribe = null;
+    let packageStats: PackageStats | null = $state(null);
+    let metrics: Metric[] = $state([]);
+    let timeRange: TimeRange = $state("1h");
+    let sseUnsubscribe: (() => void) | null = null;
 
     const serverId = $derived($page.params.id);
 
-    function handleSSEMessage(event) {
+    function handleSSEMessage(event: SSEEvent) {
         // Handle server_update events for this specific server
         if (event.type === "server_update") {
             const update = event.data;
@@ -174,7 +175,7 @@
         }
     }
 
-    function copyToClipboard(text) {
+    function copyToClipboard(text: string) {
         navigator.clipboard.writeText(text);
     }
 
@@ -194,7 +195,7 @@
         metrics.length > 0 ? metrics[metrics.length - 1] : null,
     );
 
-    function handleEscape(e) {
+    function handleEscape(e: KeyboardEvent) {
         if (e.key !== "Escape") return;
         if (showDeleteConfirm) {
             showDeleteConfirm = false;
@@ -523,7 +524,7 @@
 {#if showDeleteConfirm}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
         role="presentation"
         onclick={() => (showDeleteConfirm = false)}
     >
@@ -566,7 +567,7 @@
 {#if showRegenerateConfirm}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
         role="presentation"
         onclick={() => {
             showRegenerateConfirm = false;
@@ -648,7 +649,7 @@
 {#if showChangeIP}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
         role="presentation"
         onclick={() => {
             showChangeIP = false;

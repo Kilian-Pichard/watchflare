@@ -138,10 +138,15 @@ export interface Package {
 	updated_at: string;
 }
 
+export interface PackageManagerStat {
+	package_manager: string;
+	count: number;
+}
+
 export interface PackageStats {
 	total_packages: number;
 	recent_changes?: number;
-	by_manager: Record<string, number>;
+	by_package_manager: PackageManagerStat[];
 }
 
 export interface PackageCollection {

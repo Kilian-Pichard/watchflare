@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import { fade } from "svelte/transition";
     import { page } from "$app/stores";
@@ -14,7 +14,7 @@
     onMount(() => {
         const mediaQuery = window.matchMedia("(min-width: 1024px)");
 
-        const handleChange = (e) => {
+        const handleChange = (e: MediaQueryListEvent) => {
             if (e.matches) {
                 // Passage en desktop : sauvegarder l'état et fermer
                 wasOpenBeforeDesktop = get(mobileMenuOpen);
@@ -43,7 +43,7 @@
         { href: "/settings", label: "Settings", icon: Settings },
     ];
 
-    function isActive(href) {
+    function isActive(href: string): boolean {
         if (href === "/") {
             return $page.url.pathname === "/";
         }

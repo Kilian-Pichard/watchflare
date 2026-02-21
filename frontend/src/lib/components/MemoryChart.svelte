@@ -1,10 +1,11 @@
-<script>
+<script lang="ts">
     import { AreaChart } from "layerchart";
     import { scaleTime } from "d3-scale";
     import { formatBytes } from "$lib/utils";
     import * as ChartUI from "$lib/components/ui/chart";
+    import type { Metric, AggregatedMetric } from "$lib/types";
 
-    let { data = [] } = $props();
+    let { data = [] }: { data: (Metric | AggregatedMetric)[] } = $props();
 
     // Transform data for layerchart
     let chartData = $derived(

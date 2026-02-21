@@ -1,12 +1,16 @@
-<script>
+<script lang="ts">
 	import { formatBytes, formatPercent, getStatusClass, getMetricClass, formatRelativeTime } from '$lib/utils';
+	import type { ServerWithMetrics, Metric } from '$lib/types';
 
-	const { servers, metricsData } = $props();
+	const { servers, metricsData }: {
+		servers: ServerWithMetrics[];
+		metricsData: Record<string, Metric[]>;
+	} = $props();
 
 	let sortColumn = $state('name');
-	let sortOrder = $state('asc');
+	let sortOrder = $state<'asc' | 'desc'>('asc');
 
-	function handleSort(column) {
+	function handleSort(column: string) {
 		if (sortColumn === column) {
 			sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
 		} else {
@@ -15,7 +19,7 @@
 		}
 	}
 
-	function getLastMetrics(serverId) {
+	function getLastMetrics(serverId: string) {
 		const metrics = metricsData[serverId];
 		if (!metrics || metrics.length === 0) {
 			return { hasData: false, cpu: 0, memory: 0, disk: 0, memoryUsed: 0, memoryTotal: 0, diskUsed: 0, diskTotal: 0 };

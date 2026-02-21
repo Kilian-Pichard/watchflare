@@ -1,13 +1,18 @@
-<script>
+<script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import { generateAlerts } from '$lib/utils';
 	import { XCircle, AlertTriangle } from 'lucide-svelte';
+	import type { ServerWithMetrics } from '$lib/types';
 
-	const { servers, isOpen, onClose } = $props();
+	const { servers, isOpen, onClose }: {
+		servers: ServerWithMetrics[];
+		isOpen: boolean;
+		onClose: () => void;
+	} = $props();
 
 	const alerts = $derived(generateAlerts(servers));
 
-	function getAlertColor(type) {
+	function getAlertColor(type: string): string {
 		if (type === 'critical') {
 			return 'bg-destructive/10 text-destructive border-destructive/20';
 		}

@@ -1,15 +1,19 @@
-<script>
+<script lang="ts">
 	import { TIME_RANGES, logger } from '$lib/utils';
 	import { updatePreferences } from '$lib/api';
 	import * as Select from '$lib/components/ui/select';
+	import type { TimeRange } from '$lib/types';
 
-	let { value = $bindable('24h'), onValueChange } = $props();
+	let { value = $bindable<TimeRange>('24h'), onValueChange }: {
+		value?: TimeRange;
+		onValueChange?: (value: TimeRange) => void;
+	} = $props();
 
 	let selectedLabel = $derived(
 		TIME_RANGES.find(r => r.value === value)?.label || value
 	);
 
-	async function handleChange(newValue) {
+	async function handleChange(newValue: TimeRange) {
 		value = newValue;
 
 		// Save to user preferences

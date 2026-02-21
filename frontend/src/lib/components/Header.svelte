@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { goto } from "$app/navigation";
     import {
         mobileMenuOpen,
@@ -26,7 +26,7 @@
         uiStore.toggleRightSidebar();
     }
 
-    function handleKeydown(e) {
+    function handleKeydown(e: KeyboardEvent) {
         if ((e.metaKey || e.ctrlKey) && e.key === "k") {
             e.preventDefault();
             commandPaletteOpen = true;

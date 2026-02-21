@@ -1,17 +1,18 @@
-<script>
+<script lang="ts">
     import { goto } from "$app/navigation";
     import { Command, Dialog } from "bits-ui";
     import { Search, Server } from "lucide-svelte";
     import * as api from "$lib/api.js";
+    import type { Server as ServerType } from "$lib/types";
 
     let { open = $bindable(false) } = $props();
 
     let query = $state("");
-    let results = $state([]);
+    let results: ServerType[] = $state([]);
     let loading = $state(false);
-    let searchTimeout = null;
+    let searchTimeout: ReturnType<typeof setTimeout> | null = $state(null);
 
-    function handleInputChange(value) {
+    function handleInputChange(value: string) {
         query = value;
         if (searchTimeout) clearTimeout(searchTimeout);
         if (!value.trim()) {
@@ -32,14 +33,14 @@
         }, 200);
     }
 
-    function handleSelect(serverId) {
+    function handleSelect(serverId: string) {
         open = false;
         query = "";
         results = [];
         goto(`/servers/${serverId}`);
     }
 
-    function getStatusDot(status) {
+    function getStatusDot(status: string): string {
         switch (status) {
             case "online": return "bg-success";
             case "offline": return "bg-muted-foreground";

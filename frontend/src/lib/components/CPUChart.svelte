@@ -1,9 +1,10 @@
-<script>
+<script lang="ts">
     import { LineChart } from "layerchart";
     import { scaleTime } from "d3-scale";
     import * as ChartUI from "$lib/components/ui/chart";
+    import type { Metric, AggregatedMetric } from "$lib/types";
 
-    let { data = [] } = $props();
+    let { data = [] }: { data: (Metric | AggregatedMetric)[] } = $props();
 
     // Transform data for layerchart
     let chartData = $derived(

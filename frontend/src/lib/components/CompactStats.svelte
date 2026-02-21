@@ -1,7 +1,15 @@
-<script>
+<script lang="ts">
     import { formatBytes, formatPercent } from "$lib/utils";
 
-    const { stats } = $props();
+    const { stats }: {
+        stats: {
+            onlineServers: number;
+            totalServers: number;
+            avgCPU: number;
+            usedMemory: number;
+            usedDisk: number;
+        };
+    } = $props();
 </script>
 
 <div

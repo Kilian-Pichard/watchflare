@@ -1,27 +1,28 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import * as api from '$lib/api.js';
 	import * as Select from '$lib/components/ui/select';
+	import type { Server, Package, PackageStats, PackageCollection } from '$lib/types';
 
-	let server = null;
-	let packages = [];
-	let stats = null;
-	let collections = [];
-	let loading = true;
-	let error = '';
-	let searchTerm = '';
-	let selectedManager = '';
-	let totalCount = 0;
+	let server: Server | null = $state(null);
+	let packages: Package[] = $state([]);
+	let stats: PackageStats | null = $state(null);
+	let collections: PackageCollection[] = $state([]);
+	let loading = $state(true);
+	let error = $state('');
+	let searchTerm = $state('');
+	let selectedManager = $state('');
+	let totalCount = $state(0);
 	let limit = 50;
-	let offset = 0;
-	let showCollections = false;
+	let offset = $state(0);
+	let showCollections = $state(false);
 
-	$: serverId = $page.params.id;
-	$: managerLabel = selectedManager ? getManagerLabel(selectedManager) : 'All Package Managers';
-	$: managerItems = ['All Package Managers', ...(stats?.by_package_manager || []).map(pm => getManagerLabel(pm.package_manager))];
-	$: currentPage = Math.floor(offset / limit) + 1;
-	$: totalPages = Math.ceil(totalCount / limit);
+	let serverId = $derived($page.params.id);
+	let managerLabel = $derived(selectedManager ? getManagerLabel(selectedManager) : 'All Package Managers');
+	let managerItems = $derived(['All Package Managers', ...(stats?.by_package_manager || []).map(pm => getManagerLabel(pm.package_manager))]);
+	let currentPage = $derived(Math.floor(offset / limit) + 1);
+	let totalPages = $derived(Math.ceil(totalCount / limit));
 
 	onMount(async () => {
 		await loadData();
@@ -47,8 +48,8 @@
 			totalCount = packagesData.total_count || 0;
 			stats = statsData;
 			collections = collectionsData.collections || [];
-		} catch (err) {
-			error = err.message || 'Failed to load packages';
+		} catch (err: unknown) {
+			error = err instanceof Error ? err.message : 'Failed to load packages';
 		} finally {
 			loading = false;
 		}
@@ -59,7 +60,7 @@
 		await loadData();
 	}
 
-	async function handleFilterChange(value) {
+	async function handleFilterChange(value: string) {
 		selectedManager = value;
 		offset = 0;
 		await loadData();
@@ -79,13 +80,13 @@
 		}
 	}
 
-	function formatDate(dateString) {
+	function formatDate(dateString: string) {
 		if (!dateString) return '-';
 		return new Date(dateString).toLocaleString('fr-FR');
 	}
 
-	function getManagerColor(manager) {
-		const colors = {
+	function getManagerColor(manager: string): string {
+		const colors: Record<string, string> = {
 			brew: 'bg-[var(--chart-4)]/10 text-[var(--chart-4)] border-[var(--chart-4)]/20',
 			dpkg: 'bg-[var(--chart-2)]/10 text-[var(--chart-2)] border-[var(--chart-2)]/20',
 			rpm: 'bg-[var(--chart-1)]/10 text-[var(--chart-1)] border-[var(--chart-1)]/20',
@@ -94,8 +95,8 @@
 		return colors[manager] || 'bg-muted text-muted-foreground border-border';
 	}
 
-	function getManagerLabel(manager) {
-		const labels = {
+	function getManagerLabel(manager: string): string {
+		const labels: Record<string, string> = {
 			brew: 'Homebrew',
 			dpkg: 'apt/dpkg',
 			rpm: 'yum/rpm',

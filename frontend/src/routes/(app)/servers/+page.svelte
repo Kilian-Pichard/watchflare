@@ -10,24 +10,24 @@
 
     const PER_PAGE = 20;
 
-    let servers: Server[] = [];
-    let total = 0;
-    let page = 1;
-    let initialLoading = true;
-    let loading = false;
-    let error = "";
-    let showDeleteConfirm = false;
-    let serverToDelete: Server | null = null;
+    let servers: Server[] = $state([]);
+    let total = $state(0);
+    let page = $state(1);
+    let initialLoading = $state(true);
+    let loading = $state(false);
+    let error = $state("");
+    let showDeleteConfirm = $state(false);
+    let serverToDelete: Server | null = $state(null);
     let sseUnsubscribe: (() => void) | null = null;
 
     // Sort state
-    let sortColumn = "created_at";
-    let sortOrder: "asc" | "desc" = "desc";
+    let sortColumn = $state("created_at");
+    let sortOrder: "asc" | "desc" = $state("desc");
 
     // Filter state
-    let searchQuery = "";
-    let statusFilter = "";
-    let environmentFilter = "";
+    let searchQuery = $state("");
+    let statusFilter = $state("");
+    let environmentFilter = $state("");
     let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const statusOptions = [
@@ -46,10 +46,16 @@
         { value: "container", label: "Container" },
     ];
 
-    $: statusLabel = statusOptions.find(o => o.value === statusFilter)?.label || "All statuses";
-    $: environmentLabel = environmentOptions.find(o => o.value === environmentFilter)?.label || "All environments";
+    let statusLabel = $derived(
+        statusOptions.find((o) => o.value === statusFilter)?.label ||
+        "All statuses"
+    );
+    let environmentLabel = $derived(
+        environmentOptions.find((o) => o.value === environmentFilter)?.label ||
+        "All environments"
+    );
 
-    $: totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+    let totalPages = $derived(Math.max(1, Math.ceil(total / PER_PAGE)));
 
     async function loadPage(p: number) {
         loading = true;
@@ -201,9 +207,7 @@
 
 <!-- Header -->
 <div class="mb-6">
-    <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
-        Servers
-    </h1>
+    <h1 class="text-xl sm:text-2xl font-semibold text-foreground">Servers</h1>
     <p class="text-sm text-muted-foreground mt-1">
         Manage your monitored servers
     </p>
@@ -218,8 +222,12 @@
         oninput={handleSearchInput}
         class="rounded-lg border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 w-full sm:w-64"
     />
-    <Select.Root type="single" value={statusFilter} onValueChange={handleStatusChange}>
-        <Select.Trigger items={statusOptions.map(o => o.label)}>
+    <Select.Root
+        type="single"
+        value={statusFilter}
+        onValueChange={handleStatusChange}
+    >
+        <Select.Trigger items={statusOptions.map((o) => o.label)}>
             <span>{statusLabel}</span>
         </Select.Trigger>
         <Select.Content>
@@ -230,8 +238,12 @@
             {/each}
         </Select.Content>
     </Select.Root>
-    <Select.Root type="single" value={environmentFilter} onValueChange={handleEnvironmentChange}>
-        <Select.Trigger items={environmentOptions.map(o => o.label)}>
+    <Select.Root
+        type="single"
+        value={environmentFilter}
+        onValueChange={handleEnvironmentChange}
+    >
+        <Select.Trigger items={environmentOptions.map((o) => o.label)}>
             <span>{environmentLabel}</span>
         </Select.Trigger>
         <Select.Content>
@@ -550,7 +562,7 @@
 {#if showDeleteConfirm}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 max-w-full"
         role="presentation"
         onclick={cancelDelete}
     >

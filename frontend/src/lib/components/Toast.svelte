@@ -1,9 +1,9 @@
-<script>
+<script lang="ts">
 	import { toasts } from '$lib/stores/toasts';
 	import { fade, fly } from 'svelte/transition';
+	import type { ToastType } from '$lib/types';
 
-	// Icon for each toast type
-	function getIcon(type) {
+	function getIcon(type: ToastType): string {
 		switch (type) {
 			case 'success':
 				return '✓';
@@ -18,7 +18,7 @@
 	}
 
 	// Color classes for each type
-	function getColorClasses(type) {
+	function getColorClasses(type: ToastType): string {
 		switch (type) {
 			case 'success':
 				return 'bg-success/10 border-success/20 text-success';
@@ -42,7 +42,7 @@
 			<span class="text-xl font-bold flex-shrink-0">{getIcon(toast.type)}</span>
 			<p class="flex-1 text-sm">{toast.message}</p>
 			<button
-				on:click={() => toasts.remove(toast.id)}
+				onclick={() => toasts.remove(toast.id)}
 				class="text-current opacity-50 hover:opacity-100 transition-opacity flex-shrink-0"
 				aria-label="Close notification"
 			>

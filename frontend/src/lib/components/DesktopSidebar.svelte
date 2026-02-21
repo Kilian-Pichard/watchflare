@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { page } from "$app/stores";
     import {
         sidebarCollapsed,
@@ -26,7 +26,7 @@
         { href: "/settings", label: "Settings", icon: Settings },
     ];
 
-    function isActive(href) {
+    function isActive(href: string): boolean {
         if (href === "/") {
             return $page.url.pathname === "/";
         }

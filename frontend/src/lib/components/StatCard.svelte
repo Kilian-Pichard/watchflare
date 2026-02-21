@@ -1,5 +1,11 @@
-<script>
+<script lang="ts">
     import { cn } from "$lib/utils";
+
+    interface StatusInfo {
+        label: string;
+        color: string;
+        dot: string;
+    }
 
     let {
         title,
@@ -12,6 +18,17 @@
         status = null,
         percentage = null,
         class: className,
+    }: {
+        title: string;
+        value: string;
+        subtitle?: string;
+        icon?: string;
+        trend?: "up" | "down";
+        trendValue?: string;
+        variant?: string;
+        status?: StatusInfo | null;
+        percentage?: number | null;
+        class?: string;
     } = $props();
 
     // Determine status badge based on percentage
