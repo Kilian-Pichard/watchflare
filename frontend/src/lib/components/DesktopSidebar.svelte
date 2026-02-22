@@ -4,10 +4,9 @@
         sidebarCollapsed,
         sidebarTransitioning,
     } from "$lib/stores/sidebar";
+    import { authActions } from "$lib/stores";
     import { Home, Server, Settings, LogOut } from "lucide-svelte";
     import SSEStatusBadge from "./SSEStatusBadge.svelte";
-
-    const { onLogout } = $props();
 
     const transitioning = $derived($sidebarTransitioning);
     const collapsed = $derived($sidebarCollapsed);
@@ -87,7 +86,7 @@
             <!-- Logout Button -->
             <div class="px-2 pb-3">
                 <button
-                    onclick={onLogout}
+                    onclick={authActions.logout}
                     class="flex w-full items-center rounded-lg py-3.25 px-3.25 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                     title="Logout"
                 >

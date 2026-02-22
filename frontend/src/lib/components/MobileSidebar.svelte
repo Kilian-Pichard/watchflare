@@ -4,10 +4,9 @@
     import { page } from "$app/stores";
     import { mobileMenuOpen } from "$lib/stores/sidebar";
     import { get } from "svelte/store";
+    import { authActions } from "$lib/stores";
     import { Home, Server, Settings, LogOut } from "lucide-svelte";
     import SSEStatusBadge from "./SSEStatusBadge.svelte";
-
-    const { onLogout } = $props();
 
     let wasOpenBeforeDesktop = false;
 
@@ -110,7 +109,7 @@
             <!-- Logout Button -->
             <div class="px-4 pb-4">
                 <button
-                    onclick={onLogout}
+                    onclick={authActions.logout}
                     class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                 >
                     <LogOut class="h-5 w-5 shrink-0" />

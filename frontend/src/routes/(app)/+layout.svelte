@@ -1,14 +1,5 @@
 <script lang="ts">
-    import { goto } from "$app/navigation";
-    import { logout } from "$lib/api";
-    import { countAlerts, logger } from "$lib/utils";
     import {
-        userStore,
-        serversStore,
-        servers,
-        metricsStore,
-        aggregatedStore,
-        alertsStore,
         uiStore,
         sidebarCollapsed,
         sidebarTransitioning,
@@ -20,34 +11,16 @@
 
     const { children } = $props();
 
-    let serversList = $derived($servers);
     let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
-    let alertCount = $derived(countAlerts(serversList));
-
-    async function handleLogout() {
-        try {
-            await logout();
-            userStore.clear();
-            serversStore.clear();
-            metricsStore.clear();
-            aggregatedStore.clear();
-            alertsStore.clear();
-            goto("/login");
-        } catch (err) {
-            logger.error("Logout failed:", err);
-            goto("/login");
-        }
-    }
 </script>
 
 <div class="min-h-screen bg-background">
-    <Header {alertCount} />
+    <Header />
 
-    <DesktopSidebar onLogout={handleLogout} />
-    <MobileSidebar onLogout={handleLogout} />
+    <DesktopSidebar />
+    <MobileSidebar />
 
     <RightSidebar
-        servers={serversList}
         isOpen={rightSidebarOpen}
         onClose={() => uiStore.setRightSidebar(false)}
     />

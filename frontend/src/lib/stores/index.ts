@@ -12,7 +12,8 @@ export {
 	servers,
 	onlineServers,
 	offlineServers,
-	serversLoading
+	serversLoading,
+	alertCount
 } from './servers';
 
 // Metrics store
@@ -29,6 +30,9 @@ export {
 
 // Alerts store
 export { alertsStore } from './alerts';
+
+// Auth actions
+export { authActions } from './auth';
 
 // UI store
 export { uiStore } from './ui';
