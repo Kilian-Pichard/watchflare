@@ -33,6 +33,7 @@
 	<thead>
 		<tr class="border-b bg-muted/30">
 			<th
+				scope="col"
 				class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 				onclick={() => onSort('name')}
 			>
@@ -50,6 +51,7 @@
 				</span>
 			</th>
 			<th
+				scope="col"
 				class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 				onclick={() => onSort('status')}
 			>
@@ -67,6 +69,7 @@
 				</span>
 			</th>
 			<th
+				scope="col"
 				class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 				onclick={() => onSort('ip')}
 			>
@@ -84,6 +87,7 @@
 				</span>
 			</th>
 			<th
+				scope="col"
 				class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 				onclick={() => onSort('last_seen')}
 			>
@@ -100,7 +104,7 @@
 					{/if}
 				</span>
 			</th>
-			<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+			<th scope="col" class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
 				Actions
 			</th>
 		</tr>

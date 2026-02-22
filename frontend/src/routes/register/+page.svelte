@@ -61,9 +61,11 @@
 						bind:value={email}
 						placeholder="admin@watchflare.io"
 						disabled={loading}
+						aria-invalid={!!fieldErrors.email}
+						aria-describedby={fieldErrors.email ? 'email-error' : undefined}
 						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.email ? 'border-destructive' : ''}"
 					/>
-					{#if fieldErrors.email}<p class="mt-1 text-xs text-destructive">{fieldErrors.email}</p>{/if}
+					{#if fieldErrors.email}<p id="email-error" class="mt-1 text-xs text-destructive">{fieldErrors.email}</p>{/if}
 				</div>
 
 				<!-- Password -->
@@ -77,9 +79,11 @@
 						bind:value={password}
 						placeholder="••••••••"
 						disabled={loading}
+						aria-invalid={!!fieldErrors.password}
+						aria-describedby={fieldErrors.password ? 'password-error' : undefined}
 						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.password ? 'border-destructive' : ''}"
 					/>
-					{#if fieldErrors.password}<p class="mt-1 text-xs text-destructive">{fieldErrors.password}</p>{/if}
+					{#if fieldErrors.password}<p id="password-error" class="mt-1 text-xs text-destructive">{fieldErrors.password}</p>{/if}
 					<p class="mt-1 text-xs text-muted-foreground">Minimum 12 characters</p>
 				</div>
 
@@ -94,9 +98,11 @@
 						bind:value={confirmPassword}
 						placeholder="••••••••"
 						disabled={loading}
+						aria-invalid={!!fieldErrors.confirmPassword}
+						aria-describedby={fieldErrors.confirmPassword ? 'confirmPassword-error' : undefined}
 						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.confirmPassword ? 'border-destructive' : ''}"
 					/>
-					{#if fieldErrors.confirmPassword}<p class="mt-1 text-xs text-destructive">{fieldErrors.confirmPassword}</p>{/if}
+					{#if fieldErrors.confirmPassword}<p id="confirmPassword-error" class="mt-1 text-xs text-destructive">{fieldErrors.confirmPassword}</p>{/if}
 				</div>
 
 				<!-- Error Message -->

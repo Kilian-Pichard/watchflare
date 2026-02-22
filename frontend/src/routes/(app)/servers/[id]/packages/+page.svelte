@@ -217,10 +217,10 @@
 			<table class="w-full">
 				<thead>
 					<tr class="border-b bg-muted/30">
-						<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-						<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
-						<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Packages</th>
-						<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Changes</th>
+						<th scope="col" class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+						<th scope="col" class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
+						<th scope="col" class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Packages</th>
+						<th scope="col" class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Changes</th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-border">
@@ -276,11 +276,11 @@
 			<table class="w-full">
 				<thead>
 					<tr class="border-b bg-muted/30">
-						<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Name</th>
-						<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Version</th>
-						<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Manager</th>
-						<th class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
-						<th class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Last Seen</th>
+						<th scope="col" class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Name</th>
+						<th scope="col" class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Version</th>
+						<th scope="col" class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Manager</th>
+						<th scope="col" class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
+						<th scope="col" class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Last Seen</th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-border">

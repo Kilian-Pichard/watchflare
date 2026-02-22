@@ -82,11 +82,14 @@
                 bind:value={currentPassword}
                 placeholder="Enter current password"
                 disabled={loading}
+                aria-invalid={!!fieldErrors.currentPassword}
+                aria-describedby={fieldErrors.currentPassword ? 'currentPassword-error' : undefined}
                 class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.currentPassword
                     ? 'border-destructive'
                     : ''}"
             />
             {#if fieldErrors.currentPassword}<p
+                    id="currentPassword-error"
                     class="mt-1 text-xs text-destructive"
                 >
                     {fieldErrors.currentPassword}
@@ -107,11 +110,14 @@
                 bind:value={newPassword}
                 placeholder="Enter new password (min 12 characters)"
                 disabled={loading}
+                aria-invalid={!!fieldErrors.newPassword}
+                aria-describedby={fieldErrors.newPassword ? 'newPassword-error' : undefined}
                 class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.newPassword
                     ? 'border-destructive'
                     : ''}"
             />
             {#if fieldErrors.newPassword}<p
+                    id="newPassword-error"
                     class="mt-1 text-xs text-destructive"
                 >
                     {fieldErrors.newPassword}
@@ -132,11 +138,14 @@
                 bind:value={confirmPassword}
                 placeholder="Confirm new password"
                 disabled={loading}
+                aria-invalid={!!fieldErrors.confirmPassword}
+                aria-describedby={fieldErrors.confirmPassword ? 'confirmPassword-error' : undefined}
                 class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.confirmPassword
                     ? 'border-destructive'
                     : ''}"
             />
             {#if fieldErrors.confirmPassword}<p
+                    id="confirmPassword-error"
                     class="mt-1 text-xs text-destructive"
                 >
                     {fieldErrors.confirmPassword}

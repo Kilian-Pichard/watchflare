@@ -85,11 +85,14 @@
                         bind:value={email}
                         placeholder="admin@watchflare.io"
                         disabled={loading}
+                        aria-invalid={!!fieldErrors.email}
+                        aria-describedby={fieldErrors.email ? 'email-error' : undefined}
                         class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.email
                             ? 'border-destructive'
                             : ''}"
                     />
                     {#if fieldErrors.email}<p
+                            id="email-error"
                             class="mt-1 text-xs text-destructive"
                         >
                             {fieldErrors.email}
@@ -110,11 +113,14 @@
                         bind:value={password}
                         placeholder="••••••••"
                         disabled={loading}
+                        aria-invalid={!!fieldErrors.password}
+                        aria-describedby={fieldErrors.password ? 'password-error' : undefined}
                         class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.password
                             ? 'border-destructive'
                             : ''}"
                     />
                     {#if fieldErrors.password}<p
+                            id="password-error"
                             class="mt-1 text-xs text-destructive"
                         >
                             {fieldErrors.password}

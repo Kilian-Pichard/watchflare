@@ -178,7 +178,7 @@
 		<table class="w-full min-w-[1000px]">
 			<thead>
 				<tr class="border-b bg-muted/30">
-					<th
+					<th scope="col"
 						class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 						onclick={() => handleSort('name')}
 					>
@@ -187,7 +187,7 @@
 							{@render sortIcon('name')}
 						</span>
 					</th>
-					<th
+					<th scope="col"
 						class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 						onclick={() => handleSort('status')}
 					>
@@ -196,7 +196,7 @@
 							{@render sortIcon('status')}
 						</span>
 					</th>
-					<th
+					<th scope="col"
 						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 						onclick={() => handleSort('cpu')}
 					>
@@ -205,7 +205,7 @@
 							{@render sortIcon('cpu')}
 						</span>
 					</th>
-					<th
+					<th scope="col"
 						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 						onclick={() => handleSort('memory')}
 					>
@@ -214,7 +214,7 @@
 							{@render sortIcon('memory')}
 						</span>
 					</th>
-					<th
+					<th scope="col"
 						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 						onclick={() => handleSort('disk')}
 					>
@@ -223,10 +223,10 @@
 							{@render sortIcon('disk')}
 						</span>
 					</th>
-					<th class="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+					<th scope="col" class="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
 						Updates
 					</th>
-					<th
+					<th scope="col"
 						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
 						onclick={() => handleSort('last_seen')}
 					>
