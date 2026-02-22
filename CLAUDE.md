@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.17.1
+**Current version**: 0.18.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.18.0` - P5 polish: extracted buildQueryString() utility (6 API functions refactored), normalized handler names (handle* convention), added 24 new tests (toasts store, metrics store, buildQueryString) bringing total to 111
 - `0.17.1` - P4 accessibility: added scope="col" to all 21 table headers (3 files), aria-invalid/aria-describedby on 10 form fields (4 files), RightSidebar close button already compliant
 - `0.17.0` - P3 stores & performance: extracted 12 named constants replacing magic numbers, memoized dashboardStats derived store (skips recalculation on irrelevant SSE heartbeats), normalized store APIs with resetSidebar() and documented store categories in index.ts
 - `0.16.0` - P2 component architecture: eliminated props drilling (alertCount store, authActions store, RightSidebar uses servers store directly), extracted 5 server sub-components (ServerDetailHeader, ServerAlerts, ServerMetricsCharts, ServerFilters, ServerListTable), server detail page 630→280 lines, server list page 550→200 lines

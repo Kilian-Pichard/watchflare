@@ -35,7 +35,7 @@
   --host ${backendHost} \\
   --port 50051`);
 
-	function copyToClipboard(text: string) {
+	function handleCopy(text: string) {
 		navigator.clipboard.writeText(text);
 		copied = true;
 
@@ -100,7 +100,7 @@
 				<pre class="bg-foreground text-background p-4 rounded-md font-mono text-sm leading-relaxed overflow-x-auto">{quickInstallCmd}</pre>
 				<button
 					class="absolute top-2 right-2 px-3 py-2 bg-muted-foreground/30 text-white rounded text-xs font-medium cursor-pointer transition-colors hover:bg-muted-foreground/50"
-					onclick={() => copyToClipboard(quickInstallCmd)}
+					onclick={() => handleCopy(quickInstallCmd)}
 				>
 					{copied ? '✓ Copied!' : 'Copy'}
 				</button>
@@ -161,7 +161,7 @@
 							<pre class="bg-foreground text-background p-4 rounded-md font-mono text-sm leading-relaxed overflow-x-auto">{linuxCmd}</pre>
 							<button
 								class="absolute top-2 right-2 px-3 py-2 bg-muted-foreground/30 text-white rounded text-xs font-medium cursor-pointer transition-colors hover:bg-muted-foreground/50"
-								onclick={() => copyToClipboard(linuxCmd)}
+								onclick={() => handleCopy(linuxCmd)}
 							>
 								{copied ? '✓ Copied!' : 'Copy'}
 							</button>
@@ -187,7 +187,7 @@
 							<pre class="bg-foreground text-background p-4 rounded-md font-mono text-sm leading-relaxed overflow-x-auto">{macosCmd}</pre>
 							<button
 								class="absolute top-2 right-2 px-3 py-2 bg-muted-foreground/30 text-white rounded text-xs font-medium cursor-pointer transition-colors hover:bg-muted-foreground/50"
-								onclick={() => copyToClipboard(macosCmd)}
+								onclick={() => handleCopy(macosCmd)}
 							>
 								{copied ? '✓ Copied!' : 'Copy'}
 							</button>

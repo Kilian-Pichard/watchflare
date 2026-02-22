@@ -18,6 +18,18 @@ import type {
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
+// Build query string from params, filtering out undefined/null/empty values
+export function buildQueryString(params: Record<string, string | number | boolean | undefined | null>): string {
+	const qs = new URLSearchParams();
+	for (const [key, value] of Object.entries(params)) {
+		if (value !== undefined && value !== null && value !== '') {
+			qs.append(key, String(value));
+		}
+	}
+	const str = qs.toString();
+	return str ? '?' + str : '';
+}
+
 interface ApiRequestOptions extends RequestInit {
 	headers?: Record<string, string>;
 }
@@ -180,16 +192,16 @@ export async function listServers(params?: {
 	search?: string;
 	environment?: string;
 }): Promise<ListServersResponse> {
-	const queryParams = new URLSearchParams();
-	if (params?.page) queryParams.append('page', params.page.toString());
-	if (params?.perPage) queryParams.append('per_page', params.perPage.toString());
-	if (params?.sort) queryParams.append('sort', params.sort);
-	if (params?.order) queryParams.append('order', params.order);
-	if (params?.status) queryParams.append('status', params.status);
-	if (params?.search) queryParams.append('search', params.search);
-	if (params?.environment) queryParams.append('environment', params.environment);
-	const query = queryParams.toString();
-	return apiRequest<ListServersResponse>(`/servers${query ? '?' + query : ''}`);
+	const query = buildQueryString({
+		page: params?.page,
+		per_page: params?.perPage,
+		sort: params?.sort,
+		order: params?.order,
+		status: params?.status,
+		search: params?.search,
+		environment: params?.environment
+	});
+	return apiRequest<ListServersResponse>(`/servers${query}`);
 }
 
 export async function getServer(id: string): Promise<GetServerResponse> {
@@ -272,20 +284,12 @@ export async function getServerMetrics(
 	serverId: string,
 	params: MetricsQueryParams = {}
 ): Promise<GetMetricsResponse> {
-	const queryParams = new URLSearchParams();
-
-	// Support new time_range parameter (1h, 12h, 24h, 7d, 30d)
-	// Backend handles start/end/interval calculation automatically
-	if (params.time_range) {
-		queryParams.append('time_range', params.time_range);
-	}
-	if (params.limit) queryParams.append('limit', params.limit.toString());
-	if (params.offset) queryParams.append('offset', params.offset.toString());
-
-	const query = queryParams.toString();
-	return apiRequest<GetMetricsResponse>(
-		`/servers/${serverId}/metrics${query ? '?' + query : ''}`
-	);
+	const query = buildQueryString({
+		time_range: params.time_range,
+		limit: params.limit,
+		offset: params.offset
+	});
+	return apiRequest<GetMetricsResponse>(`/servers/${serverId}/metrics${query}`);
 }
 
 // Get dropped metrics summary for the last 24 hours
@@ -297,14 +301,8 @@ export async function getDroppedMetrics(): Promise<GetDroppedMetricsResponse> {
 export async function getAggregatedMetrics(
 	timeRange?: string
 ): Promise<GetAggregatedMetricsResponse> {
-	const queryParams = new URLSearchParams();
-	if (timeRange) {
-		queryParams.append('time_range', timeRange);
-	}
-	const query = queryParams.toString();
-	return apiRequest<GetAggregatedMetricsResponse>(
-		`/servers/metrics/aggregated${query ? '?' + query : ''}`
-	);
+	const query = buildQueryString({ time_range: timeRange });
+	return apiRequest<GetAggregatedMetricsResponse>(`/servers/metrics/aggregated${query}`);
 }
 
 // Package API calls
@@ -319,16 +317,13 @@ export async function getServerPackages(
 	serverId: string,
 	params: PackageQueryParams = {}
 ): Promise<GetPackagesResponse> {
-	const queryParams = new URLSearchParams();
-	if (params.limit) queryParams.append('limit', params.limit.toString());
-	if (params.offset) queryParams.append('offset', params.offset.toString());
-	if (params.package_manager) queryParams.append('package_manager', params.package_manager);
-	if (params.search) queryParams.append('search', params.search);
-
-	const query = queryParams.toString();
-	return apiRequest<GetPackagesResponse>(
-		`/servers/${serverId}/packages${query ? '?' + query : ''}`
-	);
+	const query = buildQueryString({
+		limit: params.limit,
+		offset: params.offset,
+		package_manager: params.package_manager,
+		search: params.search
+	});
+	return apiRequest<GetPackagesResponse>(`/servers/${serverId}/packages${query}`);
 }
 
 export async function getPackageStats(serverId: string): Promise<GetPackageStatsResponse> {
@@ -344,24 +339,14 @@ export async function getPackageCollections(
 	serverId: string,
 	params: CollectionQueryParams = {}
 ): Promise<GetPackageCollectionsResponse> {
-	const queryParams = new URLSearchParams();
-	if (params.limit) queryParams.append('limit', params.limit.toString());
-	if (params.offset) queryParams.append('offset', params.offset.toString());
-
-	const query = queryParams.toString();
-	return apiRequest<GetPackageCollectionsResponse>(
-		`/servers/${serverId}/packages/collections${query ? '?' + query : ''}`
-	);
+	const query = buildQueryString({ limit: params.limit, offset: params.offset });
+	return apiRequest<GetPackageCollectionsResponse>(`/servers/${serverId}/packages/collections${query}`);
 }
 
 export async function getPackageHistory(
 	serverId: string,
 	params: CollectionQueryParams = {}
 ): Promise<GetPackageHistoryResponse> {
-	const queryParams = new URLSearchParams();
-	if (params.limit) queryParams.append('limit', params.limit.toString());
-	if (params.offset) queryParams.append('offset', params.offset.toString());
-
-	const query = queryParams.toString();
-	return apiRequest(`/servers/${serverId}/packages/history${query ? '?' + query : ''}`);
+	const query = buildQueryString({ limit: params.limit, offset: params.offset });
+	return apiRequest(`/servers/${serverId}/packages/history${query}`);
 }

@@ -43,7 +43,7 @@
 		}
 	}
 
-	function copyToClipboard(text) {
+	function handleCopy(text) {
 		navigator.clipboard.writeText(text);
 	}
 </script>
@@ -191,7 +191,7 @@
 						class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
 					/>
 					<button
-						onclick={() => copyToClipboard(token)}
+						onclick={() => handleCopy(token)}
 						class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
 					>
 						Copy
@@ -213,7 +213,7 @@
 						class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
 					/>
 					<button
-						onclick={() => copyToClipboard(agentKey)}
+						onclick={() => handleCopy(agentKey)}
 						class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
 					>
 						Copy

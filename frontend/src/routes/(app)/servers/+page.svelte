@@ -89,9 +89,9 @@
         loadPage(1);
     }
 
-    async function dismissReactivation(serverId: string) {
+    async function handleDismissReactivation(serverId: string) {
         try {
-            await api.dismissReactivation(serverId);
+            await api.handleDismissReactivation(serverId);
             await loadPage(page);
         } catch (err) {
             logger.error("Failed to dismiss reactivation:", err);
@@ -236,7 +236,7 @@
             {sortOrder}
             onSort={handleSort}
             onDelete={openDeleteModal}
-            onDismissReactivation={dismissReactivation}
+            onDismissReactivation={handleDismissReactivation}
         />
 
         <!-- Pagination -->
