@@ -3,6 +3,7 @@
     import { goto } from "$app/navigation";
     import * as api from "$lib/api.js";
     import { handleSSEReactivation, logger } from "$lib/utils";
+    import { SERVERS_PER_PAGE, SEARCH_DEBOUNCE_MS } from "$lib/constants";
     import type { Server, SSEEvent } from "$lib/types";
     import { sseStore } from "$lib/stores/sse";
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -10,7 +11,7 @@
     import ServerFilters from "$lib/components/server/ServerFilters.svelte";
     import ServerListTable from "$lib/components/server/ServerListTable.svelte";
 
-    const PER_PAGE = 20;
+    const PER_PAGE = SERVERS_PER_PAGE;
 
     let servers: Server[] = $state([]);
     let total = $state(0);
@@ -75,7 +76,7 @@
         if (searchTimeout) clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
             loadPage(1);
-        }, 300);
+        }, SEARCH_DEBOUNCE_MS);
     }
 
     function handleStatusChange(value: string) {

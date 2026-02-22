@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import * as api from '$lib/api.js';
 	import * as Select from '$lib/components/ui/select';
+	import { PACKAGES_PER_PAGE, COLLECTIONS_PER_PAGE } from '$lib/constants';
 	import type { Server, Package, PackageStats, PackageCollection } from '$lib/types';
 	import Pagination from '$lib/components/Pagination.svelte';
 
@@ -15,7 +16,7 @@
 	let searchTerm = $state('');
 	let selectedManager = $state('');
 	let totalCount = $state(0);
-	let limit = 50;
+	let limit = PACKAGES_PER_PAGE;
 	let offset = $state(0);
 	let showCollections = $state(false);
 
@@ -41,7 +42,7 @@
 					search: searchTerm || undefined
 				}),
 				api.getPackageStats(serverId),
-				api.getPackageCollections(serverId, { limit: 10 })
+				api.getPackageCollections(serverId, { limit: COLLECTIONS_PER_PAGE })
 			]);
 
 			server = serverData.server;

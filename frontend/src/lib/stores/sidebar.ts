@@ -14,3 +14,13 @@ export function toggleSidebarWithTransition() {
 		sidebarTransitioning.set(false);
 	}, 300);
 }
+
+export function resetSidebar() {
+	sidebarCollapsed.set(false);
+	mobileMenuOpen.set(false);
+	sidebarTransitioning.set(false);
+	if (transitionTimeout) {
+		clearTimeout(transitionTimeout);
+		transitionTimeout = null;
+	}
+}

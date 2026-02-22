@@ -3,6 +3,7 @@ import type { AggregatedMetric, TimeRange } from '$lib/types';
 import { getAggregatedMetrics } from '$lib/api';
 import { serversStore } from './servers';
 import { logger } from '$lib/utils';
+import { MAX_AGGREGATED_POINTS } from '$lib/constants';
 
 interface AggregatedState {
 	// Current time range metrics
@@ -78,8 +79,8 @@ function createAggregatedStore() {
 				if (state.timeRange === '1h') {
 					// 1h view: add real-time 30s points
 					let updatedMetrics = [...state.metrics, metric];
-					if (updatedMetrics.length > 200) {
-						updatedMetrics = updatedMetrics.slice(-200);
+					if (updatedMetrics.length > MAX_AGGREGATED_POINTS) {
+						updatedMetrics = updatedMetrics.slice(-MAX_AGGREGATED_POINTS);
 					}
 					return { ...state, metrics: updatedMetrics };
 				}
@@ -133,7 +134,68 @@ export const aggregatedMetrics = derived(aggregatedStore, $store => $store.metri
 export const aggregatedMetrics24h = derived(aggregatedStore, $store => $store.metrics24h);
 export const currentTimeRange = derived(aggregatedStore, $store => $store.timeRange);
 
-// Derived store for computed stats
+// Derived store for computed stats (memoized to avoid recalculation on irrelevant store changes)
+let cachedStats: ReturnType<typeof computeStats> | null = null;
+let cachedLastPoint: AggregatedMetric | null = null;
+let cachedFirstPoint24h: AggregatedMetric | null = null;
+let cachedOnlineCount = -1;
+let cachedTotalCount = -1;
+
+function computeStats(
+	lastPoint: AggregatedMetric | null,
+	firstPoint24h: AggregatedMetric | null,
+	totalServers: number,
+	onlineServers: number
+) {
+	const avgCPU = lastPoint?.cpu_usage_percent || 0;
+	const totalMemory = lastPoint?.memory_total_bytes || 0;
+	const usedMemory = lastPoint?.memory_used_bytes || 0;
+	const totalDisk = lastPoint?.disk_total_bytes || 0;
+	const usedDisk = lastPoint?.disk_used_bytes || 0;
+
+	// Calculate trends (comparing current to 24h ago)
+	const cpuTrend =
+		firstPoint24h && firstPoint24h.cpu_usage_percent > 0
+			? ((avgCPU - firstPoint24h.cpu_usage_percent) / firstPoint24h.cpu_usage_percent) * 100
+			: 0;
+
+	const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
+	const compareMemoryPercent =
+		firstPoint24h && firstPoint24h.memory_total_bytes > 0
+			? (firstPoint24h.memory_used_bytes / firstPoint24h.memory_total_bytes) * 100
+			: memoryPercent;
+	const memoryTrend =
+		compareMemoryPercent > 0
+			? ((memoryPercent - compareMemoryPercent) / compareMemoryPercent) * 100
+			: 0;
+
+	const diskPercent = totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0;
+	const compareDiskPercent =
+		firstPoint24h && firstPoint24h.disk_total_bytes > 0
+			? (firstPoint24h.disk_used_bytes / firstPoint24h.disk_total_bytes) * 100
+			: diskPercent;
+	const diskTrend =
+		compareDiskPercent > 0
+			? ((diskPercent - compareDiskPercent) / compareDiskPercent) * 100
+			: 0;
+
+	return {
+		totalServers,
+		onlineServers,
+		offlineServers: totalServers - onlineServers,
+		avgCPU,
+		avgMemory: memoryPercent,
+		avgDisk: diskPercent,
+		totalMemory,
+		usedMemory,
+		totalDisk,
+		usedDisk,
+		cpuTrend: isFinite(cpuTrend) ? cpuTrend : 0,
+		memoryTrend: isFinite(memoryTrend) ? memoryTrend : 0,
+		diskTrend: isFinite(diskTrend) ? diskTrend : 0
+	};
+}
+
 export const dashboardStats = derived(
 	[aggregatedStore, serversStore],
 	([$aggregated, $servers]) => {
@@ -141,61 +203,29 @@ export const dashboardStats = derived(
 			$aggregated.metrics.length > 0
 				? $aggregated.metrics[$aggregated.metrics.length - 1]
 				: null;
-
 		const firstPoint24h =
 			$aggregated.metrics24h.length > 0 ? $aggregated.metrics24h[0] : null;
 
 		const activeServers = $servers.servers.filter(s => s.server.status !== 'pending');
-		const totalServers = activeServers.length;
-		const onlineServers = activeServers.filter(
-			s => s.server.status === 'online'
-		).length;
-		const avgCPU = lastPoint?.cpu_usage_percent || 0;
-		const totalMemory = lastPoint?.memory_total_bytes || 0;
-		const usedMemory = lastPoint?.memory_used_bytes || 0;
-		const totalDisk = lastPoint?.disk_total_bytes || 0;
-		const usedDisk = lastPoint?.disk_used_bytes || 0;
+		const onlineCount = activeServers.filter(s => s.server.status === 'online').length;
+		const totalCount = activeServers.length;
 
-		// Calculate trends (comparing current to 24h ago)
-		const cpuTrend =
-			firstPoint24h && firstPoint24h.cpu_usage_percent > 0
-				? ((avgCPU - firstPoint24h.cpu_usage_percent) / firstPoint24h.cpu_usage_percent) * 100
-				: 0;
+		// Skip recalculation if inputs haven't changed
+		if (
+			cachedStats &&
+			lastPoint === cachedLastPoint &&
+			firstPoint24h === cachedFirstPoint24h &&
+			onlineCount === cachedOnlineCount &&
+			totalCount === cachedTotalCount
+		) {
+			return cachedStats;
+		}
 
-		const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
-		const compareMemoryPercent =
-			firstPoint24h && firstPoint24h.memory_total_bytes > 0
-				? (firstPoint24h.memory_used_bytes / firstPoint24h.memory_total_bytes) * 100
-				: memoryPercent;
-		const memoryTrend =
-			compareMemoryPercent > 0
-				? ((memoryPercent - compareMemoryPercent) / compareMemoryPercent) * 100
-				: 0;
-
-		const diskPercent = totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0;
-		const compareDiskPercent =
-			firstPoint24h && firstPoint24h.disk_total_bytes > 0
-				? (firstPoint24h.disk_used_bytes / firstPoint24h.disk_total_bytes) * 100
-				: diskPercent;
-		const diskTrend =
-			compareDiskPercent > 0
-				? ((diskPercent - compareDiskPercent) / compareDiskPercent) * 100
-				: 0;
-
-		return {
-			totalServers,
-			onlineServers,
-			offlineServers: totalServers - onlineServers,
-			avgCPU,
-			avgMemory: memoryPercent,
-			avgDisk: diskPercent,
-			totalMemory,
-			usedMemory,
-			totalDisk,
-			usedDisk,
-			cpuTrend: isFinite(cpuTrend) ? cpuTrend : 0,
-			memoryTrend: isFinite(memoryTrend) ? memoryTrend : 0,
-			diskTrend: isFinite(diskTrend) ? diskTrend : 0
-		};
+		cachedLastPoint = lastPoint;
+		cachedFirstPoint24h = firstPoint24h;
+		cachedOnlineCount = onlineCount;
+		cachedTotalCount = totalCount;
+		cachedStats = computeStats(lastPoint, firstPoint24h, totalCount, onlineCount);
+		return cachedStats;
 	}
 );

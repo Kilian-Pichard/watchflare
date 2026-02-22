@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
 	import { formatPercent, handleSSEReactivation, logger } from '$lib/utils';
+	import { DROPPED_METRICS_POLL_INTERVAL, TREND_24H_POLL_INTERVAL } from '$lib/constants';
 	import {
 		userStore,
 		currentUser,
@@ -110,10 +111,10 @@
 		sseUnsubscribe = sseStore.connect(handleSSEMessage);
 
 		// Refresh dropped metrics every 1 hour
-		const droppedMetricsInterval = setInterval(() => alertsStore.load(), 3600000);
+		const droppedMetricsInterval = setInterval(() => alertsStore.load(), DROPPED_METRICS_POLL_INTERVAL);
 
 		// Refresh 24h metrics for trend calculation every 5 minutes
-		const trend24hInterval = setInterval(() => aggregatedStore.load24h(), 300000);
+		const trend24hInterval = setInterval(() => aggregatedStore.load24h(), TREND_24H_POLL_INTERVAL);
 
 		// Cleanup on unmount
 		return () => {

@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import type { Metric } from '$lib/types';
 import { getServerMetrics } from '$lib/api';
 import { logger } from '$lib/utils';
+import { MAX_METRICS_POINTS_DASHBOARD } from '$lib/constants';
 
 interface MetricsState {
 	// Map of server ID to array of metrics
@@ -60,9 +61,9 @@ function createMetricsStore() {
 				const existingMetrics = state.data[serverId] || [];
 				let updatedMetrics = [...existingMetrics, metric];
 
-				// Keep only last 50 points per server
-				if (updatedMetrics.length > 50) {
-					updatedMetrics = updatedMetrics.slice(-50);
+				// Keep only last N points per server
+				if (updatedMetrics.length > MAX_METRICS_POINTS_DASHBOARD) {
+					updatedMetrics = updatedMetrics.slice(-MAX_METRICS_POINTS_DASHBOARD);
 				}
 
 				return {

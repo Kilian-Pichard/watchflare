@@ -5,6 +5,7 @@
     import * as api from "$lib/api.js";
     import { sseStore } from "$lib/stores/sse";
     import { handleSSEReactivation, logger } from "$lib/utils";
+    import { MAX_METRICS_POINTS_DETAIL } from "$lib/constants";
     import type { Server, Metric, PackageStats, SSEEvent, TimeRange } from "$lib/types";
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
     import Modal from "$lib/components/Modal.svelte";
@@ -53,9 +54,9 @@
                 // Add new metric to the array
                 metrics = [...metrics, metric];
 
-                // Keep only last 200 points to avoid memory issues
-                if (metrics.length > 200) {
-                    metrics = metrics.slice(-200);
+                // Keep only last N points to avoid memory issues
+                if (metrics.length > MAX_METRICS_POINTS_DETAIL) {
+                    metrics = metrics.slice(-MAX_METRICS_POINTS_DETAIL);
                 }
             }
         }

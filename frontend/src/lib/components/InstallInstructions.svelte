@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import * as api from '$lib/api.js';
 	import { logger } from '$lib/utils';
+	import { AGENT_STATUS_POLL_INTERVAL } from '$lib/constants';
 	import type { Server } from '$lib/types';
 
 	const { server, token, agentKey, backendHost }: {
@@ -59,7 +60,7 @@
 
 	onMount(() => {
 		if (serverStatus !== 'online') {
-			pollInterval = setInterval(pollServerStatus, 5000);
+			pollInterval = setInterval(pollServerStatus, AGENT_STATUS_POLL_INTERVAL);
 		}
 	});
 

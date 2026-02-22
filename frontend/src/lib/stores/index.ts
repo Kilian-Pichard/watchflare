@@ -1,6 +1,17 @@
 /**
  * Central store exports for Watchflare Frontend
- * All application state management is centralized here
+ *
+ * Store categories:
+ *
+ * DATA STORES — { subscribe, load(), clear(), ...methods }
+ *   user, servers, metrics, aggregated, alerts
+ *
+ * UTILITY STORES — specialized patterns
+ *   sidebar: raw writables + toggleSidebarWithTransition + resetSidebar
+ *   toasts:  imperative add/remove/clear
+ *   sse:     connection manager (connect/disconnect)
+ *   ui:      UI state (right sidebar open/closed)
+ *   auth:    actions (logout)
  */
 
 // User store
@@ -37,11 +48,17 @@ export { authActions } from './auth';
 // UI store
 export { uiStore } from './ui';
 
-// Toast store (already existed)
+// Toast store
 export { toasts } from './toasts';
 
-// Sidebar store (already existed)
-export { sidebarCollapsed, mobileMenuOpen, sidebarTransitioning } from './sidebar';
+// Sidebar store
+export {
+	sidebarCollapsed,
+	mobileMenuOpen,
+	sidebarTransitioning,
+	toggleSidebarWithTransition,
+	resetSidebar
+} from './sidebar';
 
 // SSE store
 export {

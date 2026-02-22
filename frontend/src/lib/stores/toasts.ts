@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import type { Toast, ToastType, ToastStore } from '$lib/types';
+import { TOAST_DEFAULT_DURATION } from '$lib/constants';
 
 // Toast store for managing toast notifications
 function createToastStore(): ToastStore {
@@ -9,7 +10,7 @@ function createToastStore(): ToastStore {
 
 	return {
 		subscribe,
-		add: (message: string, type: ToastType = 'info', duration: number = 5000): number => {
+		add: (message: string, type: ToastType = 'info', duration: number = TOAST_DEFAULT_DURATION): number => {
 			const id = nextId++;
 			const toast: Toast = { id, message, type };
 
