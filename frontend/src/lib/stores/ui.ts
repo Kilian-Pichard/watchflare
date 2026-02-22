@@ -3,12 +3,14 @@ import { writable } from 'svelte/store';
 interface UIState {
 	loading: boolean;
 	rightSidebarOpen: boolean;
+	metricsCollapsed: boolean;
 }
 
 function createUIStore() {
 	const { subscribe, set, update } = writable<UIState>({
 		loading: false,
-		rightSidebarOpen: false
+		rightSidebarOpen: false,
+		metricsCollapsed: false
 	});
 
 	return {
@@ -29,9 +31,14 @@ function createUIStore() {
 			update(state => ({ ...state, rightSidebarOpen: open }));
 		},
 
+		// Toggle metrics collapsed
+		toggleMetricsCollapsed(): void {
+			update(state => ({ ...state, metricsCollapsed: !state.metricsCollapsed }));
+		},
+
 		// Reset UI state
 		reset(): void {
-			set({ loading: false, rightSidebarOpen: false });
+			set({ loading: false, rightSidebarOpen: false, metricsCollapsed: false });
 		}
 	};
 }

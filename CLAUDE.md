@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.18.1` - Collapsible Global Metrics: chevron toggle on dashboard, cards animate to compact mode (no icon/trend, smaller text), charts slide in/out with 250ms transitions, state persisted in UI store
 - `0.18.0` - P5 polish: extracted buildQueryString() utility (6 API functions refactored), normalized handler names (handle* convention), added 24 new tests (toasts store, metrics store, buildQueryString) bringing total to 111
 - `0.17.1` - P4 accessibility: added scope="col" to all 21 table headers (3 files), aria-invalid/aria-describedby on 10 form fields (4 files), RightSidebar close button already compliant
 - `0.17.0` - P3 stores & performance: extracted 12 named constants replacing magic numbers, memoized dashboardStats derived store (skips recalculation on irrelevant SSE heartbeats), normalized store APIs with resetSidebar() and documented store categories in index.ts

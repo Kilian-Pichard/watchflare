@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { slide } from 'svelte/transition';
 	import { get } from 'svelte/store';
 	import { formatPercent, handleSSEReactivation, logger } from '$lib/utils';
 	import { DROPPED_METRICS_POLL_INTERVAL, TREND_24H_POLL_INTERVAL } from '$lib/constants';
@@ -15,13 +16,15 @@
 		currentTimeRange,
 		dashboardStats,
 		alertsStore,
-		sseStore
+		sseStore,
+		uiStore
 	} from '$lib/stores';
 	import ServerTable from '$lib/components/ServerTable.svelte';
 	import DashboardStats from '$lib/components/dashboard/DashboardStats.svelte';
 	import DashboardCharts from '$lib/components/dashboard/DashboardCharts.svelte';
 	import DroppedMetricsAlert from '$lib/components/dashboard/DroppedMetricsAlert.svelte';
 	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
+	import { ChevronUp, ChevronDown } from 'lucide-svelte';
 	import type { SSEEvent, TimeRange } from '$lib/types';
 
 	// SSE unsubscribe function
@@ -35,6 +38,7 @@
 	let metrics = $derived($metricsData);
 	let stats = $derived($dashboardStats);
 	let droppedAlerts = $derived($alertsStore.droppedMetrics);
+	let metricsCollapsed = $derived($uiStore.metricsCollapsed);
 
 	// Time range from store
 	let selectedTimeRange = $derived($currentTimeRange);
@@ -164,13 +168,30 @@
 			<DroppedMetricsAlert alerts={droppedAlerts} />
 
 			<!-- Global Metrics Section -->
-			<h2 class="text-lg font-semibold mb-4">Global Metrics</h2>
+			<div class="mb-4 flex items-center justify-between">
+				<h2 class="text-lg font-semibold">Global Metrics</h2>
+				<button
+					onclick={() => uiStore.toggleMetricsCollapsed()}
+					class="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+					aria-label={metricsCollapsed ? 'Expand metrics' : 'Collapse metrics'}
+				>
+					{#if metricsCollapsed}
+						<ChevronDown class="h-5 w-5" />
+					{:else}
+						<ChevronUp class="h-5 w-5" />
+					{/if}
+				</button>
+			</div>
 
-			<!-- Dashboard Stats Cards -->
-			<DashboardStats {stats} />
+			<!-- Dashboard Stats Cards (compact when collapsed) -->
+			<DashboardStats {stats} compact={metricsCollapsed} />
 
-			<!-- Dashboard Charts -->
-			<DashboardCharts aggregatedMetrics={$aggregatedMetrics} {stats} />
+			<!-- Dashboard Charts (hidden when collapsed) -->
+			{#if !metricsCollapsed}
+				<div transition:slide={{ duration: 250 }}>
+					<DashboardCharts aggregatedMetrics={$aggregatedMetrics} {stats} />
+				</div>
+			{/if}
 
 			<!-- Servers Table -->
 			<div class="mb-6">
