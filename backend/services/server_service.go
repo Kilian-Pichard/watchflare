@@ -305,9 +305,9 @@ func RegenerateToken(serverID string) (string, error) {
 		return "", err
 	}
 
-	// Only allow regeneration for pending or expired servers
-	if server.Status != "pending" && server.Status != "expired" {
-		return "", errors.New("can only regenerate token for pending or expired servers")
+	// Only allow regeneration for pending servers
+	if server.Status != "pending" {
+		return "", errors.New("can only regenerate token for pending servers")
 	}
 
 	// Generate new registration token

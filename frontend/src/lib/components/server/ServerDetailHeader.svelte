@@ -40,12 +40,14 @@
 			>
 				Change IP
 			</button>
-			<button
-				onclick={onRegenerateToken}
-				class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
-			>
-				Regenerate Token
-			</button>
+			{#if server.status === 'pending'}
+				<button
+					onclick={onRegenerateToken}
+					class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
+				>
+					Regenerate Token
+				</button>
+			{/if}
 			<button
 				onclick={onDelete}
 				class="rounded-lg border border-destructive bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 whitespace-nowrap"

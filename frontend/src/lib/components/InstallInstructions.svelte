@@ -5,10 +5,10 @@
 	import { AGENT_STATUS_POLL_INTERVAL } from '$lib/constants';
 	import type { Server } from '$lib/types';
 
-	const { server, token, agentKey, backendHost }: {
+	const { server, token, agentKey = '', backendHost }: {
 		server: Server;
 		token: string;
-		agentKey: string;
+		agentKey?: string;
 		backendHost: string;
 	} = $props();
 

@@ -12,6 +12,7 @@
     import ServerDetailHeader from "$lib/components/server/ServerDetailHeader.svelte";
     import ServerAlerts from "$lib/components/server/ServerAlerts.svelte";
     import ServerMetricsCharts from "$lib/components/server/ServerMetricsCharts.svelte";
+    import InstallInstructions from "$lib/components/InstallInstructions.svelte";
 
     let server: Server | null = $state(null);
     let loading = $state(true);
@@ -21,6 +22,8 @@
     let showChangeIP = $state(false);
     let newIP = $state("");
     let regeneratedToken = $state("");
+    let backendHost = $state("");
+    let copiedToken = $state(false);
     let packageStats: PackageStats | null = $state(null);
     let metrics: Metric[] = $state([]);
     let timeRange: TimeRange = $state("1h");
@@ -124,6 +127,7 @@
         try {
             const response = await api.regenerateToken(serverId);
             regeneratedToken = response.token;
+            backendHost = window.location.hostname;
             showRegenerateConfirm = false;
             await loadServer();
         } catch (err) {
@@ -191,11 +195,6 @@
 
 
 
-    function closeRegenerateModal() {
-        showRegenerateConfirm = false;
-        regeneratedToken = "";
-    }
-
     function closeChangeIPModal() {
         showChangeIP = false;
         newIP = "";
@@ -246,6 +245,19 @@
         onChangeIP={() => (showChangeIP = true)}
     />
 
+    {#if regeneratedToken}
+        <div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 flex items-center justify-between gap-4 flex-wrap">
+            <p class="text-sm font-medium text-warning">This token is valid for 24 hours and will not be displayed again. Make sure to copy it or use it now.</p>
+            <button
+                onclick={() => { handleCopy(regeneratedToken); copiedToken = true; setTimeout(() => copiedToken = false, 2000); }}
+                class="shrink-0 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+                {copiedToken ? 'Copied!' : 'Copy Token'}
+            </button>
+        </div>
+        <InstallInstructions {server} token={regeneratedToken} {backendHost} />
+    {/if}
+
     <ServerAlerts
         {server}
         {showIPMismatchWarning}
@@ -278,65 +290,18 @@
     </p>
 </ConfirmDialog>
 
-<!-- Regenerate Token Modal -->
-<Modal open={showRegenerateConfirm} onClose={closeRegenerateModal}>
-    {#if !regeneratedToken}
-        <h3 class="text-lg font-semibold text-foreground mb-3">
-            Regenerate Token
-        </h3>
-        <p class="text-sm text-muted-foreground mb-6">
-            This will invalidate the current registration token. The
-            agent will need to re-register.
-        </p>
-        <div class="flex gap-3 justify-end">
-            <button
-                onclick={() => (showRegenerateConfirm = false)}
-                class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-            >
-                Cancel
-            </button>
-            <button
-                onclick={handleRegenerateToken}
-                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-                Regenerate
-            </button>
-        </div>
-    {:else}
-        <h3 class="text-lg font-semibold text-success mb-3">
-            Token Regenerated
-        </h3>
-        <div class="mb-4">
-            <label
-                class="block text-sm font-medium text-foreground mb-2"
-                >New Registration Token</label
-            >
-            <div class="flex gap-2">
-                <input
-                    type="text"
-                    readonly
-                    value={regeneratedToken}
-                    class="flex-1 rounded-lg border bg-muted px-3 py-2 font-mono text-xs text-foreground"
-                />
-                <button
-                    onclick={() => handleCopy(regeneratedToken)}
-                    class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                >
-                    Copy
-                </button>
-            </div>
-            <p class="mt-2 text-xs font-medium text-warning">
-                Save this token securely. It won't be shown again!
-            </p>
-        </div>
-        <button
-            onclick={closeRegenerateModal}
-            class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-            Close
-        </button>
-    {/if}
-</Modal>
+<!-- Regenerate Token Confirmation -->
+<ConfirmDialog
+    open={showRegenerateConfirm}
+    title="Regenerate Token"
+    onConfirm={handleRegenerateToken}
+    onClose={() => (showRegenerateConfirm = false)}
+    confirmLabel="Regenerate"
+>
+    <p class="text-sm text-muted-foreground">
+        This will invalidate the current registration token and generate a new one.
+    </p>
+</ConfirmDialog>
 
 <!-- Change IP Modal -->
 <Modal open={showChangeIP} onClose={closeChangeIPModal}>
