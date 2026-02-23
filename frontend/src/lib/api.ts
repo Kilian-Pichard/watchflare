@@ -190,7 +190,6 @@ export async function listServers(params?: {
 	order?: 'asc' | 'desc';
 	status?: string;
 	search?: string;
-	environment?: string;
 }): Promise<ListServersResponse> {
 	const query = buildQueryString({
 		page: params?.page,
@@ -199,7 +198,6 @@ export async function listServers(params?: {
 		order: params?.order,
 		status: params?.status,
 		search: params?.search,
-		environment: params?.environment
 	});
 	return apiRequest<ListServersResponse>(`/servers${query}`);
 }

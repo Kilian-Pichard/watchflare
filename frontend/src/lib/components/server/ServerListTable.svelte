@@ -29,82 +29,50 @@
 	}
 </script>
 
+{#snippet sortIcon(column)}
+	{#if sortColumn === column}
+		<svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+			{#if sortOrder === 'asc'}
+				<path d="M6 2l4 5H2z" />
+			{:else}
+				<path d="M6 10l4-5H2z" />
+			{/if}
+		</svg>
+	{:else}
+		<svg class="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" viewBox="0 0 12 12" fill="currentColor">
+			<path d="M6 10l4-5H2z" />
+		</svg>
+	{/if}
+{/snippet}
+
 <table class="w-full min-w-[800px]">
 	<thead>
 		<tr class="border-b bg-muted/30">
-			<th
-				scope="col"
-				class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-				onclick={() => onSort('name')}
-			>
-				<span class="inline-flex items-center gap-1">
+			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('name')}>
+				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					Name
-					{#if sortColumn === 'name'}
-						<svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
-							{#if sortOrder === 'asc'}
-								<path d="M6 2l4 5H2z" />
-							{:else}
-								<path d="M6 10l4-5H2z" />
-							{/if}
-						</svg>
-					{/if}
+					{@render sortIcon('name')}
 				</span>
 			</th>
-			<th
-				scope="col"
-				class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-				onclick={() => onSort('status')}
-			>
-				<span class="inline-flex items-center gap-1">
+			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('status')}>
+				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					Status
-					{#if sortColumn === 'status'}
-						<svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
-							{#if sortOrder === 'asc'}
-								<path d="M6 2l4 5H2z" />
-							{:else}
-								<path d="M6 10l4-5H2z" />
-							{/if}
-						</svg>
-					{/if}
+					{@render sortIcon('status')}
 				</span>
 			</th>
-			<th
-				scope="col"
-				class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-				onclick={() => onSort('ip')}
-			>
-				<span class="inline-flex items-center gap-1">
+			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('ip')}>
+				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					IP Address
-					{#if sortColumn === 'ip'}
-						<svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
-							{#if sortOrder === 'asc'}
-								<path d="M6 2l4 5H2z" />
-							{:else}
-								<path d="M6 10l4-5H2z" />
-							{/if}
-						</svg>
-					{/if}
+					{@render sortIcon('ip')}
 				</span>
 			</th>
-			<th
-				scope="col"
-				class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-				onclick={() => onSort('last_seen')}
-			>
-				<span class="inline-flex items-center gap-1 justify-end w-full">
+			<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('last_seen')}>
+				<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					Last Seen
-					{#if sortColumn === 'last_seen'}
-						<svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
-							{#if sortOrder === 'asc'}
-								<path d="M6 2l4 5H2z" />
-							{:else}
-								<path d="M6 10l4-5H2z" />
-							{/if}
-						</svg>
-					{/if}
+					{@render sortIcon('last_seen')}
 				</span>
 			</th>
-			<th scope="col" class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+			<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
 				Actions
 			</th>
 		</tr>

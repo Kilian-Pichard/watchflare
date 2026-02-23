@@ -15,7 +15,7 @@
 			sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
 		} else {
 			sortColumn = column;
-			sortOrder = 'asc';
+			sortOrder = 'desc';
 		}
 	}
 
@@ -126,6 +126,10 @@
 				<path d="M6 10l4-5H2z" />
 			{/if}
 		</svg>
+	{:else}
+		<svg class="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" viewBox="0 0 12 12" fill="currentColor">
+			<path d="M6 10l4-5H2z" />
+		</svg>
 	{/if}
 {/snippet}
 
@@ -178,59 +182,41 @@
 		<table class="w-full min-w-[1000px]">
 			<thead>
 				<tr class="border-b bg-muted/30">
-					<th scope="col"
-						class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-						onclick={() => handleSort('name')}
-					>
-						<span class="inline-flex items-center gap-1">
+					<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('name')}>
+						<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Server
 							{@render sortIcon('name')}
 						</span>
 					</th>
-					<th scope="col"
-						class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-						onclick={() => handleSort('status')}
-					>
-						<span class="inline-flex items-center gap-1">
+					<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('status')}>
+						<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Status
 							{@render sortIcon('status')}
 						</span>
 					</th>
-					<th scope="col"
-						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-						onclick={() => handleSort('cpu')}
-					>
-						<span class="inline-flex items-center gap-1 justify-end w-full">
+					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('cpu')}>
+						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							CPU
 							{@render sortIcon('cpu')}
 						</span>
 					</th>
-					<th scope="col"
-						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-						onclick={() => handleSort('memory')}
-					>
-						<span class="inline-flex items-center gap-1 justify-end w-full">
+					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('memory')}>
+						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Memory
 							{@render sortIcon('memory')}
 						</span>
 					</th>
-					<th scope="col"
-						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-						onclick={() => handleSort('disk')}
-					>
-						<span class="inline-flex items-center gap-1 justify-end w-full">
+					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('disk')}>
+						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Disk
 							{@render sortIcon('disk')}
 						</span>
 					</th>
-					<th scope="col" class="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+					<th scope="col" class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
 						Updates
 					</th>
-					<th scope="col"
-						class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors"
-						onclick={() => handleSort('last_seen')}
-					>
-						<span class="inline-flex items-center gap-1 justify-end w-full">
+					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('last_seen')}>
+						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Last Seen
 							{@render sortIcon('last_seen')}
 						</span>

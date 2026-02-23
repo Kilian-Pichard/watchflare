@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.18.4` - UI polish: sort buttons as rounded hover pills on table headers (h-8, hover:bg-muted), default sort order changed to descending, removed environment filter from server list
 - `0.18.3` - Rename server: new PUT /servers/:id/rename endpoint, rename modal in server detail page with pre-filled current name, 2-64 char validation
 - `0.18.2` - Token regeneration: restricted to pending servers only (backend + frontend), replaced token modal with InstallInstructions component showing curl commands, added warning banner with copy token button, 24h expiry notice
 - `0.18.1` - Collapsible Global Metrics: chevron toggle on dashboard, cards animate to compact mode (no icon/trend, smaller text), charts slide in/out with 250ms transitions, state persisted in UI store

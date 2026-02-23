@@ -4,17 +4,13 @@
 	const {
 		searchQuery,
 		statusFilter,
-		environmentFilter,
 		onSearchInput,
 		onStatusChange,
-		onEnvironmentChange,
 	}: {
 		searchQuery: string;
 		statusFilter: string;
-		environmentFilter: string;
 		onSearchInput: (e: Event) => void;
 		onStatusChange: (value: string) => void;
-		onEnvironmentChange: (value: string) => void;
 	} = $props();
 
 	const statusOptions = [
@@ -24,20 +20,8 @@
 		{ value: 'pending', label: 'Pending' },
 	];
 
-	const environmentOptions = [
-		{ value: '', label: 'All environments' },
-		{ value: 'physical', label: 'Physical' },
-		{ value: 'physical_with_containers', label: 'Physical + Containers' },
-		{ value: 'vm', label: 'VM' },
-		{ value: 'vm_with_containers', label: 'VM + Containers' },
-		{ value: 'container', label: 'Container' },
-	];
-
 	const statusLabel = $derived(
 		statusOptions.find((o) => o.value === statusFilter)?.label || 'All statuses'
-	);
-	const environmentLabel = $derived(
-		environmentOptions.find((o) => o.value === environmentFilter)?.label || 'All environments'
 	);
 </script>
 
@@ -55,18 +39,6 @@
 		</Select.Trigger>
 		<Select.Content>
 			{#each statusOptions as option}
-				<Select.Item value={option.value} label={option.label}>
-					{option.label}
-				</Select.Item>
-			{/each}
-		</Select.Content>
-	</Select.Root>
-	<Select.Root type="single" value={environmentFilter} onValueChange={onEnvironmentChange}>
-		<Select.Trigger items={environmentOptions.map((o) => o.label)}>
-			<span>{environmentLabel}</span>
-		</Select.Trigger>
-		<Select.Content>
-			{#each environmentOptions as option}
 				<Select.Item value={option.value} label={option.label}>
 					{option.label}
 				</Select.Item>

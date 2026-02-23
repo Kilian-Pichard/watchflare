@@ -29,7 +29,7 @@ export interface ChangePasswordRequest {
 // ===== Server =====
 
 export type ServerStatus = 'online' | 'offline' | 'pending' | 'ip_mismatch';
-export type EnvironmentType = 'physical' | 'physical_with_containers' | 'vm' | 'vm_with_containers' | 'container';
+export type EnvironmentType = 'physical' | 'physical_with_containers' | 'vm' | 'vm_with_containers';
 
 export interface Server {
 	id: string;

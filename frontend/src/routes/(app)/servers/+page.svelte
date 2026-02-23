@@ -30,7 +30,6 @@
     // Filter state
     let searchQuery = $state("");
     let statusFilter = $state("");
-    let environmentFilter = $state("");
     let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
     let totalPages = $derived(Math.max(1, Math.ceil(total / PER_PAGE)));
@@ -46,7 +45,6 @@
                 order: sortOrder,
                 status: statusFilter || undefined,
                 search: searchQuery || undefined,
-                environment: environmentFilter || undefined,
             });
             servers = response.servers || [];
             total = response.total || 0;
@@ -65,7 +63,7 @@
             sortOrder = sortOrder === "asc" ? "desc" : "asc";
         } else {
             sortColumn = column;
-            sortOrder = "asc";
+            sortOrder = "desc";
         }
         loadPage(page);
     }
@@ -81,11 +79,6 @@
 
     function handleStatusChange(value: string) {
         statusFilter = value;
-        loadPage(1);
-    }
-
-    function handleEnvironmentChange(value: string) {
-        environmentFilter = value;
         loadPage(1);
     }
 
@@ -176,10 +169,8 @@
 <ServerFilters
     {searchQuery}
     {statusFilter}
-    {environmentFilter}
     onSearchInput={handleSearchInput}
     onStatusChange={handleStatusChange}
-    onEnvironmentChange={handleEnvironmentChange}
 />
 
 {#if initialLoading}
@@ -190,7 +181,7 @@
     <div class="rounded-lg border border-destructive bg-destructive/10 p-4">
         <p class="text-sm text-destructive">{error}</p>
     </div>
-{:else if servers.length === 0 && page === 1 && !searchQuery && !statusFilter && !environmentFilter}
+{:else if servers.length === 0 && page === 1 && !searchQuery && !statusFilter}
     <div
         class="flex flex-col items-center justify-center rounded-lg border bg-card py-20 text-center"
     >
