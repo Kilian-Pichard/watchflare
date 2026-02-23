@@ -227,6 +227,29 @@ func ValidateIP(serverID string, selectedIP string) error {
 	return nil
 }
 
+// RenameServer changes the display name of a server
+func RenameServer(serverID string, newName string) error {
+	if len(newName) < 2 || len(newName) > 64 {
+		return errors.New("name must be between 2 and 64 characters")
+	}
+
+	var server models.Server
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("server not found")
+		}
+		return err
+	}
+
+	server.Name = newName
+
+	if err := database.DB.Save(&server).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // UpdateConfiguredIP changes the configured IP for a server
 func UpdateConfiguredIP(serverID string, newIP string) error {
 	var server models.Server

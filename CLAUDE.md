@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.18.3` - Rename server: new PUT /servers/:id/rename endpoint, rename modal in server detail page with pre-filled current name, 2-64 char validation
 - `0.18.2` - Token regeneration: restricted to pending servers only (backend + frontend), replaced token modal with InstallInstructions component showing curl commands, added warning banner with copy token button, 24h expiry notice
 - `0.18.1` - Collapsible Global Metrics: chevron toggle on dashboard, cards animate to compact mode (no icon/trend, smaller text), charts slide in/out with 250ms transitions, state persisted in UI store
 - `0.18.0` - P5 polish: extracted buildQueryString() utility (6 API functions refactored), normalized handler names (handle* convention), added 24 new tests (toasts store, metrics store, buildQueryString) bringing total to 111

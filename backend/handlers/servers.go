@@ -65,6 +65,11 @@ type ValidateIPRequest struct {
 	SelectedIP string `json:"selected_ip" binding:"required"`
 }
 
+// RenameServerRequest represents the rename server request body
+type RenameServerRequest struct {
+	NewName string `json:"new_name" binding:"required"`
+}
+
 // UpdateConfiguredIPRequest represents the update configured IP request body
 type UpdateConfiguredIPRequest struct {
 	NewIP string `json:"new_ip" binding:"required"`
@@ -165,6 +170,26 @@ func ValidateIP(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "IP validated successfully",
+	})
+}
+
+// RenameServer changes the display name of a server
+func RenameServer(c *gin.Context) {
+	serverID := c.Param("id")
+
+	var req RenameServerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := services.RenameServer(serverID, req.NewName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Server renamed successfully",
 	})
 }
 

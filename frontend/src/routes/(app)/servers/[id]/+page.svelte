@@ -21,6 +21,8 @@
     let showRegenerateConfirm = $state(false);
     let showChangeIP = $state(false);
     let newIP = $state("");
+    let showRename = $state(false);
+    let newServerName = $state("");
     let regeneratedToken = $state("");
     let backendHost = $state("");
     let copiedToken = $state(false);
@@ -136,6 +138,17 @@
         }
     }
 
+    async function handleRename() {
+        try {
+            await api.renameServer(serverId, newServerName);
+            showRename = false;
+            newServerName = "";
+            await loadServer();
+        } catch (err) {
+            error = err.message || "Failed to rename server";
+        }
+    }
+
     async function handleChangeIP() {
         try {
             await api.updateConfiguredIP(serverId, newIP);
@@ -243,6 +256,7 @@
         onDelete={() => (showDeleteConfirm = true)}
         onRegenerateToken={() => (showRegenerateConfirm = true)}
         onChangeIP={() => (showChangeIP = true)}
+        onRename={() => { newServerName = server?.name || ''; showRename = true; }}
     />
 
     {#if regeneratedToken}
@@ -302,6 +316,43 @@
         This will invalidate the current registration token and generate a new one.
     </p>
 </ConfirmDialog>
+
+<!-- Rename Server Modal -->
+<Modal open={showRename} onClose={() => { showRename = false; newServerName = ''; }}>
+    <h3 class="text-lg font-semibold text-foreground mb-3">
+        Rename Server
+    </h3>
+    <div class="mb-4">
+        <label
+            for="newname"
+            class="block text-sm font-medium text-foreground mb-2"
+        >
+            New Name
+        </label>
+        <input
+            id="newname"
+            type="text"
+            bind:value={newServerName}
+            placeholder="e.g., production-web-01"
+            class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+    </div>
+    <div class="flex gap-3 justify-end">
+        <button
+            onclick={() => { showRename = false; newServerName = ''; }}
+            class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        >
+            Cancel
+        </button>
+        <button
+            onclick={handleRename}
+            disabled={newServerName.length < 2}
+            class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+        >
+            Rename
+        </button>
+    </div>
+</Modal>
 
 <!-- Change IP Modal -->
 <Modal open={showChangeIP} onClose={closeChangeIPModal}>

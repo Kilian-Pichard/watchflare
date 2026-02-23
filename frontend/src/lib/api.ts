@@ -242,6 +242,13 @@ export async function validateIP(id: string, selectedIP: string): Promise<{ mess
 	});
 }
 
+export async function renameServer(id: string, newName: string): Promise<{ message: string }> {
+	return apiRequest<{ message: string }>(`/servers/${id}/rename`, {
+		method: 'PUT',
+		body: JSON.stringify({ new_name: newName })
+	});
+}
+
 export async function updateConfiguredIP(id: string, newIP: string): Promise<{ message: string }> {
 	return apiRequest<{ message: string }>(`/servers/${id}/change-ip`, {
 		method: 'PUT',

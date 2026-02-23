@@ -8,12 +8,14 @@
 		onDelete,
 		onRegenerateToken,
 		onChangeIP,
+		onRename,
 	}: {
 		server: Server;
 		packageStats: PackageStats | null;
 		onDelete: () => void;
 		onRegenerateToken: () => void;
 		onChangeIP: () => void;
+		onRename: () => void;
 	} = $props();
 </script>
 
@@ -34,6 +36,12 @@
 			</span>
 		</div>
 		<div class="flex flex-wrap gap-2">
+			<button
+				onclick={onRename}
+				class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
+			>
+				Rename
+			</button>
 			<button
 				onclick={onChangeIP}
 				class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
