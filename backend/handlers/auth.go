@@ -212,8 +212,8 @@ func UpdatePreferences(c *gin.Context) {
 	}
 
 	// Validate theme
-	if req.Theme != "" && req.Theme != "light" && req.Theme != "dark" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid theme. Valid values: light, dark"})
+	if req.Theme != "" && req.Theme != "light" && req.Theme != "dark" && req.Theme != "system" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid theme. Valid values: light, dark, system"})
 		return
 	}
 

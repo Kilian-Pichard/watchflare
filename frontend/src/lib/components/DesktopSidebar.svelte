@@ -4,9 +4,9 @@
         sidebarCollapsed,
         sidebarTransitioning,
     } from "$lib/stores/sidebar";
-    import { authActions } from "$lib/stores";
-    import { Home, Server, Settings, LogOut } from "lucide-svelte";
+    import { Home, Server, Settings } from "lucide-svelte";
     import SSEStatusBadge from "./SSEStatusBadge.svelte";
+    import UserMenuButton from "./UserMenuButton.svelte";
 
     const transitioning = $derived($sidebarTransitioning);
     const collapsed = $derived($sidebarCollapsed);
@@ -76,25 +76,16 @@
             {/each}
         </nav>
 
-        <!-- SSE Connection Status + Logout -->
+        <!-- SSE Connection Status + User Menu -->
         <div class="border-t">
             <!-- SSE Status Badge -->
             <div class="px-2 pt-3 pb-1">
                 <SSEStatusBadge {textClass} />
             </div>
 
-            <!-- Logout Button -->
+            <!-- User Menu -->
             <div class="px-2 pb-3">
-                <button
-                    onclick={authActions.logout}
-                    class="flex w-full items-center rounded-lg py-3.25 px-3.25 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                    title="Logout"
-                >
-                    <LogOut class="h-5 w-5 shrink-0" />
-                    <span class="whitespace-nowrap overflow-hidden {textClass}"
-                        >Logout</span
-                    >
-                </button>
+                <UserMenuButton collapsed={collapsed} {textClass} />
             </div>
         </div>
     </div>

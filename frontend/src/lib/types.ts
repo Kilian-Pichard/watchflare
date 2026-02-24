@@ -4,10 +4,13 @@
 
 // ===== User & Authentication =====
 
+export type Theme = 'light' | 'dark' | 'system';
+
 export interface User {
 	id: number;
 	email: string;
 	default_time_range: TimeRange;
+	theme: Theme;
 	created_at: string;
 }
 

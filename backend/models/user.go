@@ -13,7 +13,7 @@ type User struct {
 	Email            string    `gorm:"unique;not null" json:"email"`
 	Password         string    `gorm:"not null" json:"-"`
 	DefaultTimeRange string    `gorm:"type:varchar(10);default:'24h'" json:"default_time_range"`
-	Theme            string    `gorm:"type:varchar(10);default:'light'" json:"theme"`
+	Theme            string    `gorm:"type:varchar(10);default:'system'" json:"theme"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
@@ -28,7 +28,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 		u.DefaultTimeRange = "24h"
 	}
 	if u.Theme == "" {
-		u.Theme = "light"
+		u.Theme = "system"
 	}
 	return nil
 }

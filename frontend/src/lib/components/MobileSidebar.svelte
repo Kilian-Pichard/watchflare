@@ -4,9 +4,9 @@
     import { page } from "$app/stores";
     import { mobileMenuOpen } from "$lib/stores/sidebar";
     import { get } from "svelte/store";
-    import { authActions } from "$lib/stores";
-    import { Home, Server, Settings, LogOut } from "lucide-svelte";
+    import { Home, Server, Settings } from "lucide-svelte";
     import SSEStatusBadge from "./SSEStatusBadge.svelte";
+    import UserMenuButton from "./UserMenuButton.svelte";
 
     let wasOpenBeforeDesktop = false;
 
@@ -99,22 +99,16 @@
             {/each}
         </nav>
 
-        <!-- SSE Connection Status + Logout -->
+        <!-- SSE Connection Status + User Menu -->
         <div class="border-t">
             <!-- SSE Status Badge -->
             <div class="px-4 pt-4 pb-2">
                 <SSEStatusBadge />
             </div>
 
-            <!-- Logout Button -->
+            <!-- User Menu -->
             <div class="px-4 pb-4">
-                <button
-                    onclick={authActions.logout}
-                    class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                >
-                    <LogOut class="h-5 w-5 shrink-0" />
-                    <span>Logout</span>
-                </button>
+                <UserMenuButton collapsed={false} onAction={closeMobileMenu} />
             </div>
         </div>
     </div>
