@@ -6,11 +6,21 @@ interface UIState {
 	metricsCollapsed: boolean;
 }
 
+function loadMetricsCollapsed(): boolean {
+	if (typeof localStorage === 'undefined') return false;
+	return localStorage.getItem('metricsCollapsed') === 'true';
+}
+
+function saveMetricsCollapsed(value: boolean): void {
+	if (typeof localStorage === 'undefined') return;
+	localStorage.setItem('metricsCollapsed', String(value));
+}
+
 function createUIStore() {
 	const { subscribe, set, update } = writable<UIState>({
 		loading: false,
 		rightSidebarOpen: false,
-		metricsCollapsed: false
+		metricsCollapsed: loadMetricsCollapsed()
 	});
 
 	return {
@@ -33,7 +43,11 @@ function createUIStore() {
 
 		// Toggle metrics collapsed
 		toggleMetricsCollapsed(): void {
-			update(state => ({ ...state, metricsCollapsed: !state.metricsCollapsed }));
+			update(state => {
+				const next = !state.metricsCollapsed;
+				saveMetricsCollapsed(next);
+				return { ...state, metricsCollapsed: next };
+			});
 		},
 
 		// Reset UI state
