@@ -133,6 +133,7 @@ func setupRouter() *gin.Engine {
 		protectedGroup.GET("/user", handlers.GetCurrentUser)
 		protectedGroup.PUT("/preferences", handlers.UpdatePreferences)
 		protectedGroup.PUT("/change-password", handlers.ChangePassword)
+		protectedGroup.PUT("/change-email", handlers.ChangeEmail)
 	}
 
 	// Server routes (protected)

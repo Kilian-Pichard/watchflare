@@ -34,6 +34,9 @@ function applyTheme(theme: Theme): void {
 	}
 }
 
+// Standalone reactive store for theme — always in sync with user preferences
+export const themeStore = writable<Theme>('system');
+
 function createUserStore() {
 	const { subscribe, set, update } = writable<UserState>({
 		user: null,
@@ -55,7 +58,9 @@ function createUserStore() {
 				}
 
 				const user = userData.user;
-				applyTheme(user.theme || 'system');
+				const theme = user.theme || 'system';
+				applyTheme(theme);
+				themeStore.set(theme);
 
 				update(state => ({
 					...state,
@@ -71,22 +76,26 @@ function createUserStore() {
 
 		// Update user preferences
 		async updatePreferences(timeRange: TimeRange, theme: Theme): Promise<void> {
+			// Optimistic update
+			themeStore.set(theme);
+			applyTheme(theme);
+
+			update(state => {
+				if (state.user) {
+					return {
+						...state,
+						user: {
+							...state.user,
+							default_time_range: timeRange,
+							theme
+						}
+					};
+				}
+				return state;
+			});
+
 			try {
 				await updatePreferences(timeRange, theme);
-
-				update(state => {
-					if (state.user) {
-						return {
-							...state,
-							user: {
-								...state.user,
-								default_time_range: timeRange,
-								theme
-							}
-						};
-					}
-					return state;
-				});
 			} catch (err) {
 				logger.error('Failed to update preferences:', err);
 				throw err;
@@ -96,29 +105,28 @@ function createUserStore() {
 		// Update theme only
 		async updateTheme(theme: Theme): Promise<void> {
 			applyTheme(theme);
+			themeStore.set(theme);
 
-			let currentUser: User | null = null;
-			const unsubscribe = subscribe(state => { currentUser = state.user; });
-			unsubscribe();
-
-			if (currentUser) {
-				try {
-					await updatePreferences(currentUser.default_time_range, theme);
-					update(state => {
-						if (state.user) {
-							return { ...state, user: { ...state.user, theme } };
-						}
-						return state;
-					});
-				} catch (err) {
-					logger.error('Failed to update theme:', err);
+			let timeRange = '24h';
+			update(state => {
+				if (state.user) {
+					timeRange = state.user.default_time_range;
+					return { ...state, user: { ...state.user, theme } };
 				}
+				return state;
+			});
+
+			try {
+				await updatePreferences(timeRange, theme);
+			} catch (err) {
+				logger.error('Failed to update theme:', err);
 			}
 		},
 
 		// Clear user data (logout)
 		clear(): void {
 			set({ user: null, loading: false, error: null });
+			themeStore.set('system');
 		}
 	};
 }

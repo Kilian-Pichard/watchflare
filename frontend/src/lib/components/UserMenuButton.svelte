@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { currentUser, authActions } from '$lib/stores';
-	import { userStore } from '$lib/stores/user';
+	import { authActions } from '$lib/stores';
+	import { userStore, themeStore } from '$lib/stores/user';
 	import type { Theme } from '$lib/types';
-	import { User, Settings, LogOut, Sun, Moon, Monitor, Check } from 'lucide-svelte';
+	import { Settings, LogOut, Sun, Moon, Monitor, Check } from 'lucide-svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	const {
@@ -16,13 +15,11 @@
 		onAction?: () => void;
 	} = $props();
 
-	const user = $derived($currentUser);
+	const email = $derived($userStore.user?.email || '');
 	const initials = $derived(
-		user?.email
-			? user.email.substring(0, 2).toUpperCase()
-			: '??'
+		email ? email.substring(0, 2).toUpperCase() : '??'
 	);
-	const currentTheme = $derived(user?.theme || 'system');
+	const currentTheme = $derived($themeStore);
 
 	const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
 		{ value: 'light', label: 'Light', icon: Sun },
@@ -32,11 +29,6 @@
 
 	async function handleThemeChange(theme: Theme) {
 		await userStore.updateTheme(theme);
-	}
-
-	function handleNavigate(path: string) {
-		onAction?.();
-		goto(path);
 	}
 
 	function handleLogout() {
@@ -51,13 +43,13 @@
 			<button
 				{...props}
 				class="flex w-full items-center rounded-lg py-3.25 px-3.25 text-sm font-medium text-surface-foreground transition-colors hover:bg-surface-accent"
-				title={user?.email || 'User menu'}
+				title={email || 'User menu'}
 			>
 				<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
 					{initials}
 				</span>
 				<span class="whitespace-nowrap overflow-hidden text-left truncate {textClass}">
-					{user?.email || 'User'}
+					{email || 'User'}
 				</span>
 			</button>
 		{/snippet}

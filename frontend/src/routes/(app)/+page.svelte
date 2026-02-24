@@ -53,8 +53,10 @@
 		try {
 			loading = true;
 
-			// Load user preferences
-			await userStore.load();
+			// Ensure user preferences are loaded
+			if (!$currentUser) {
+				await userStore.load();
+			}
 
 			// Get time range from user preferences (migrate old 6h to 12h)
 			const userTimeRange = $currentUser?.default_time_range || '24h';

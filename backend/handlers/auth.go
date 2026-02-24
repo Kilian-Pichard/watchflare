@@ -28,6 +28,11 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" binding:"required,min=8"`
 }
 
+// ChangeEmailRequest represents the change email request body
+type ChangeEmailRequest struct {
+	NewEmail string `json:"new_email" binding:"required,email"`
+}
+
 // UpdatePreferencesRequest represents the update preferences request body
 type UpdatePreferencesRequest struct {
 	DefaultTimeRange string `json:"default_time_range"`
@@ -147,6 +152,30 @@ func ChangePassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Password changed successfully",
+	})
+}
+
+// ChangeEmail updates the authenticated user's email
+func ChangeEmail(c *gin.Context) {
+	var req ChangeEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID.(string)).Update("email", req.NewEmail).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update email"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Email updated successfully",
 	})
 }
 

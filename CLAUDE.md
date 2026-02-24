@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.19.0
+**Current version**: 0.19.1
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.19.1` - Full user settings page: email change, password change (migrated from /settings), preferences (theme + time range), standalone themeStore for cross-component reactivity, layout-level user loading with ready gate, /settings placeholder
 - `0.19.0` - User menu in sidebar: dropdown with avatar/email replacing logout button, theme switcher (light/dark/system) with backend persistence, dropdown-menu UI components (bits-ui), placeholder user settings page
 - `0.18.5` - Persist Global Metrics collapse state in localStorage across page refresh and reconnection
 - `0.18.4` - UI polish: sort buttons as rounded hover pills on table headers (h-8, hover:bg-muted), default sort order changed to descending, removed environment filter from server list

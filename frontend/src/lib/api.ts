@@ -182,6 +182,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
 	});
 }
 
+export async function changeEmail(newEmail: string): Promise<{ message: string }> {
+	return apiRequest<{ message: string }>('/auth/change-email', {
+		method: 'PUT',
+		body: JSON.stringify({
+			new_email: newEmail
+		})
+	});
+}
+
 // Server API calls
 export async function listServers(params?: {
 	page?: number;
