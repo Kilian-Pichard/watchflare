@@ -27,6 +27,8 @@
 		{ value: 'system', label: 'System', icon: Monitor },
 	];
 
+	let open = $state(false);
+
 	async function handleThemeChange(theme: Theme) {
 		await userStore.updateTheme(theme);
 	}
@@ -37,7 +39,7 @@
 	}
 </script>
 
-<DropdownMenu.Root>
+<DropdownMenu.Root bind:open>
 	<DropdownMenu.Trigger>
 		{#snippet child({ props })}
 			<button
@@ -56,7 +58,7 @@
 	</DropdownMenu.Trigger>
 
 	<DropdownMenu.Content side="top" align="start" class="mb-1">
-		<a href="/user" onclick={() => onAction?.()} class="flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground outline-none hover:bg-muted">
+		<a href="/user" onclick={() => { open = false; onAction?.(); }} class="flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground outline-none hover:bg-muted">
 			<Settings class="h-4 w-4" />
 			User Settings
 		</a>

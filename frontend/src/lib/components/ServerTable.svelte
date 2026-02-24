@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatBytes, formatPercent, getStatusClass, getMetricClass, formatRelativeTime } from '$lib/utils';
+	import { formatPercent, getStatusClass, formatRelativeTime } from '$lib/utils';
 	import type { ServerWithMetrics, Metric } from '$lib/types';
 
 	const { servers, metricsData }: {
@@ -22,7 +22,7 @@
 	function getLastMetrics(serverId: string) {
 		const metrics = metricsData[serverId];
 		if (!metrics || metrics.length === 0) {
-			return { hasData: false, cpu: 0, memory: 0, disk: 0, memoryUsed: 0, memoryTotal: 0, diskUsed: 0, diskTotal: 0 };
+			return { hasData: false, cpu: 0, memory: 0, disk: 0 };
 		}
 
 		// If only 1-2 points (real-time SSE), use the latest
@@ -32,11 +32,7 @@
 				hasData: true,
 				cpu: latest.cpu_usage_percent || 0,
 				memory: latest.memory_total_bytes > 0 ? (latest.memory_used_bytes / latest.memory_total_bytes) * 100 : 0,
-				disk: latest.disk_total_bytes > 0 ? (latest.disk_used_bytes / latest.disk_total_bytes) * 100 : 0,
-				memoryUsed: latest.memory_used_bytes || 0,
-				memoryTotal: latest.memory_total_bytes || 0,
-				diskUsed: latest.disk_used_bytes || 0,
-				diskTotal: latest.disk_total_bytes || 0
+				disk: latest.disk_total_bytes > 0 ? (latest.disk_used_bytes / latest.disk_total_bytes) * 100 : 0
 			};
 		}
 
@@ -59,12 +55,14 @@
 			hasData: true,
 			cpu: cpuSum / count,
 			memory: avgMemTotal > 0 ? (avgMemUsed / avgMemTotal) * 100 : 0,
-			disk: avgDiskTotal > 0 ? (avgDiskUsed / avgDiskTotal) * 100 : 0,
-			memoryUsed: avgMemUsed,
-			memoryTotal: avgMemTotal,
-			diskUsed: avgDiskUsed,
-			diskTotal: avgDiskTotal
+			disk: avgDiskTotal > 0 ? (avgDiskUsed / avgDiskTotal) * 100 : 0
 		};
+	}
+
+	function getBarColor(percent: number): string {
+		if (percent >= 90) return 'bg-danger';
+		if (percent >= 70) return 'bg-warning';
+		return 'bg-primary';
 	}
 
 	const sortedServers = $derived(() => {
@@ -133,6 +131,15 @@
 	{/if}
 {/snippet}
 
+{#snippet metricBar(percent: number)}
+	<div class="w-16 h-1.5 rounded-full bg-muted mt-1">
+		<div
+			class="h-full rounded-full {getBarColor(percent)}"
+			style="width: {Math.min(percent, 100)}%"
+		></div>
+	</div>
+{/snippet}
+
 <div class="rounded-lg border bg-card">
 	<!-- Mobile: Cards layout -->
 	<div class="md:hidden divide-y divide-border">
@@ -157,17 +164,18 @@
 					<div class="grid grid-cols-3 gap-3 text-sm">
 						<div>
 							<span class="text-xs text-muted-foreground">CPU</span>
-							<p class={getMetricClass(metrics.cpu)}>{formatPercent(metrics.cpu)}</p>
+							<p class="text-foreground">{formatPercent(metrics.cpu)}</p>
+							{@render metricBar(metrics.cpu)}
 						</div>
 						<div>
 							<span class="text-xs text-muted-foreground">Memory</span>
-							<p class={getMetricClass(metrics.memory)}>{formatPercent(metrics.memory)}</p>
-							<p class="text-xs text-muted-foreground">{formatBytes(metrics.memoryUsed)}</p>
+							<p class="text-foreground">{formatPercent(metrics.memory)}</p>
+							{@render metricBar(metrics.memory)}
 						</div>
 						<div>
 							<span class="text-xs text-muted-foreground">Disk</span>
-							<p class={getMetricClass(metrics.disk)}>{formatPercent(metrics.disk)}</p>
-							<p class="text-xs text-muted-foreground">{formatBytes(metrics.diskUsed)}</p>
+							<p class="text-foreground">{formatPercent(metrics.disk)}</p>
+							{@render metricBar(metrics.disk)}
 						</div>
 					</div>
 				{:else}
@@ -257,9 +265,12 @@
 						<!-- CPU -->
 						<td class="px-4 py-3.5 text-right">
 							{#if metrics.hasData}
-								<span class={getMetricClass(metrics.cpu)}>
-									{formatPercent(metrics.cpu)}
-								</span>
+								<div class="flex flex-col items-end">
+									<span class="text-foreground">
+										{formatPercent(metrics.cpu)}
+									</span>
+									{@render metricBar(metrics.cpu)}
+								</div>
 							{:else}
 								<span class="text-muted-foreground">-</span>
 							{/if}
@@ -269,12 +280,10 @@
 						<td class="px-4 py-3.5 text-right">
 							{#if metrics.hasData}
 								<div class="flex flex-col items-end">
-									<span class={getMetricClass(metrics.memory)}>
+									<span class="text-foreground">
 										{formatPercent(metrics.memory)}
 									</span>
-									<span class="text-xs text-muted-foreground">
-										{formatBytes(metrics.memoryUsed)} / {formatBytes(metrics.memoryTotal)}
-									</span>
+									{@render metricBar(metrics.memory)}
 								</div>
 							{:else}
 								<span class="text-muted-foreground">-</span>
@@ -285,12 +294,10 @@
 						<td class="px-4 py-3.5 text-right">
 							{#if metrics.hasData}
 								<div class="flex flex-col items-end">
-									<span class={getMetricClass(metrics.disk)}>
+									<span class="text-foreground">
 										{formatPercent(metrics.disk)}
 									</span>
-									<span class="text-xs text-muted-foreground">
-										{formatBytes(metrics.diskUsed)} / {formatBytes(metrics.diskTotal)}
-									</span>
+									{@render metricBar(metrics.disk)}
 								</div>
 							{:else}
 								<span class="text-muted-foreground">-</span>
