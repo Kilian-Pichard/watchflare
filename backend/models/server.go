@@ -38,7 +38,7 @@ type Server struct {
 	LastSeen        *time.Time `json:"last_seen"`
 
 	// Statut du serveur
-	// Valeurs: "pending", "online", "offline", "expired"
+	// Valeurs: "pending", "online", "offline", "paused", "expired"
 	Status string `gorm:"default:pending" json:"status"`
 
 	// Timestamp when agent was reactivated (via UUID reuse)

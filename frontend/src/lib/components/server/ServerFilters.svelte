@@ -17,6 +17,7 @@
 		{ value: '', label: 'All statuses' },
 		{ value: 'online', label: 'Online' },
 		{ value: 'offline', label: 'Offline' },
+		{ value: 'paused', label: 'Paused' },
 		{ value: 'pending', label: 'Pending' },
 	];
 

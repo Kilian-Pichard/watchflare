@@ -197,6 +197,14 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 		return nil, result.Error
 	}
 
+	// If server is paused, acknowledge but don't update cache or broadcast
+	if server.Status == "paused" {
+		return &pb.HeartbeatResponse{
+			Success: true,
+			Message: "Server is paused",
+		}, nil
+	}
+
 	// Update heartbeat cache (in-memory, no DB write)
 	heartbeatCache := cache.GetCache()
 	heartbeatCache.Update(req.AgentId, req.IpAddressV4, req.IpAddressV6)
@@ -236,6 +244,15 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 			}, nil
 		}
 		return nil, result.Error
+	}
+
+	// If server is paused, acknowledge but don't store metrics
+	if server.Status == "paused" {
+		log.Printf("⏸ Metrics discarded for paused server %s (%s)", server.Name, server.ID)
+		return &pb.MetricsResponse{
+			Success: true,
+			Message: "Server is paused, metrics discarded",
+		}, nil
 	}
 
 	// Create metric record

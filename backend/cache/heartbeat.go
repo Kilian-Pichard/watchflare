@@ -132,6 +132,13 @@ func (c *HeartbeatCache) CheckStale(timeout time.Duration) []string {
 	return staleAgents
 }
 
+// Remove removes a specific agent from the cache
+func (c *HeartbeatCache) Remove(agentID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.cache, agentID)
+}
+
 // Clear removes all cached data (used for testing)
 func (c *HeartbeatCache) Clear() {
 	c.mu.Lock()

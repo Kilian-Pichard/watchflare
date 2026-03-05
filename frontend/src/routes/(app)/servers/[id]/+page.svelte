@@ -194,6 +194,26 @@
         navigator.clipboard.writeText(text);
     }
 
+    async function handlePause() {
+        if (!server) return;
+        try {
+            await api.pauseServer(server.id);
+            server = { ...server, status: 'paused' };
+        } catch (err) {
+            error = err.message || "Failed to pause server";
+        }
+    }
+
+    async function handleResume() {
+        if (!server) return;
+        try {
+            await api.resumeServer(server.id);
+            server = { ...server, status: 'online' };
+        } catch (err) {
+            error = err.message || "Failed to resume server";
+        }
+    }
+
     function handleTimeRangeChange() {
         loadMetrics();
     }
@@ -257,6 +277,8 @@
         onRegenerateToken={() => (showRegenerateConfirm = true)}
         onChangeIP={() => (showChangeIP = true)}
         onRename={() => { newServerName = server?.name || ''; showRename = true; }}
+        onPause={handlePause}
+        onResume={handleResume}
     />
 
     {#if regeneratedToken}

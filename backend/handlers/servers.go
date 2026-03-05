@@ -8,6 +8,7 @@ import (
 	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/services"
+	"watchflare/backend/sse"
 
 	"github.com/gin-gonic/gin"
 )
@@ -254,6 +255,48 @@ func DismissReactivation(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Reactivation badge dismissed",
+	})
+}
+
+// PauseServer pauses monitoring for a server
+func PauseServer(c *gin.Context) {
+	serverID := c.Param("id")
+
+	if err := services.PauseServer(serverID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Broadcast SSE update
+	broker := sse.GetBroker()
+	broker.BroadcastServerUpdate(sse.ServerUpdate{
+		ID:     serverID,
+		Status: "paused",
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Server paused successfully",
+	})
+}
+
+// ResumeServer resumes monitoring for a paused server
+func ResumeServer(c *gin.Context) {
+	serverID := c.Param("id")
+
+	if err := services.ResumeServer(serverID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Broadcast SSE update
+	broker := sse.GetBroker()
+	broker.BroadcastServerUpdate(sse.ServerUpdate{
+		ID:     serverID,
+		Status: "online",
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Server resumed successfully",
 	})
 }
 

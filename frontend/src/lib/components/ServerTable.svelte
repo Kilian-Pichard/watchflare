@@ -156,7 +156,7 @@
 					<span
 						class="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
 					>
-						<span class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : 'bg-muted-foreground'}"></span>
+						<span class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : server.status === 'offline' ? 'bg-danger' : 'bg-muted-foreground'}"></span>
 						{server.status}
 					</span>
 				</div>
@@ -257,7 +257,7 @@
 							<span
 								class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
 							>
-								<span class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : 'bg-muted-foreground'}"></span>
+								<span class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : server.status === 'offline' ? 'bg-danger' : 'bg-muted-foreground'}"></span>
 								{server.status}
 							</span>
 						</td>

@@ -104,6 +104,11 @@ func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
 		return
 	}
 
+	// Skip broadcasting if no data (all servers paused/offline)
+	if memoryTotalBytes == 0 && diskTotalBytes == 0 && cpuUsagePercent == 0 {
+		return
+	}
+
 	// Create aggregated metrics update
 	update := sse.AggregatedMetricsUpdate{
 		Timestamp:            bucketTime.Format(time.RFC3339),

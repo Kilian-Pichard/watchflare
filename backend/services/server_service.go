@@ -356,6 +356,56 @@ func RegenerateToken(serverID string) (string, error) {
 	return token, nil
 }
 
+// PauseServer sets a server's status to "paused" and removes it from heartbeat cache
+func PauseServer(serverID string) error {
+	var server models.Server
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("server not found")
+		}
+		return err
+	}
+
+	if server.Status == "pending" {
+		return errors.New("cannot pause a pending server")
+	}
+	if server.Status == "paused" {
+		return errors.New("server is already paused")
+	}
+
+	server.Status = "paused"
+	if err := database.DB.Save(&server).Error; err != nil {
+		return err
+	}
+
+	// Remove from heartbeat cache so stale checker ignores it
+	cache.GetCache().Remove(server.AgentID)
+
+	return nil
+}
+
+// ResumeServer sets a paused server's status back to "online"
+func ResumeServer(serverID string) error {
+	var server models.Server
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("server not found")
+		}
+		return err
+	}
+
+	if server.Status != "paused" {
+		return errors.New("server is not paused")
+	}
+
+	server.Status = "online"
+	if err := database.DB.Save(&server).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // DeleteServer deletes a server
 func DeleteServer(serverID string) error {
 	var server models.Server

@@ -94,6 +94,8 @@ export function getStatusClass(status: string): string {
 		case 'ip_mismatch':
 			return 'bg-warning/10 text-warning border-warning/20';
 		case 'offline':
+			return 'bg-danger/10 text-danger border-danger/20';
+		case 'paused':
 		case 'expired':
 		default:
 			return 'bg-muted text-muted-foreground border-border';
@@ -140,6 +142,7 @@ export interface ServerWithLatestMetric {
 export function countAlerts(servers: ServerWithLatestMetric[]): number {
 	let count = 0;
 	for (const { server, latestMetric } of servers) {
+		if (server.status === 'paused') continue;
 		if (server.status === 'offline') count++;
 		if (server.status === 'ip_mismatch') count++;
 		if (latestMetric && latestMetric.cpu_usage_percent > 90) count++;
@@ -162,6 +165,7 @@ export function generateAlerts(servers: ServerWithLatestMetric[]): Alert[] {
 	const alerts: Alert[] = [];
 
 	for (const { server, latestMetric } of servers) {
+		if (server.status === 'paused') continue;
 		if (server.status === 'offline') {
 			alerts.push({ type: 'critical', server: server.name as string, message: 'Server is offline', time: 'Just now' });
 		}

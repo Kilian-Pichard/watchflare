@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getStatusClass, formatRelativeTime } from '$lib/utils';
+	import { Pause, Play } from 'lucide-svelte';
 	import type { Server, PackageStats } from '$lib/types';
 
 	const {
@@ -9,6 +10,8 @@
 		onRegenerateToken,
 		onChangeIP,
 		onRename,
+		onPause,
+		onResume,
 	}: {
 		server: Server;
 		packageStats: PackageStats | null;
@@ -16,6 +19,8 @@
 		onRegenerateToken: () => void;
 		onChangeIP: () => void;
 		onRename: () => void;
+		onPause: () => void;
+		onResume: () => void;
 	} = $props();
 </script>
 
@@ -30,7 +35,7 @@
 				class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
 			>
 				<span
-					class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : 'bg-muted-foreground'}"
+					class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : server.status === 'offline' ? 'bg-danger' : 'bg-muted-foreground'}"
 				></span>
 				{server.status}
 			</span>
@@ -55,6 +60,25 @@
 				>
 					Regenerate Token
 				</button>
+			{/if}
+			{#if server.status !== 'pending'}
+				{#if server.status === 'paused'}
+					<button
+						onclick={onResume}
+						class="inline-flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
+					>
+						<Play class="h-3.5 w-3.5" />
+						Resume
+					</button>
+				{:else}
+					<button
+						onclick={onPause}
+						class="inline-flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
+					>
+						<Pause class="h-3.5 w-3.5" />
+						Pause
+					</button>
+				{/if}
 			{/if}
 			<button
 				onclick={onDelete}

@@ -230,6 +230,18 @@ export async function createServer(
 	});
 }
 
+export async function pauseServer(id: string): Promise<{ message: string }> {
+	return apiRequest<{ message: string }>(`/servers/${id}/pause`, {
+		method: 'PUT'
+	});
+}
+
+export async function resumeServer(id: string): Promise<{ message: string }> {
+	return apiRequest<{ message: string }>(`/servers/${id}/resume`, {
+		method: 'PUT'
+	});
+}
+
 export async function deleteServer(id: string): Promise<{ message: string }> {
 	return apiRequest<{ message: string }>(`/servers/${id}`, {
 		method: 'DELETE'
