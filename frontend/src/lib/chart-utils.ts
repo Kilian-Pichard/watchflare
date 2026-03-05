@@ -13,6 +13,16 @@ export function computeXDomain(
 	return [new Date(lastDate.getTime() - range.seconds * 1000), lastDate];
 }
 
+// Filtre les données pour ne garder que celles dans la fenêtre xDomain
+export function filterByDomain<T extends { date: Date }>(
+	data: T[],
+	domain: [Date, Date] | undefined
+): T[] {
+	if (!domain) return data;
+	const [start, end] = domain;
+	return data.filter((d) => d.date >= start && d.date <= end);
+}
+
 // Format xAxis partagé
 export function formatXAxis(d: Date): string {
 	return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

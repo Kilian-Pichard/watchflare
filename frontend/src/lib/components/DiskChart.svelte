@@ -4,7 +4,7 @@
 	import { formatBytes } from '$lib/utils';
 	import * as ChartUI from '$lib/components/ui/chart';
 	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, formatXAxis, CHART_PADDING_BYTES } from '$lib/chart-utils';
+	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_BYTES } from '$lib/chart-utils';
 	import type { Metric, TimeRange } from '$lib/types';
 
 	let { data = [], timeRange }: { data: Metric[]; timeRange?: TimeRange } = $props();
@@ -17,6 +17,7 @@
 	);
 
 	let xDomain = $derived(computeXDomain(chartData, timeRange));
+	let visibleData = $derived(filterByDomain(chartData, xDomain));
 
 	let maxDisk = $derived(
 		data.length > 0 ? Math.max(...data.map((d) => d.disk_total_bytes)) : 0
@@ -27,11 +28,11 @@
 	};
 </script>
 
-{#if chartData.length > 0}
+{#if visibleData.length > 0}
 	<div class="h-64">
 		<ChartUI.Container config={chartConfig} class="h-full w-full">
 			<AreaChart
-				data={chartData}
+				data={visibleData}
 				x="date"
 				xScale={scaleTime()}
 				{xDomain}

@@ -3,7 +3,7 @@
 	import { scaleTime } from 'd3-scale';
 	import * as ChartUI from '$lib/components/ui/chart';
 	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, formatXAxis, CHART_PADDING_PERCENT } from '$lib/chart-utils';
+	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_PERCENT } from '$lib/chart-utils';
 	import type { Metric, AggregatedMetric, TimeRange } from '$lib/types';
 
 	let { data = [], timeRange }: { data: (Metric | AggregatedMetric)[]; timeRange?: TimeRange } =
@@ -17,17 +17,18 @@
 	);
 
 	let xDomain = $derived(computeXDomain(chartData, timeRange));
+	let visibleData = $derived(filterByDomain(chartData, xDomain));
 
 	const chartConfig = {
 		cpu: { label: 'CPU Usage', color: 'var(--chart-1)' }
 	};
 </script>
 
-{#if chartData.length > 0}
+{#if visibleData.length > 0}
 	<div class="h-48 sm:h-64">
 		<ChartUI.Container config={chartConfig} class="h-full w-full">
 			<LineChart
-				data={chartData}
+				data={visibleData}
 				x="date"
 				xScale={scaleTime()}
 				{xDomain}
