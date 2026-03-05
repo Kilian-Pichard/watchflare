@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.19.2
+**Current version**: 0.20.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.20.0` - Fix macOS APFS disk metrics (platform-specific diskutil collection), unified chart architecture (shared xDomain/tooltip/formatting in chart-utils.ts + ChartTooltip component), xDomain anchored to last data point for time range coverage, responsive chart headers (% only on mobile), tooltip color bar fix, formatBytes switched to base 1024 (IEC)
 - `0.19.2` - Replace exact metric values with colored progress bars in server table, neutral text for percentages
 - `0.19.1` - Full user settings page: email change, password change (migrated from /settings), preferences (theme + time range), standalone themeStore for cross-component reactivity, layout-level user loading with ready gate, /settings placeholder
 - `0.19.0` - User menu in sidebar: dropdown with avatar/email replacing logout button, theme switcher (light/dark/system) with backend persistence, dropdown-menu UI components (bits-ui), placeholder user settings page

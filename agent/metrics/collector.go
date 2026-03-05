@@ -6,7 +6,6 @@ import (
 	"watchflare-agent/sysinfo"
 
 	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -73,12 +72,14 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		}
 	}
 
-	// Disk usage (root partition) - SKIPPED for containers to avoid double-counting
+	// Disk usage - SKIPPED for containers to avoid double-counting
+	// On macOS: uses diskutil for APFS-accurate values (container level)
+	// On Linux: uses gopsutil disk.Usage("/")
 	if config.CollectDisk {
-		diskStats, err := disk.Usage("/")
-		if err == nil {
-			metrics.DiskTotalBytes = diskStats.Total
-			metrics.DiskUsedBytes = diskStats.Used
+		total, used, diskErr := getDiskUsage()
+		if diskErr == nil {
+			metrics.DiskTotalBytes = total
+			metrics.DiskUsedBytes = used
 		}
 	}
 

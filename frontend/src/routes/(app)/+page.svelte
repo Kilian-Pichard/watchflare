@@ -191,7 +191,7 @@
 			<!-- Dashboard Charts (hidden when collapsed) -->
 			{#if !metricsCollapsed}
 				<div transition:slide={{ duration: 250 }}>
-					<DashboardCharts aggregatedMetrics={$aggregatedMetrics} {stats} />
+					<DashboardCharts aggregatedMetrics={$aggregatedMetrics} {stats} timeRange={selectedTimeRange} />
 				</div>
 			{/if}
 

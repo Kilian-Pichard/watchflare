@@ -2,7 +2,7 @@
 	import CPUChart from '$lib/components/CPUChart.svelte';
 	import MemoryChart from '$lib/components/MemoryChart.svelte';
 	import { formatBytes, formatPercent } from '$lib/utils';
-	import type { AggregatedMetric } from '$lib/types';
+	import type { AggregatedMetric, TimeRange } from '$lib/types';
 
 	interface Stats {
 		avgCPU: number;
@@ -12,10 +12,12 @@
 
 	const {
 		aggregatedMetrics,
-		stats
+		stats,
+		timeRange
 	}: {
 		aggregatedMetrics: AggregatedMetric[];
 		stats: Stats;
+		timeRange: TimeRange;
 	} = $props();
 
 	// Create a unique key based on the last metric's timestamp to force chart re-render
@@ -38,7 +40,7 @@
 				</span>
 			</div>
 			{#key chartKey}
-				<CPUChart data={aggregatedMetrics} />
+				<CPUChart data={aggregatedMetrics} {timeRange} />
 			{/key}
 		</div>
 
@@ -47,11 +49,12 @@
 			<div class="mb-3 flex items-center justify-between">
 				<h3 class="text-sm font-medium">Memory Usage</h3>
 				<span class="text-xs text-muted-foreground">
-					{formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)}
+					<span class="sm:hidden">{formatPercent(stats.totalMemory > 0 ? (stats.usedMemory / stats.totalMemory) * 100 : 0)}</span>
+					<span class="hidden sm:inline">{formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)} ({formatPercent(stats.totalMemory > 0 ? (stats.usedMemory / stats.totalMemory) * 100 : 0)})</span>
 				</span>
 			</div>
 			{#key chartKey}
-				<MemoryChart data={aggregatedMetrics} />
+				<MemoryChart data={aggregatedMetrics} {timeRange} />
 			{/key}
 		</div>
 	</div>

@@ -1,103 +1,64 @@
 <script lang="ts">
-    import { AreaChart } from "layerchart";
-    import { scaleTime } from "d3-scale";
-    import { formatBytes } from "$lib/utils";
-    import * as ChartUI from "$lib/components/ui/chart";
-    import type { Metric } from "$lib/types";
+	import { AreaChart } from 'layerchart';
+	import { scaleTime } from 'd3-scale';
+	import { formatBytes } from '$lib/utils';
+	import * as ChartUI from '$lib/components/ui/chart';
+	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
+	import { computeXDomain, formatXAxis, CHART_PADDING_BYTES } from '$lib/chart-utils';
+	import type { Metric, TimeRange } from '$lib/types';
 
-    let { data = [] }: { data: Metric[] } = $props();
+	let { data = [], timeRange }: { data: Metric[]; timeRange?: TimeRange } = $props();
 
-    // Transform data for layerchart
-    let chartData = $derived(
-        data.map((d) => ({
-            date: new Date(d.timestamp),
-            disk: d.disk_used_bytes,
-        })),
-    );
+	let chartData = $derived(
+		data.map((d) => ({
+			date: new Date(d.timestamp),
+			disk: d.disk_used_bytes
+		}))
+	);
 
-    // Calculate max for y-axis
-    let maxDisk = $derived(
-        data.length > 0 ? Math.max(...data.map((d) => d.disk_total_bytes)) : 0,
-    );
+	let xDomain = $derived(computeXDomain(chartData, timeRange));
 
-    const chartConfig = {
-        disk: { label: "Disk Used", color: "var(--chart-3)" },
-    };
+	let maxDisk = $derived(
+		data.length > 0 ? Math.max(...data.map((d) => d.disk_total_bytes)) : 0
+	);
+
+	const chartConfig = {
+		disk: { label: 'Disk Used', color: 'var(--chart-3)' }
+	};
 </script>
 
 {#if chartData.length > 0}
-    <div class="h-64">
-        <ChartUI.Container config={chartConfig} class="h-full w-full">
-            <AreaChart
-                data={chartData}
-                x="date"
-                xScale={scaleTime()}
-                yDomain={[0, maxDisk]}
-                padding={{ left: 70, bottom: 24, top: 8, right: 8 }}
-                series={[
-                    {
-                        key: "disk",
-                        label: "Disk Used",
-                        color: chartConfig.disk.color,
-                    },
-                ]}
-                props={{
-                    area: {
-                        "fill-opacity": 0.2,
-                        line: { class: "stroke-2" },
-                    },
-                    xAxis: {
-                        format: (d) =>
-                            d.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                            }),
-                    },
-                    yAxis: {
-                        format: (d) => formatBytes(d),
-                    },
-                }}
-            >
-                {#snippet tooltip()}
-                    <ChartUI.Tooltip indicator="line">
-                        {#snippet formatter({ value, name, item })}
-                            <div class="flex text-xs">
-                                <div
-                                    class="w-1 bg-[{item.color}] rounded-sm mr-2"
-                                ></div>
-                                <div class="flex flex-col">
-                                    <div class="text-foreground font-medium">
-                                        {item.label.toLocaleDateString(
-                                            "fr-FR",
-                                            {
-                                                day: "numeric",
-                                                month: "short",
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                                second: "2-digit",
-                                            },
-                                        )}
-                                    </div>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <div class="text-muted-foreground">
-                                            {name}
-                                        </div>
-                                        <div
-                                            class="font-mono font-medium text-foreground"
-                                        >
-                                            {formatBytes(value)}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        {/snippet}
-                    </ChartUI.Tooltip>
-                {/snippet}
-            </AreaChart>
-        </ChartUI.Container>
-    </div>
+	<div class="h-64">
+		<ChartUI.Container config={chartConfig} class="h-full w-full">
+			<AreaChart
+				data={chartData}
+				x="date"
+				xScale={scaleTime()}
+				{xDomain}
+				yDomain={[0, maxDisk]}
+				padding={CHART_PADDING_BYTES}
+				series={[
+					{
+						key: 'disk',
+						label: 'Disk Used',
+						color: chartConfig.disk.color
+					}
+				]}
+				props={{
+					area: {
+						'fill-opacity': 0.2,
+						line: { class: 'stroke-2' }
+					},
+					xAxis: { format: formatXAxis },
+					yAxis: { format: (d) => formatBytes(d) }
+				}}
+			>
+				{#snippet tooltip()}
+					<ChartTooltip valueFormatter={(v) => formatBytes(v)} />
+				{/snippet}
+			</AreaChart>
+		</ChartUI.Container>
+	</div>
 {:else}
-    <div class="h-64 flex items-center justify-center text-muted-foreground">
-        No data available
-    </div>
+	<div class="h-64 flex items-center justify-center text-muted-foreground">No data available</div>
 {/if}
