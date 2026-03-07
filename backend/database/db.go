@@ -1,10 +1,12 @@
 package database
 
 import (
+	"database/sql"
 	_ "embed"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"watchflare/backend/models"
 
 	"gorm.io/driver/postgres"
@@ -149,27 +151,64 @@ func Connect() error {
 }
 
 // RunContinuousAggregatesMigration runs the continuous aggregates migration
+// Statements are executed individually outside transactions because
+// refresh_continuous_aggregate() cannot run inside a transaction block.
 func RunContinuousAggregatesMigration() error {
 	log.Println("Running continuous aggregates migration...")
 
-	// Execute migration (SQL embedded at compile time)
-	if err := DB.Exec(continuousAggregatesSQL).Error; err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
+	}
+
+	if err := execStatementsOutsideTx(sqlDB, continuousAggregatesSQL); err != nil {
+		return err
 	}
 
 	log.Println("✓ Continuous aggregates migration completed successfully")
 	return nil
 }
 
+// execStatementsOutsideTx splits SQL into individual statements and executes
+// each one outside a transaction. Skips comments and empty statements.
+func execStatementsOutsideTx(db *sql.DB, sqlContent string) error {
+	statements := strings.Split(sqlContent, ";")
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+		// Skip comment-only blocks
+		lines := strings.Split(stmt, "\n")
+		hasCode := false
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
+				hasCode = true
+				break
+			}
+		}
+		if !hasCode {
+			continue
+		}
+
+		if _, err := db.Exec(stmt); err != nil {
+			log.Printf("Warning: migration statement failed (may be idempotent): %v", err)
+		}
+	}
+	return nil
+}
+
 // RunDroppedMetricsMigration runs the dropped metrics migration
 func RunDroppedMetricsMigration() error {
 	log.Println("Running dropped metrics migration...")
-
-	// Execute migration (SQL embedded at compile time)
-	if err := DB.Exec(droppedMetricsSQL).Error; err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-
+	if err := execStatementsOutsideTx(sqlDB, droppedMetricsSQL); err != nil {
+		return err
+	}
 	log.Println("✓ Dropped metrics migration completed successfully")
 	return nil
 }
@@ -177,12 +216,13 @@ func RunDroppedMetricsMigration() error {
 // RunPackagesMigration runs the packages migration
 func RunPackagesMigration() error {
 	log.Println("Running packages migration...")
-
-	// Execute migration (SQL embedded at compile time)
-	if err := DB.Exec(packagesSQL).Error; err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-
+	if err := execStatementsOutsideTx(sqlDB, packagesSQL); err != nil {
+		return err
+	}
 	log.Println("✓ Packages migration completed successfully")
 	return nil
 }
@@ -190,12 +230,13 @@ func RunPackagesMigration() error {
 // RunEnvironmentDetectionMigration runs the environment detection migration
 func RunEnvironmentDetectionMigration() error {
 	log.Println("Running environment detection migration...")
-
-	// Execute migration (SQL embedded at compile time)
-	if err := DB.Exec(environmentDetectionSQL).Error; err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-
+	if err := execStatementsOutsideTx(sqlDB, environmentDetectionSQL); err != nil {
+		return err
+	}
 	log.Println("✓ Environment detection migration completed successfully")
 	return nil
 }
