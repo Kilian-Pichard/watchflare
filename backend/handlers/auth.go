@@ -56,17 +56,15 @@ func Register(c *gin.Context) {
 	// Set JWT token in HttpOnly cookie (auto-login after registration)
 	isProd := config.AppConfig.Environment == "production"
 	domain := config.AppConfig.CookieDomain
-	if domain == "" {
-		domain = "localhost" // Default for development
-	}
+	secure := isProd && domain != "" // Only secure if HTTPS is likely (custom domain set)
 
 	c.SetCookie(
 		"jwt_token",           // name
 		token,                 // value
 		60*60*24*7,           // maxAge (7 days in seconds)
 		"/",                   // path
-		domain,                // domain (from config)
-		isProd,                // secure (true in production)
+		domain,                // domain (empty = current host)
+		secure,                // secure (only with custom domain/HTTPS)
 		true,                  // httpOnly
 	)
 
@@ -93,17 +91,15 @@ func Login(c *gin.Context) {
 	// Set JWT token in HttpOnly cookie
 	isProd := config.AppConfig.Environment == "production"
 	domain := config.AppConfig.CookieDomain
-	if domain == "" {
-		domain = "localhost" // Default for development
-	}
+	secure := isProd && domain != "" // Only secure if HTTPS is likely (custom domain set)
 
 	c.SetCookie(
 		"jwt_token",           // name
 		token,                 // value
 		60*60*24*7,           // maxAge (7 days in seconds)
 		"/",                   // path
-		domain,                // domain (from config)
-		isProd,                // secure (true in production)
+		domain,                // domain (empty = current host)
+		secure,                // secure (only with custom domain/HTTPS)
 		true,                  // httpOnly
 	)
 

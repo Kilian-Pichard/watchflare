@@ -25,11 +25,27 @@ POSTGRES_PASSWORD=your_secure_database_password
 JWT_SECRET=your_random_jwt_secret
 ```
 
-Generate a random JWT secret:
+Generate a random JWT secret (use hex to avoid special characters):
 
 ```bash
-openssl rand -base64 32
+openssl rand -hex 32
 ```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `POSTGRES_PASSWORD` | *required* | Database password |
+| `JWT_SECRET` | *required* | JWT signing key (min 32 chars) |
+| `POSTGRES_USER` | `watchflare` | Database user |
+| `POSTGRES_DB` | `watchflare` | Database name |
+| `PORT` | `8080` | HTTP port (frontend + API) |
+| `GRPC_PORT` | `50051` | gRPC port (agents) |
+| `TLS_MODE` | `auto` | `auto` (self-signed) or `custom` (bring your own certs) |
+| `COOKIE_DOMAIN` | *(empty)* | Set to your domain when using HTTPS (enables secure cookies) |
+| `GRPC_TIMESTAMP_WINDOW` | `300` | HMAC timestamp tolerance in seconds |
+
+**Cookie security:** By default, cookies are not marked as `Secure` — this allows HTTP access (e.g., via IP address). When you set up a reverse proxy with HTTPS, set `COOKIE_DOMAIN=your-domain.com` in `.env` to enable secure cookies.
 
 Start the stack:
 
@@ -106,6 +122,8 @@ tail -f /var/log/watchflare-agent.log                # Logs
 ## 4. Reverse Proxy (HTTPS)
 
 For production, put the HTTP port (8080) behind a reverse proxy with TLS. The gRPC port (50051) uses its own TLS and should be exposed directly.
+
+After setting up HTTPS, add `COOKIE_DOMAIN=your-domain.com` to `.env` and restart to enable secure cookies.
 
 ### Caddy
 
