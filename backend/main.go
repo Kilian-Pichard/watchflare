@@ -1,8 +1,10 @@
 package main
 
 import (
+	"io/fs"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 	"watchflare/backend/cache"
@@ -110,15 +112,18 @@ func setupRouter() *gin.Engine {
 	}
 	router.Use(cors.New(corsConfig))
 
+	// API routes under /api prefix
+	api := router.Group("/api")
+
 	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
+	api.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "ok",
 		})
 	})
 
 	// Auth routes (public)
-	authGroup := router.Group("/auth")
+	authGroup := api.Group("/auth")
 	{
 		authGroup.GET("/setup-required", handlers.SetupRequired)
 		authGroup.POST("/register", handlers.Register)
@@ -127,7 +132,7 @@ func setupRouter() *gin.Engine {
 	}
 
 	// Protected routes (require JWT)
-	protectedGroup := router.Group("/auth")
+	protectedGroup := api.Group("/auth")
 	protectedGroup.Use(middleware.AuthMiddleware())
 	{
 		protectedGroup.GET("/user", handlers.GetCurrentUser)
@@ -137,7 +142,7 @@ func setupRouter() *gin.Engine {
 	}
 
 	// Server routes (protected)
-	serverGroup := router.Group("/servers")
+	serverGroup := api.Group("/servers")
 	serverGroup.Use(middleware.AuthMiddleware())
 	{
 		serverGroup.POST("", handlers.CreateAgent)
@@ -162,6 +167,28 @@ func setupRouter() *gin.Engine {
 		serverGroup.GET("/:id/packages/history", handlers.GetServerPackageHistory)
 		serverGroup.GET("/:id/packages/collections", handlers.GetServerPackageCollections)
 		serverGroup.GET("/:id/packages/stats", handlers.GetPackageStats)
+	}
+
+	// Serve embedded frontend (SPA with fallback to index.html)
+	frontendFiles, err := fs.Sub(frontendFS, "frontend/dist")
+	if err != nil {
+		log.Printf("Warning: Frontend files not found (dev mode?): %v", err)
+	} else {
+		fileServer := http.FileServer(http.FS(frontendFiles))
+		router.NoRoute(func(c *gin.Context) {
+			// Try to serve the exact file first
+			path := c.Request.URL.Path
+			f, err := frontendFiles.Open(path[1:]) // strip leading /
+			if err == nil {
+				f.Close()
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				return
+			}
+			// SPA fallback: serve index.html for all non-file routes
+			c.Request.URL.Path = "/"
+			fileServer.ServeHTTP(c.Writer, c.Request)
+		})
+		log.Println("Frontend embedded and served from /")
 	}
 
 	return router

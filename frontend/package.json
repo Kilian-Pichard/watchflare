@@ -1,6 +1,6 @@
 {
   "name": "watchflare-frontend",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "private": true,
   "scripts": {
     "dev": "vite dev",
@@ -13,6 +13,7 @@
     "@internationalized/date": "^3.10.0",
     "@lucide/svelte": "^0.561.0",
     "@sveltejs/adapter-auto": "^7.0.0",
+    "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.49.1",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/vite": "^4.1.18",

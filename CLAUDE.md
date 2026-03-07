@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.21.0
+**Current version**: 0.22.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.22.0` - Docker production deployment: single binary with embedded frontend (go:embed + build tags), multi-stage Dockerfile, docker-compose.prod.yml, SPA mode (adapter-static), API routes prefixed with /api, README and installation guide
 - `0.21.0` - Pause/resume server monitoring (server-side): backend ignores heartbeats/metrics for paused servers, stale checker skips them, aggregated scheduler skips empty broadcasts, offline badge now red pastel, paused badge grey, pause/resume button on server detail page, status filter option
 - `0.20.1` - Fix chart overflow when data has gaps (sleep/wake), filter data points to xDomain window
 - `0.20.0` - Fix macOS APFS disk metrics (platform-specific diskutil collection), unified chart architecture (shared xDomain/tooltip/formatting in chart-utils.ts + ChartTooltip component), xDomain anchored to last data point for time range coverage, responsive chart headers (% only on mobile), tooltip color bar fix, formatBytes switched to base 1024 (IEC)

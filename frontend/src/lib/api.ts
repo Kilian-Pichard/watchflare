@@ -16,7 +16,7 @@ import type {
 	MetricsQueryParams
 } from './types';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Build query string from params, filtering out undefined/null/empty values
 export function buildQueryString(params: Record<string, string | number | boolean | undefined | null>): string {
