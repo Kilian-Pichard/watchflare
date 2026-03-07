@@ -107,7 +107,7 @@ function createUserStore() {
 			applyTheme(theme);
 			themeStore.set(theme);
 
-			let timeRange = '24h';
+			let timeRange = '1h';
 			update(state => {
 				if (state.user) {
 					timeRange = state.user.default_time_range;

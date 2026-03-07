@@ -12,7 +12,7 @@ type User struct {
 	ID               string    `gorm:"type:char(36);primarykey" json:"id"`
 	Email            string    `gorm:"unique;not null" json:"email"`
 	Password         string    `gorm:"not null" json:"-"`
-	DefaultTimeRange string    `gorm:"type:varchar(10);default:'24h'" json:"default_time_range"`
+	DefaultTimeRange string    `gorm:"type:varchar(10);default:'1h'" json:"default_time_range"`
 	Theme            string    `gorm:"type:varchar(10);default:'system'" json:"theme"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`

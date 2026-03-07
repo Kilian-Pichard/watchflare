@@ -20,7 +20,7 @@ function createAggregatedStore() {
 	const { subscribe, set, update } = writable<AggregatedState>({
 		metrics: [],
 		metrics24h: [],
-		timeRange: '24h',
+		timeRange: '1h',
 		loading: false,
 		error: null
 	});
@@ -119,7 +119,7 @@ function createAggregatedStore() {
 			set({
 				metrics: [],
 				metrics24h: [],
-				timeRange: '24h',
+				timeRange: '1h',
 				loading: false,
 				error: null
 			});
