@@ -94,7 +94,7 @@
 
         <DropdownMenu.Item
             onclick={handleLogout}
-            class="text-destructive data-[highlighted]:text-destructive"
+            class="text-destructive data-highlighted:text-destructive"
         >
             <LogOut class="h-4 w-4" />
             Logout

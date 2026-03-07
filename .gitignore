@@ -38,9 +38,6 @@ certs/
 *.crt
 *.key
 
-# Go
-go.sum
-
 # IDE
 .vscode/
 .idea/
