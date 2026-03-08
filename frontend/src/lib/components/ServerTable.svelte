@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatPercent, getStatusClass, formatRelativeTime } from '$lib/utils';
+	import { formatPercent, getStatusClass } from '$lib/utils';
 	import type { ServerWithMetrics, Metric } from '$lib/types';
 
 	const { servers, metricsData }: {
@@ -96,11 +96,6 @@
 					const mB = getLastMetrics(b.server.id);
 					valA = mA.disk;
 					valB = mB.disk;
-					break;
-				}
-				case 'last_seen': {
-					valA = a.server.last_seen ? new Date(a.server.last_seen).getTime() : 0;
-					valB = b.server.last_seen ? new Date(b.server.last_seen).getTime() : 0;
 					break;
 				}
 				default:
@@ -223,13 +218,7 @@
 					<th scope="col" class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
 						Updates
 					</th>
-					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('last_seen')}>
-						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
-							Last Seen
-							{@render sortIcon('last_seen')}
-						</span>
-					</th>
-				</tr>
+					</tr>
 			</thead>
 			<tbody class="divide-y divide-border">
 				{#each sortedServers() as { server }}
@@ -311,11 +300,7 @@
 							</span>
 						</td>
 
-						<!-- Last Seen -->
-						<td class="px-4 py-3.5 text-right text-sm text-muted-foreground">
-							{formatRelativeTime(server.last_seen)}
-						</td>
-					</tr>
+						</tr>
 				{/each}
 			</tbody>
 		</table>

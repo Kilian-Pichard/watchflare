@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getStatusClass, formatRelativeTime } from '$lib/utils';
+	import { getStatusClass } from '$lib/utils';
 	import type { Server } from '$lib/types';
 
 	const {
@@ -45,31 +45,25 @@
 	{/if}
 {/snippet}
 
-<table class="w-full min-w-[800px]">
+<table class="w-full min-w-[640px]">
 	<thead>
 		<tr class="border-b bg-muted/30">
-			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('name')}>
+			<th scope="col" class="w-2/5 px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('name')}>
 				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					Name
 					{@render sortIcon('name')}
 				</span>
 			</th>
-			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('status')}>
+			<th scope="col" class="w-1/5 px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('status')}>
 				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					Status
 					{@render sortIcon('status')}
 				</span>
 			</th>
-			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('ip')}>
+			<th scope="col" class="w-1/4 px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('ip')}>
 				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					IP Address
 					{@render sortIcon('ip')}
-				</span>
-			</th>
-			<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('last_seen')}>
-				<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
-					Last Seen
-					{@render sortIcon('last_seen')}
 				</span>
 			</th>
 			<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -148,10 +142,7 @@
 				<td class="px-4 py-3.5 text-sm text-foreground">
 					{server.ip_address_v4 || server.configured_ip || '-'}
 				</td>
-				<td class="px-4 py-3.5 text-right text-sm text-muted-foreground">
-					{formatRelativeTime(server.last_seen)}
-				</td>
-				<td class="px-4 py-3.5 text-right">
+					<td class="px-4 py-3.5 text-right">
 					<div class="flex items-center justify-end gap-3">
 						<button
 							onclick={(e) => {

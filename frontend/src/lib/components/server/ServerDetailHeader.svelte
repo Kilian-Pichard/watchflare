@@ -117,7 +117,7 @@
 				<p class="text-sm font-medium text-foreground">{server.ip_address_v4 || server.configured_ip}</p>
 			</div>
 		{/if}
-		{#if server.last_seen}
+		{#if server.last_seen && (server.status === 'offline' || server.status === 'paused')}
 			<div>
 				<p class="text-xs text-muted-foreground">Last Seen</p>
 				<p class="text-sm font-medium text-foreground">{formatRelativeTime(server.last_seen)}</p>
