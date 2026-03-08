@@ -30,6 +30,17 @@ type Metric struct {
 	DiskTotalBytes uint64 `json:"disk_total_bytes"`
 	DiskUsedBytes  uint64 `json:"disk_used_bytes"`
 
+	// Disk I/O metrics (bytes per second)
+	DiskReadBytesPerSec  uint64 `json:"disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec uint64 `json:"disk_write_bytes_per_sec"`
+
+	// Network metrics (bytes per second)
+	NetworkRxBytesPerSec uint64 `json:"network_rx_bytes_per_sec"`
+	NetworkTxBytesPerSec uint64 `json:"network_tx_bytes_per_sec"`
+
+	// Temperature (physical servers only, 0 if unavailable)
+	CPUTemperatureCelsius float64 `json:"cpu_temperature_celsius"`
+
 	// System uptime
 	UptimeSeconds uint64 `json:"uptime_seconds"`
 

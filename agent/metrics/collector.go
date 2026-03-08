@@ -35,7 +35,21 @@ type SystemMetrics struct {
 	DiskUsedBytes        uint64
 	UptimeSeconds        uint64
 	Timestamp            int64
+
+	// Disk I/O rates (bytes per second)
+	DiskReadBytesPerSec  uint64
+	DiskWriteBytesPerSec uint64
+
+	// Network rates (bytes per second)
+	NetworkRxBytesPerSec uint64
+	NetworkTxBytesPerSec uint64
+
+	// Temperature (physical servers only)
+	CPUTemperatureCelsius float64
 }
+
+// Package-level delta tracker for rate-based metrics (disk I/O, network)
+var deltaTracker = NewDeltaTracker()
 
 // Collect gathers system metrics based on environment configuration
 // config parameter determines which metrics to collect (e.g., containers don't collect disk)
@@ -80,6 +94,32 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		if diskErr == nil {
 			metrics.DiskTotalBytes = total
 			metrics.DiskUsedBytes = used
+		}
+	}
+
+	// Disk I/O
+	if config.CollectDiskIO {
+		readBytes, writeBytes, ioErr := getDiskIOCounters()
+		if ioErr == nil {
+			now := time.Now()
+			metrics.DiskReadBytesPerSec, metrics.DiskWriteBytesPerSec = deltaTracker.ComputeDiskIORate(readBytes, writeBytes, now)
+		}
+	}
+
+	// Network bandwidth
+	if config.CollectNetwork {
+		rxBytes, txBytes, netErr := getNetworkCounters()
+		if netErr == nil {
+			now := time.Now()
+			metrics.NetworkRxBytesPerSec, metrics.NetworkTxBytesPerSec = deltaTracker.ComputeNetworkRate(rxBytes, txBytes, now)
+		}
+	}
+
+	// Temperature (physical servers only)
+	if config.CollectTemperature {
+		temp, tempErr := getCPUTemperature()
+		if tempErr == nil {
+			metrics.CPUTemperatureCelsius = temp
 		}
 	}
 

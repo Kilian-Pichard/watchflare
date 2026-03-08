@@ -228,6 +228,12 @@ func (c *Client) SendMetrics(agentID, agentKey string, m *metrics.SystemMetrics)
 			DiskUsedBytes:        m.DiskUsedBytes,
 			UptimeSeconds:        m.UptimeSeconds,
 			Timestamp:            m.Timestamp,
+
+			DiskReadBytesPerSec:  m.DiskReadBytesPerSec,
+			DiskWriteBytesPerSec: m.DiskWriteBytesPerSec,
+			NetworkRxBytesPerSec: m.NetworkRxBytesPerSec,
+			NetworkTxBytesPerSec: m.NetworkTxBytesPerSec,
+			CpuTemperatureCelsius: m.CPUTemperatureCelsius,
 		},
 		Timestamp: timestamp, // Request-level timestamp for anti-replay
 	}

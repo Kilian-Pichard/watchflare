@@ -28,9 +28,14 @@ type MetricDataPoint struct {
 	LoadAvg1Min          float64   `json:"load_avg_1min"`
 	LoadAvg5Min          float64   `json:"load_avg_5min"`
 	LoadAvg15Min         float64   `json:"load_avg_15min"`
-	DiskTotalBytes       uint64    `json:"disk_total_bytes"`
-	DiskUsedBytes        uint64    `json:"disk_used_bytes"`
-	UptimeSeconds        uint64    `json:"uptime_seconds"`
+	DiskTotalBytes        uint64    `json:"disk_total_bytes"`
+	DiskUsedBytes         uint64    `json:"disk_used_bytes"`
+	DiskReadBytesPerSec   uint64    `json:"disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec  uint64    `json:"disk_write_bytes_per_sec"`
+	NetworkRxBytesPerSec  uint64    `json:"network_rx_bytes_per_sec"`
+	NetworkTxBytesPerSec  uint64    `json:"network_tx_bytes_per_sec"`
+	CPUTemperatureCelsius float64   `json:"cpu_temperature_celsius"`
+	UptimeSeconds         uint64    `json:"uptime_seconds"`
 }
 
 // GetMetrics retrieves metrics for a server with optional time range and aggregation
@@ -68,9 +73,14 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 				LoadAvg1Min:          m.LoadAvg1Min,
 				LoadAvg5Min:          m.LoadAvg5Min,
 				LoadAvg15Min:         m.LoadAvg15Min,
-				DiskTotalBytes:       m.DiskTotalBytes,
-				DiskUsedBytes:        m.DiskUsedBytes,
-				UptimeSeconds:        m.UptimeSeconds,
+				DiskTotalBytes:        m.DiskTotalBytes,
+				DiskUsedBytes:         m.DiskUsedBytes,
+				DiskReadBytesPerSec:   m.DiskReadBytesPerSec,
+				DiskWriteBytesPerSec:  m.DiskWriteBytesPerSec,
+				NetworkRxBytesPerSec:  m.NetworkRxBytesPerSec,
+				NetworkTxBytesPerSec:  m.NetworkTxBytesPerSec,
+				CPUTemperatureCelsius: m.CPUTemperatureCelsius,
+				UptimeSeconds:         m.UptimeSeconds,
 			})
 		}
 
@@ -96,6 +106,11 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 			load_avg15_min AS load_avg_15min,
 			CAST(disk_total_bytes AS BIGINT) AS disk_total_bytes,
 			CAST(disk_used_bytes AS BIGINT) AS disk_used_bytes,
+			CAST(disk_read_bytes_per_sec AS BIGINT) AS disk_read_bytes_per_sec,
+			CAST(disk_write_bytes_per_sec AS BIGINT) AS disk_write_bytes_per_sec,
+			CAST(network_rx_bytes_per_sec AS BIGINT) AS network_rx_bytes_per_sec,
+			CAST(network_tx_bytes_per_sec AS BIGINT) AS network_tx_bytes_per_sec,
+			cpu_temperature_celsius,
 			CAST(uptime_seconds AS BIGINT) AS uptime_seconds
 		FROM %s
 		WHERE server_id = $1 AND bucket >= $2 AND bucket <= $3

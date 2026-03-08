@@ -233,17 +233,22 @@ func (s *Sender) sendRecord(data []byte) error {
 
 	// Convert to metrics.SystemMetrics for client
 	m := &metrics.SystemMetrics{
-		CPUUsagePercent:      pbMetrics.CpuUsagePercent,
-		MemoryTotalBytes:     pbMetrics.MemoryTotalBytes,
-		MemoryUsedBytes:      pbMetrics.MemoryUsedBytes,
-		MemoryAvailableBytes: pbMetrics.MemoryAvailableBytes,
-		LoadAvg1Min:          pbMetrics.LoadAvg_1Min,
-		LoadAvg5Min:          pbMetrics.LoadAvg_5Min,
-		LoadAvg15Min:         pbMetrics.LoadAvg_15Min,
-		DiskTotalBytes:       pbMetrics.DiskTotalBytes,
-		DiskUsedBytes:        pbMetrics.DiskUsedBytes,
-		UptimeSeconds:        pbMetrics.UptimeSeconds,
-		Timestamp:            pbMetrics.Timestamp,
+		CPUUsagePercent:       pbMetrics.CpuUsagePercent,
+		MemoryTotalBytes:      pbMetrics.MemoryTotalBytes,
+		MemoryUsedBytes:       pbMetrics.MemoryUsedBytes,
+		MemoryAvailableBytes:  pbMetrics.MemoryAvailableBytes,
+		LoadAvg1Min:           pbMetrics.LoadAvg_1Min,
+		LoadAvg5Min:           pbMetrics.LoadAvg_5Min,
+		LoadAvg15Min:          pbMetrics.LoadAvg_15Min,
+		DiskTotalBytes:        pbMetrics.DiskTotalBytes,
+		DiskUsedBytes:         pbMetrics.DiskUsedBytes,
+		DiskReadBytesPerSec:   pbMetrics.DiskReadBytesPerSec,
+		DiskWriteBytesPerSec:  pbMetrics.DiskWriteBytesPerSec,
+		NetworkRxBytesPerSec:  pbMetrics.NetworkRxBytesPerSec,
+		NetworkTxBytesPerSec:  pbMetrics.NetworkTxBytesPerSec,
+		CPUTemperatureCelsius: pbMetrics.CpuTemperatureCelsius,
+		UptimeSeconds:         pbMetrics.UptimeSeconds,
+		Timestamp:             pbMetrics.Timestamp,
 	}
 
 	// Send via gRPC
@@ -253,17 +258,22 @@ func (s *Sender) sendRecord(data []byte) error {
 // serializeMetrics converts SystemMetrics to protobuf bytes
 func (s *Sender) serializeMetrics(m *metrics.SystemMetrics) ([]byte, error) {
 	pbMetrics := &pb.Metrics{
-		CpuUsagePercent:      m.CPUUsagePercent,
-		MemoryTotalBytes:     m.MemoryTotalBytes,
-		MemoryUsedBytes:      m.MemoryUsedBytes,
-		MemoryAvailableBytes: m.MemoryAvailableBytes,
-		LoadAvg_1Min:         m.LoadAvg1Min,
-		LoadAvg_5Min:         m.LoadAvg5Min,
-		LoadAvg_15Min:        m.LoadAvg15Min,
-		DiskTotalBytes:       m.DiskTotalBytes,
-		DiskUsedBytes:        m.DiskUsedBytes,
-		UptimeSeconds:        m.UptimeSeconds,
-		Timestamp:            m.Timestamp,
+		CpuUsagePercent:       m.CPUUsagePercent,
+		MemoryTotalBytes:      m.MemoryTotalBytes,
+		MemoryUsedBytes:       m.MemoryUsedBytes,
+		MemoryAvailableBytes:  m.MemoryAvailableBytes,
+		LoadAvg_1Min:          m.LoadAvg1Min,
+		LoadAvg_5Min:          m.LoadAvg5Min,
+		LoadAvg_15Min:         m.LoadAvg15Min,
+		DiskTotalBytes:        m.DiskTotalBytes,
+		DiskUsedBytes:         m.DiskUsedBytes,
+		DiskReadBytesPerSec:   m.DiskReadBytesPerSec,
+		DiskWriteBytesPerSec:  m.DiskWriteBytesPerSec,
+		NetworkRxBytesPerSec:  m.NetworkRxBytesPerSec,
+		NetworkTxBytesPerSec:  m.NetworkTxBytesPerSec,
+		CpuTemperatureCelsius: m.CPUTemperatureCelsius,
+		UptimeSeconds:         m.UptimeSeconds,
+		Timestamp:             m.Timestamp,
 	}
 
 	return proto.Marshal(pbMetrics)

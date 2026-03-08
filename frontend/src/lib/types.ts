@@ -90,10 +90,11 @@ export interface Metric {
 	load_avg_5min: number;
 	load_avg_15min: number;
 	uptime_seconds: number;
-	swap_used_bytes?: number;
-	swap_total_bytes?: number;
-	network_rx_bytes?: number;
-	network_tx_bytes?: number;
+	disk_read_bytes_per_sec: number;
+	disk_write_bytes_per_sec: number;
+	network_rx_bytes_per_sec: number;
+	network_tx_bytes_per_sec: number;
+	cpu_temperature_celsius: number;
 }
 
 export interface AggregatedMetric {
@@ -107,6 +108,11 @@ export interface AggregatedMetric {
 	load_avg_1min: number;
 	load_avg_5min: number;
 	load_avg_15min: number;
+	disk_read_bytes_per_sec: number;
+	disk_write_bytes_per_sec: number;
+	network_rx_bytes_per_sec: number;
+	network_tx_bytes_per_sec: number;
+	cpu_temperature_celsius: number;
 	server_count: number;
 }
 

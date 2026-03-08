@@ -1,8 +1,13 @@
 <script lang="ts">
 	import { formatBytes, formatPercent } from '$lib/utils';
+	import { formatRate, formatTemperature } from '$lib/chart-utils';
 	import CPUChart from '$lib/components/CPUChart.svelte';
 	import MemoryChart from '$lib/components/MemoryChart.svelte';
 	import DiskChart from '$lib/components/DiskChart.svelte';
+	import LoadAvgChart from '$lib/components/LoadAvgChart.svelte';
+	import DiskIOChart from '$lib/components/DiskIOChart.svelte';
+	import NetworkChart from '$lib/components/NetworkChart.svelte';
+	import TemperatureChart from '$lib/components/TemperatureChart.svelte';
 	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
 	import type { Metric, TimeRange } from '$lib/types';
 
@@ -59,5 +64,51 @@
 			</div>
 			<DiskChart data={metrics} {timeRange} />
 		</div>
+		<div class="rounded-lg border bg-card p-4">
+			<div class="mb-3 flex items-center justify-between">
+				<h3 class="text-sm font-medium">Load Average</h3>
+				{#if latestMetric}
+					<span class="text-xs text-muted-foreground">
+						{latestMetric.load_avg_1min.toFixed(2)} / {latestMetric.load_avg_5min.toFixed(2)} / {latestMetric.load_avg_15min.toFixed(2)}
+					</span>
+				{/if}
+			</div>
+			<LoadAvgChart data={metrics} {timeRange} />
+		</div>
+		<div class="rounded-lg border bg-card p-4">
+			<div class="mb-3 flex items-center justify-between">
+				<h3 class="text-sm font-medium">Disk I/O</h3>
+				{#if latestMetric}
+					<span class="text-xs text-muted-foreground">
+						<span class="sm:hidden">{formatRate(latestMetric.disk_read_bytes_per_sec)}</span>
+						<span class="hidden sm:inline">R: {formatRate(latestMetric.disk_read_bytes_per_sec)} / W: {formatRate(latestMetric.disk_write_bytes_per_sec)}</span>
+					</span>
+				{/if}
+			</div>
+			<DiskIOChart data={metrics} {timeRange} />
+		</div>
+		<div class="rounded-lg border bg-card p-4">
+			<div class="mb-3 flex items-center justify-between">
+				<h3 class="text-sm font-medium">Network</h3>
+				{#if latestMetric}
+					<span class="text-xs text-muted-foreground">
+						<span class="sm:hidden">{formatRate(latestMetric.network_rx_bytes_per_sec)}</span>
+						<span class="hidden sm:inline">↓ {formatRate(latestMetric.network_rx_bytes_per_sec)} / ↑ {formatRate(latestMetric.network_tx_bytes_per_sec)}</span>
+					</span>
+				{/if}
+			</div>
+			<NetworkChart data={metrics} {timeRange} />
+		</div>
+		{#if latestMetric && latestMetric.cpu_temperature_celsius > 0}
+			<div class="rounded-lg border bg-card p-4">
+				<div class="mb-3 flex items-center justify-between">
+					<h3 class="text-sm font-medium">CPU Temperature</h3>
+					<span class="text-xs text-muted-foreground">
+						{formatTemperature(latestMetric.cpu_temperature_celsius)}
+					</span>
+				</div>
+				<TemperatureChart data={metrics} {timeRange} />
+			</div>
+		{/if}
 	</div>
 </div>

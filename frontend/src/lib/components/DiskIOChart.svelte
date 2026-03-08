@@ -3,7 +3,7 @@
 	import { scaleTime } from 'd3-scale';
 	import * as ChartUI from '$lib/components/ui/chart';
 	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_PERCENT } from '$lib/chart-utils';
+	import { computeXDomain, filterByDomain, formatXAxis, formatRate, CHART_PADDING_RATE } from '$lib/chart-utils';
 	import type { Metric, AggregatedMetric, TimeRange } from '$lib/types';
 
 	let { data = [], timeRange }: { data: (Metric | AggregatedMetric)[]; timeRange?: TimeRange } =
@@ -12,7 +12,8 @@
 	let chartData = $derived(
 		data.map((d) => ({
 			date: new Date(d.timestamp),
-			cpu: d.cpu_usage_percent
+			read: d.disk_read_bytes_per_sec,
+			write: d.disk_write_bytes_per_sec
 		}))
 	);
 
@@ -20,7 +21,8 @@
 	let visibleData = $derived(filterByDomain(chartData, xDomain));
 
 	const chartConfig = {
-		cpu: { label: 'CPU Usage', color: 'var(--chart-1)' }
+		read: { label: 'Read', color: 'var(--chart-1)' },
+		write: { label: 'Write', color: 'var(--chart-2)' }
 	};
 </script>
 
@@ -32,23 +34,19 @@
 				x="date"
 				xScale={scaleTime()}
 				{xDomain}
-				yDomain={[0, 100]}
-				padding={CHART_PADDING_PERCENT}
+				padding={CHART_PADDING_RATE}
 				series={[
-					{
-						key: 'cpu',
-						label: 'CPU Usage',
-						color: chartConfig.cpu.color
-					}
+					{ key: 'read', label: 'Read', color: chartConfig.read.color },
+					{ key: 'write', label: 'Write', color: chartConfig.write.color }
 				]}
 				props={{
-					line: { class: 'stroke-2 stroke-[var(--chart-1)]' },
+					line: { class: 'stroke-2' },
 					xAxis: { format: formatXAxis },
-					yAxis: { format: (v) => v + '%' }
+					yAxis: { format: formatRate }
 				}}
 			>
 				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => v.toFixed(1) + '%'} />
+					<ChartTooltip valueFormatter={formatRate} />
 				{/snippet}
 			</LineChart>
 		</ChartUI.Container>

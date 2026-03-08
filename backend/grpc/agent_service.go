@@ -266,9 +266,14 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 		LoadAvg1Min:          req.Metrics.LoadAvg_1Min,
 		LoadAvg5Min:          req.Metrics.LoadAvg_5Min,
 		LoadAvg15Min:         req.Metrics.LoadAvg_15Min,
-		DiskTotalBytes:       req.Metrics.DiskTotalBytes,
-		DiskUsedBytes:        req.Metrics.DiskUsedBytes,
-		UptimeSeconds:        req.Metrics.UptimeSeconds,
+		DiskTotalBytes:        req.Metrics.DiskTotalBytes,
+		DiskUsedBytes:         req.Metrics.DiskUsedBytes,
+		DiskReadBytesPerSec:   req.Metrics.DiskReadBytesPerSec,
+		DiskWriteBytesPerSec:  req.Metrics.DiskWriteBytesPerSec,
+		NetworkRxBytesPerSec:  req.Metrics.NetworkRxBytesPerSec,
+		NetworkTxBytesPerSec:  req.Metrics.NetworkTxBytesPerSec,
+		CPUTemperatureCelsius: req.Metrics.CpuTemperatureCelsius,
+		UptimeSeconds:         req.Metrics.UptimeSeconds,
 	}
 
 	if err := database.DB.Create(metric).Error; err != nil {
@@ -287,9 +292,14 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 		LoadAvg1Min:          metric.LoadAvg1Min,
 		LoadAvg5Min:          metric.LoadAvg5Min,
 		LoadAvg15Min:         metric.LoadAvg15Min,
-		DiskTotalBytes:       metric.DiskTotalBytes,
-		DiskUsedBytes:        metric.DiskUsedBytes,
-		UptimeSeconds:        metric.UptimeSeconds,
+		DiskTotalBytes:        metric.DiskTotalBytes,
+		DiskUsedBytes:         metric.DiskUsedBytes,
+		DiskReadBytesPerSec:   metric.DiskReadBytesPerSec,
+		DiskWriteBytesPerSec:  metric.DiskWriteBytesPerSec,
+		NetworkRxBytesPerSec:  metric.NetworkRxBytesPerSec,
+		NetworkTxBytesPerSec:  metric.NetworkTxBytesPerSec,
+		CPUTemperatureCelsius: metric.CPUTemperatureCelsius,
+		UptimeSeconds:         metric.UptimeSeconds,
 	})
 
 	return &pb.MetricsResponse{

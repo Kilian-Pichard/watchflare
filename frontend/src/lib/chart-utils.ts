@@ -39,6 +39,26 @@ export function formatTooltipDate(date: Date): string {
 	});
 }
 
+// Format bytes per second (for disk I/O and network charts)
+export function formatRate(bytesPerSec: number): string {
+	if (bytesPerSec === 0) return '0 B/s';
+	const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+	let value = bytesPerSec;
+	let unitIndex = 0;
+	while (value >= 1024 && unitIndex < units.length - 1) {
+		value /= 1024;
+		unitIndex++;
+	}
+	return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+// Format temperature in Celsius
+export function formatTemperature(celsius: number): string {
+	if (celsius === 0) return 'N/A';
+	return `${celsius.toFixed(1)}°C`;
+}
+
 // Padding partagé
 export const CHART_PADDING_PERCENT = { left: 40, bottom: 24, top: 8, right: 8 };
 export const CHART_PADDING_BYTES = { left: 70, bottom: 24, top: 8, right: 8 };
+export const CHART_PADDING_RATE = { left: 70, bottom: 24, top: 8, right: 8 };

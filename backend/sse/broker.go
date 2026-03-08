@@ -38,9 +38,14 @@ type MetricsUpdate struct {
 	LoadAvg1Min          float64 `json:"load_avg_1min"`
 	LoadAvg5Min          float64 `json:"load_avg_5min"`
 	LoadAvg15Min         float64 `json:"load_avg_15min"`
-	DiskTotalBytes       uint64  `json:"disk_total_bytes"`
-	DiskUsedBytes        uint64  `json:"disk_used_bytes"`
-	UptimeSeconds        uint64  `json:"uptime_seconds"`
+	DiskTotalBytes        uint64  `json:"disk_total_bytes"`
+	DiskUsedBytes         uint64  `json:"disk_used_bytes"`
+	DiskReadBytesPerSec   uint64  `json:"disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec  uint64  `json:"disk_write_bytes_per_sec"`
+	NetworkRxBytesPerSec  uint64  `json:"network_rx_bytes_per_sec"`
+	NetworkTxBytesPerSec  uint64  `json:"network_tx_bytes_per_sec"`
+	CPUTemperatureCelsius float64 `json:"cpu_temperature_celsius"`
+	UptimeSeconds         uint64  `json:"uptime_seconds"`
 }
 
 // MetricsUpdateMinified represents a minified metrics update for SSE (reduces bandwidth)
@@ -54,10 +59,15 @@ type MetricsUpdateMinified struct {
 	MemoryAvailable  uint64  `json:"ma"` // memory_available_bytes
 	DiskUsed         uint64  `json:"du"` // disk_used_bytes
 	DiskTotal        uint64  `json:"dt"` // disk_total_bytes
-	LoadAvg1         float64 `json:"l1"` // load_avg_1min
-	LoadAvg5         float64 `json:"l5"` // load_avg_5min
+	LoadAvg1         float64 `json:"l1"`  // load_avg_1min
+	LoadAvg5         float64 `json:"l5"`  // load_avg_5min
 	LoadAvg15        float64 `json:"l15"` // load_avg_15min
-	Uptime           uint64  `json:"u"`  // uptime_seconds
+	DiskReadRate     uint64  `json:"dr"`  // disk_read_bytes_per_sec
+	DiskWriteRate    uint64  `json:"dw"`  // disk_write_bytes_per_sec
+	NetRxRate        uint64  `json:"nr"`  // network_rx_bytes_per_sec
+	NetTxRate        uint64  `json:"nt"`  // network_tx_bytes_per_sec
+	CPUTemp          float64 `json:"tmp"` // cpu_temperature_celsius
+	Uptime           uint64  `json:"u"`   // uptime_seconds
 }
 
 // AggregatedMetricsUpdate represents aggregated metrics from all online servers
@@ -194,6 +204,11 @@ func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
 		LoadAvg1:        update.LoadAvg1Min,
 		LoadAvg5:        update.LoadAvg5Min,
 		LoadAvg15:       update.LoadAvg15Min,
+		DiskReadRate:    update.DiskReadBytesPerSec,
+		DiskWriteRate:   update.DiskWriteBytesPerSec,
+		NetRxRate:       update.NetworkRxBytesPerSec,
+		NetTxRate:       update.NetworkTxBytesPerSec,
+		CPUTemp:         update.CPUTemperatureCelsius,
 		Uptime:          update.UptimeSeconds,
 	}
 }

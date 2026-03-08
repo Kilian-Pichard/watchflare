@@ -84,6 +84,17 @@ message Metrics {
   uint64 disk_used_bytes = 9;
   uint64 uptime_seconds = 10;
   int64 timestamp = 11;  // Unix timestamp
+
+  // Disk I/O metrics (bytes per second, computed from delta)
+  uint64 disk_read_bytes_per_sec = 12;
+  uint64 disk_write_bytes_per_sec = 13;
+
+  // Network metrics (bytes per second, computed from delta)
+  uint64 network_rx_bytes_per_sec = 14;
+  uint64 network_tx_bytes_per_sec = 15;
+
+  // Temperature (physical servers only, 0 if unavailable)
+  double cpu_temperature_celsius = 16;
 }
 
 // MetricsRequest contains authentication and metrics data

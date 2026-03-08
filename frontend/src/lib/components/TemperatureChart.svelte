@@ -10,17 +10,19 @@
 		$props();
 
 	let chartData = $derived(
-		data.map((d) => ({
-			date: new Date(d.timestamp),
-			cpu: d.cpu_usage_percent
-		}))
+		data
+			.filter((d) => d.cpu_temperature_celsius > 0)
+			.map((d) => ({
+				date: new Date(d.timestamp),
+				temp: d.cpu_temperature_celsius
+			}))
 	);
 
 	let xDomain = $derived(computeXDomain(chartData, timeRange));
 	let visibleData = $derived(filterByDomain(chartData, xDomain));
 
 	const chartConfig = {
-		cpu: { label: 'CPU Usage', color: 'var(--chart-1)' }
+		temp: { label: 'CPU Temperature', color: 'var(--chart-1)' }
 	};
 </script>
 
@@ -32,23 +34,22 @@
 				x="date"
 				xScale={scaleTime()}
 				{xDomain}
-				yDomain={[0, 100]}
+				yDomain={[0, 120]}
 				padding={CHART_PADDING_PERCENT}
 				series={[
 					{
-						key: 'cpu',
-						label: 'CPU Usage',
-						color: chartConfig.cpu.color
+						key: 'temp',
+						label: 'CPU Temp',
+						color: chartConfig.temp.color
 					}
 				]}
 				props={{
 					line: { class: 'stroke-2 stroke-[var(--chart-1)]' },
-					xAxis: { format: formatXAxis },
-					yAxis: { format: (v) => v + '%' }
+					xAxis: { format: formatXAxis }
 				}}
 			>
 				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => v.toFixed(1) + '%'} />
+					<ChartTooltip valueFormatter={(v) => v.toFixed(1) + '°C'} />
 				{/snippet}
 			</LineChart>
 		</ChartUI.Container>

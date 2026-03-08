@@ -12,7 +12,9 @@
 	let chartData = $derived(
 		data.map((d) => ({
 			date: new Date(d.timestamp),
-			cpu: d.cpu_usage_percent
+			load1: d.load_avg_1min,
+			load5: d.load_avg_5min,
+			load15: d.load_avg_15min
 		}))
 	);
 
@@ -20,7 +22,9 @@
 	let visibleData = $derived(filterByDomain(chartData, xDomain));
 
 	const chartConfig = {
-		cpu: { label: 'CPU Usage', color: 'var(--chart-1)' }
+		load1: { label: '1 min', color: 'var(--chart-1)' },
+		load5: { label: '5 min', color: 'var(--chart-2)' },
+		load15: { label: '15 min', color: 'var(--chart-3)' }
 	};
 </script>
 
@@ -32,23 +36,19 @@
 				x="date"
 				xScale={scaleTime()}
 				{xDomain}
-				yDomain={[0, 100]}
 				padding={CHART_PADDING_PERCENT}
 				series={[
-					{
-						key: 'cpu',
-						label: 'CPU Usage',
-						color: chartConfig.cpu.color
-					}
+					{ key: 'load1', label: '1 min', color: chartConfig.load1.color },
+					{ key: 'load5', label: '5 min', color: chartConfig.load5.color },
+					{ key: 'load15', label: '15 min', color: chartConfig.load15.color }
 				]}
 				props={{
-					line: { class: 'stroke-2 stroke-[var(--chart-1)]' },
-					xAxis: { format: formatXAxis },
-					yAxis: { format: (v) => v + '%' }
+					line: { class: 'stroke-2' },
+					xAxis: { format: formatXAxis }
 				}}
 			>
 				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => v.toFixed(1) + '%'} />
+					<ChartTooltip valueFormatter={(v) => v.toFixed(2)} />
 				{/snippet}
 			</LineChart>
 		</ChartUI.Container>

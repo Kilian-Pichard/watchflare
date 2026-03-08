@@ -26,6 +26,9 @@ var packagesSQL string
 //go:embed migrations/004_environment_detection.sql
 var environmentDetectionSQL string
 
+//go:embed migrations/006_new_metrics.sql
+var newMetricsSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -85,6 +88,11 @@ func Connect() error {
 			load_avg15_min DOUBLE PRECISION,
 			disk_total_bytes BIGINT,
 			disk_used_bytes BIGINT,
+			disk_read_bytes_per_sec BIGINT DEFAULT 0,
+			disk_write_bytes_per_sec BIGINT DEFAULT 0,
+			network_rx_bytes_per_sec BIGINT DEFAULT 0,
+			network_tx_bytes_per_sec BIGINT DEFAULT 0,
+			cpu_temperature_celsius DOUBLE PRECISION DEFAULT 0,
 			uptime_seconds BIGINT,
 			created_at TIMESTAMPTZ DEFAULT NOW(),
 			updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -145,6 +153,11 @@ func Connect() error {
 	// Run environment detection migration
 	if err := RunEnvironmentDetectionMigration(); err != nil {
 		log.Printf("Warning: Failed to run environment detection migration: %v", err)
+	}
+
+	// Run new metrics migration (disk I/O, network, temperature)
+	if err := RunNewMetricsMigration(); err != nil {
+		log.Printf("Warning: Failed to run new metrics migration: %v", err)
 	}
 
 	return nil
@@ -238,6 +251,20 @@ func RunEnvironmentDetectionMigration() error {
 		return err
 	}
 	log.Println("✓ Environment detection migration completed successfully")
+	return nil
+}
+
+// RunNewMetricsMigration runs the new metrics migration (disk I/O, network, temperature)
+func RunNewMetricsMigration() error {
+	log.Println("Running new metrics migration...")
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
+	}
+	if err := execStatementsOutsideTx(sqlDB, newMetricsSQL); err != nil {
+		return err
+	}
+	log.Println("✓ New metrics migration completed successfully")
 	return nil
 }
 

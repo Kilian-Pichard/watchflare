@@ -22,6 +22,11 @@ interface MinifiedMetrics {
 	l1: number;      // load_avg_1min
 	l5: number;      // load_avg_5min
 	l15: number;     // load_avg_15min
+	dr: number;      // disk_read_bytes_per_sec
+	dw: number;      // disk_write_bytes_per_sec
+	nr: number;      // network_rx_bytes_per_sec
+	nt: number;      // network_tx_bytes_per_sec
+	tmp: number;     // cpu_temperature_celsius
 	u: number;       // uptime_seconds
 }
 
@@ -42,6 +47,11 @@ function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
 		load_avg_1min: minified.l1,
 		load_avg_5min: minified.l5,
 		load_avg_15min: minified.l15,
+		disk_read_bytes_per_sec: minified.dr ?? 0,
+		disk_write_bytes_per_sec: minified.dw ?? 0,
+		network_rx_bytes_per_sec: minified.nr ?? 0,
+		network_tx_bytes_per_sec: minified.nt ?? 0,
+		cpu_temperature_celsius: minified.tmp ?? 0,
 		uptime_seconds: minified.u
 	};
 }
