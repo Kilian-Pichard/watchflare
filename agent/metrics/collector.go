@@ -57,7 +57,7 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		memStats, err := mem.VirtualMemory()
 		if err == nil {
 			metrics.MemoryTotalBytes = memStats.Total
-			metrics.MemoryUsedBytes = memStats.Used
+			metrics.MemoryUsedBytes = memStats.Total - memStats.Available
 			metrics.MemoryAvailableBytes = memStats.Available
 		}
 	}
