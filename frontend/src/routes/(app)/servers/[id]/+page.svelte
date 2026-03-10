@@ -73,10 +73,9 @@
             if (server && update.server_id === server.id) {
                 containerMetrics = [...containerMetrics, ...update.metrics];
 
-                // Keep only last N points per container to avoid memory issues
-                const maxPoints = MAX_METRICS_POINTS_DETAIL * 5; // More points since multiple containers
-                if (containerMetrics.length > maxPoints) {
-                    containerMetrics = containerMetrics.slice(-maxPoints);
+                // Keep only last N points to avoid memory issues
+                if (containerMetrics.length > MAX_METRICS_POINTS_DETAIL) {
+                    containerMetrics = containerMetrics.slice(-MAX_METRICS_POINTS_DETAIL);
                 }
             }
         }

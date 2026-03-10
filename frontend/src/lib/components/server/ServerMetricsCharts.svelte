@@ -28,6 +28,44 @@
 
 	const latestMetric = $derived(metrics.length > 0 ? metrics[metrics.length - 1] : null);
 	const hasContainerData = $derived(containerMetrics.length > 0);
+
+	// Compute container names once
+	const containerNames = $derived(
+		[...new Set(containerMetrics.map((d) => d.container_name))]
+	);
+
+	// Pivot container data once, reused by all 3 charts
+	const containerPivots = $derived((() => {
+		if (containerMetrics.length === 0) return { cpu: [], memory: [], network: [], networkKeys: [] };
+
+		const cpuByTs = new Map<string, Record<string, unknown>>();
+		const memByTs = new Map<string, Record<string, unknown>>();
+		const netByTs = new Map<string, Record<string, unknown>>();
+
+		for (const d of containerMetrics) {
+			const ts = d.timestamp;
+
+			if (!cpuByTs.has(ts)) cpuByTs.set(ts, { date: new Date(ts) });
+			cpuByTs.get(ts)![d.container_name] = d.cpu_percent;
+
+			if (!memByTs.has(ts)) memByTs.set(ts, { date: new Date(ts) });
+			memByTs.get(ts)![d.container_name] = d.memory_used_bytes;
+
+			if (!netByTs.has(ts)) netByTs.set(ts, { date: new Date(ts) });
+			netByTs.get(ts)![`${d.container_name} (RX)`] = d.network_rx_bytes_per_sec;
+			netByTs.get(ts)![`${d.container_name} (TX)`] = d.network_tx_bytes_per_sec;
+		}
+
+		const sortFn = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+			(a.date as Date).getTime() - (b.date as Date).getTime();
+
+		return {
+			cpu: [...cpuByTs.values()].sort(sortFn),
+			memory: [...memByTs.values()].sort(sortFn),
+			network: [...netByTs.values()].sort(sortFn),
+			networkKeys: containerNames.flatMap((name) => [`${name} (RX)`, `${name} (TX)`]),
+		};
+	})());
 </script>
 
 <div class="mb-6">
@@ -130,19 +168,19 @@
 				<div class="mb-3">
 					<h3 class="text-sm font-medium">Container CPU</h3>
 				</div>
-				<ContainerCPUChart data={containerMetrics} {timeRange} />
+				<ContainerCPUChart pivotedData={containerPivots.cpu} {containerNames} {timeRange} />
 			</div>
 			<div class="rounded-lg border bg-card p-4">
 				<div class="mb-3">
 					<h3 class="text-sm font-medium">Container Memory</h3>
 				</div>
-				<ContainerMemoryChart data={containerMetrics} {timeRange} />
+				<ContainerMemoryChart pivotedData={containerPivots.memory} {containerNames} {timeRange} />
 			</div>
 			<div class="rounded-lg border bg-card p-4 xl:col-span-2">
 				<div class="mb-3">
 					<h3 class="text-sm font-medium">Container Network</h3>
 				</div>
-				<ContainerNetworkChart data={containerMetrics} {timeRange} />
+				<ContainerNetworkChart pivotedData={containerPivots.network} seriesKeys={containerPivots.networkKeys} {containerNames} {timeRange} />
 			</div>
 		</div>
 	</div>

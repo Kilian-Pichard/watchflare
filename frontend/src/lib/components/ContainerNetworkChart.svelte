@@ -4,39 +4,19 @@
 	import * as ChartUI from '$lib/components/ui/chart';
 	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
 	import { computeXDomain, filterByDomain, formatXAxis, formatRate, CHART_PADDING_RATE } from '$lib/chart-utils';
-	import type { ContainerMetric, TimeRange } from '$lib/types';
+	import type { TimeRange } from '$lib/types';
 
 	const CHART_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
-	let { data = [], timeRange }: { data: ContainerMetric[]; timeRange?: TimeRange } = $props();
+	let { pivotedData = [], seriesKeys = [], containerNames = [], timeRange }: {
+		pivotedData: Record<string, unknown>[];
+		seriesKeys: string[];
+		containerNames: string[];
+		timeRange?: TimeRange;
+	} = $props();
 
-	let containerNames = $derived(
-		[...new Set(data.map((d) => d.container_name))]
-	);
-
-	// Create series keys: containerName_rx and containerName_tx for each container
-	let seriesKeys = $derived(
-		containerNames.flatMap((name) => [`${name} (RX)`, `${name} (TX)`])
-	);
-
-	let chartData = $derived(
-		(() => {
-			const byTimestamp = new Map<string, Record<string, unknown>>();
-			for (const d of data) {
-				const ts = d.timestamp;
-				if (!byTimestamp.has(ts)) {
-					byTimestamp.set(ts, { date: new Date(ts) });
-				}
-				const row = byTimestamp.get(ts)!;
-				row[`${d.container_name} (RX)`] = d.network_rx_bytes_per_sec;
-				row[`${d.container_name} (TX)`] = d.network_tx_bytes_per_sec;
-			}
-			return [...byTimestamp.values()].sort((a, b) => (a.date as Date).getTime() - (b.date as Date).getTime());
-		})()
-	);
-
-	let xDomain = $derived(computeXDomain(chartData as { date: Date }[], timeRange));
-	let visibleData = $derived(filterByDomain(chartData as { date: Date }[], xDomain));
+	let xDomain = $derived(computeXDomain(pivotedData as { date: Date }[], timeRange));
+	let visibleData = $derived(filterByDomain(pivotedData as { date: Date }[], xDomain));
 
 	let chartConfig = $derived(
 		Object.fromEntries(
