@@ -56,6 +56,9 @@ type Config struct {
 	WALEnabled   *bool  `toml:"wal_enabled"`     // Enable WAL persistence (default: true)
 	WALPath      string `toml:"wal_path"`        // WAL file path
 	WALMaxSizeMB int    `toml:"wal_max_size_mb"` // Max WAL size before FIFO truncate
+
+	// Docker metrics (opt-in: requires Docker socket access)
+	DockerMetrics *bool `toml:"docker_metrics"` // Enable Docker container metrics (default: false)
 }
 
 // SetDefaults sets default values for optional configuration fields
@@ -77,6 +80,12 @@ func (c *Config) SetDefaults() {
 	}
 	if c.WALMaxSizeMB == 0 {
 		c.WALMaxSizeMB = 10
+	}
+
+	// Docker metrics default: disabled
+	if c.DockerMetrics == nil {
+		disabled := false
+		c.DockerMetrics = &disabled
 	}
 }
 

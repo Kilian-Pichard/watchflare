@@ -104,10 +104,10 @@ func (s *Sender) replayWAL() error {
 	log.Printf("WAL RECOVERY: Found %d pending metrics from previous backend downtime", len(records))
 	log.Printf("Sending accumulated metrics to backend...")
 
-	// Try to send all pending records
+	// Try to send all pending records (no container metrics during WAL replay)
 	success := true
 	for i, data := range records {
-		if err := s.sendRecord(data); err != nil {
+		if err := s.sendRecord(data, false, nil); err != nil {
 			if errors.IsTimestampError(err) {
 				log.Printf("Failed to send record %d/%d: CLOCK SYNC ERROR - System time is out of sync (>5min difference with backend). "+
 					"Fix: Run 'sudo timedatectl set-ntp true' and restart the agent (will retry later)", i+1, len(records))
@@ -140,8 +140,15 @@ func (s *Sender) collectAndSend() {
 		return
 	}
 
+	// Container metrics are sent with the current metrics only (not WAL'd)
+	// They are point-in-time snapshots; stale container data is useless
+	containerMetrics := m.ContainerMetrics
+	m.ContainerMetrics = nil // Don't include in WAL serialization
+
 	// If WAL is disabled, send directly
 	if s.wal == nil {
+		// Attach container metrics for direct send
+		m.ContainerMetrics = containerMetrics
 		if err := s.client.SendMetrics(s.agentID, s.agentKey, m); err != nil {
 			log.Printf("Send failed: %v (metrics lost - WAL disabled)", err)
 		} else {
@@ -188,10 +195,11 @@ func (s *Sender) collectAndSend() {
 		return
 	}
 
-	// Send all records
+	// Send all records; attach container metrics to the LAST record only (current metrics)
 	success := true
 	for i, record := range records {
-		if err := s.sendRecord(record); err != nil {
+		isLastRecord := i == len(records)-1
+		if err := s.sendRecord(record, isLastRecord, containerMetrics); err != nil {
 			if errors.IsTimestampError(err) {
 				log.Printf("Send failed (record %d/%d): CLOCK SYNC ERROR - System time is out of sync (>5min difference with backend). "+
 					"Fix: Run 'sudo timedatectl set-ntp true' and restart the agent (will retry in %v)",
@@ -224,7 +232,8 @@ func (s *Sender) collectAndSend() {
 }
 
 // sendRecord sends a single serialized metrics record
-func (s *Sender) sendRecord(data []byte) error {
+// If includeContainers is true and containerMetrics is non-nil, they are attached to the send
+func (s *Sender) sendRecord(data []byte, includeContainers bool, containerMetrics []metrics.ContainerMetric) error {
 	// Deserialize
 	var pbMetrics pb.Metrics
 	if err := proto.Unmarshal(data, &pbMetrics); err != nil {
@@ -249,6 +258,11 @@ func (s *Sender) sendRecord(data []byte) error {
 		CPUTemperatureCelsius: pbMetrics.CpuTemperatureCelsius,
 		UptimeSeconds:         pbMetrics.UptimeSeconds,
 		Timestamp:             pbMetrics.Timestamp,
+	}
+
+	// Attach container metrics only to the most recent (current) record
+	if includeContainers && len(containerMetrics) > 0 {
+		m.ContainerMetrics = containerMetrics
 	}
 
 	// Send via gRPC
@@ -314,7 +328,7 @@ func (s *Sender) shutdown() {
 
 		success := true
 		for i, record := range records {
-			if err := s.sendRecord(record); err != nil {
+			if err := s.sendRecord(record, false, nil); err != nil {
 				log.Printf("Failed to send record %d/%d during shutdown: %v", i+1, len(records), err)
 				success = false
 				break

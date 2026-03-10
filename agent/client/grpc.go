@@ -238,6 +238,20 @@ func (c *Client) SendMetrics(agentID, agentKey string, m *metrics.SystemMetrics)
 		Timestamp: timestamp, // Request-level timestamp for anti-replay
 	}
 
+	// Map container metrics if present
+	for _, cm := range m.ContainerMetrics {
+		req.ContainerMetrics = append(req.ContainerMetrics, &pb.ContainerMetric{
+			ContainerId:          cm.ContainerID,
+			ContainerName:        cm.ContainerName,
+			Image:                cm.Image,
+			CpuPercent:           cm.CPUPercent,
+			MemoryUsedBytes:      cm.MemoryUsedBytes,
+			MemoryLimitBytes:     cm.MemoryLimitBytes,
+			NetworkRxBytesPerSec: cm.NetworkRxBytesPerSec,
+			NetworkTxBytesPerSec: cm.NetworkTxBytesPerSec,
+		})
+	}
+
 	// Attach HMAC authentication metadata
 	ctx := context.Background()
 	ctx, err := security.AttachAuthMetadata(ctx, agentID, agentKey, timestamp, req)

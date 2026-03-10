@@ -105,6 +105,48 @@ func GetMetrics(c *gin.Context) {
 	})
 }
 
+// GetContainerMetrics returns container metrics for a specific server
+func GetContainerMetrics(c *gin.Context) {
+	serverID := c.Param("id")
+	timeRange := c.DefaultQuery("time_range", "1h")
+
+	end := time.Now()
+	var start time.Time
+
+	switch timeRange {
+	case "1h":
+		start = end.Add(-1 * time.Hour)
+	case "12h":
+		start = end.Add(-12 * time.Hour)
+	case "24h":
+		start = end.Add(-24 * time.Hour)
+	case "7d":
+		start = end.Add(-7 * 24 * time.Hour)
+	case "30d":
+		start = end.Add(-30 * 24 * time.Hour)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time_range. Valid values: 1h, 12h, 24h, 7d, 30d"})
+		return
+	}
+
+	metrics, err := services.GetContainerMetrics(serverID, start, end)
+	if err != nil {
+		if err.Error() == "server not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"server_id":  serverID,
+		"time_range": timeRange,
+		"count":      len(metrics),
+		"metrics":    metrics,
+	})
+}
+
 // parseTime attempts to parse time from RFC3339 format or Unix timestamp
 func parseTime(timeStr string) (time.Time, error) {
 	// Try RFC3339 format first

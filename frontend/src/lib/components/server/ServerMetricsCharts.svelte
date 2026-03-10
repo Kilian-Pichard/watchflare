@@ -8,20 +8,26 @@
 	import DiskIOChart from '$lib/components/DiskIOChart.svelte';
 	import NetworkChart from '$lib/components/NetworkChart.svelte';
 	import TemperatureChart from '$lib/components/TemperatureChart.svelte';
+	import ContainerCPUChart from '$lib/components/ContainerCPUChart.svelte';
+	import ContainerMemoryChart from '$lib/components/ContainerMemoryChart.svelte';
+	import ContainerNetworkChart from '$lib/components/ContainerNetworkChart.svelte';
 	import TimeRangeSelector from '$lib/components/TimeRangeSelector.svelte';
-	import type { Metric, TimeRange } from '$lib/types';
+	import type { Metric, ContainerMetric, TimeRange } from '$lib/types';
 
 	let {
 		metrics,
+		containerMetrics = [],
 		timeRange = $bindable(),
 		onTimeRangeChange,
 	}: {
 		metrics: Metric[];
+		containerMetrics?: ContainerMetric[];
 		timeRange: TimeRange;
 		onTimeRangeChange: (range: TimeRange) => void;
 	} = $props();
 
 	const latestMetric = $derived(metrics.length > 0 ? metrics[metrics.length - 1] : null);
+	const hasContainerData = $derived(containerMetrics.length > 0);
 </script>
 
 <div class="mb-6">
@@ -112,3 +118,32 @@
 		{/if}
 	</div>
 </div>
+
+{#if hasContainerData}
+	<div class="mb-6">
+		<div class="mb-4">
+			<h2 class="text-lg font-semibold text-foreground">Container Metrics</h2>
+		</div>
+
+		<div class="grid gap-4 xl:grid-cols-2">
+			<div class="rounded-lg border bg-card p-4">
+				<div class="mb-3">
+					<h3 class="text-sm font-medium">Container CPU</h3>
+				</div>
+				<ContainerCPUChart data={containerMetrics} {timeRange} />
+			</div>
+			<div class="rounded-lg border bg-card p-4">
+				<div class="mb-3">
+					<h3 class="text-sm font-medium">Container Memory</h3>
+				</div>
+				<ContainerMemoryChart data={containerMetrics} {timeRange} />
+			</div>
+			<div class="rounded-lg border bg-card p-4 xl:col-span-2">
+				<div class="mb-3">
+					<h3 class="text-sm font-medium">Container Network</h3>
+				</div>
+				<ContainerNetworkChart data={containerMetrics} {timeRange} />
+			</div>
+		</div>
+	</div>
+{/if}

@@ -23,7 +23,8 @@ type MetricsConfig struct {
 }
 
 // GetMetricsConfig returns the appropriate metrics configuration based on environment
-func GetMetricsConfig(env *Environment) *MetricsConfig {
+// dockerMetrics controls whether Docker container metrics are collected (opt-in)
+func GetMetricsConfig(env *Environment, dockerMetrics bool) *MetricsConfig {
 	config := &MetricsConfig{}
 
 	switch env.Type {
@@ -39,7 +40,7 @@ func GetMetricsConfig(env *Environment) *MetricsConfig {
 		config.CollectTemperature = true
 
 	case EnvPhysicalWithContainers:
-		// Physical server running Docker: collect everything + Docker metrics
+		// Physical server running Docker: collect everything
 		config.CollectCPU = true
 		config.CollectMemory = true
 		config.CollectDisk = true
@@ -49,10 +50,12 @@ func GetMetricsConfig(env *Environment) *MetricsConfig {
 		config.CollectLoadAvg = true
 		config.CollectTemperature = true
 
-		// Docker-specific metrics
-		config.CollectDockerCPU = true
-		config.CollectDockerMemory = true
-		config.CollectDockerNetwork = true
+		// Docker metrics only if opt-in
+		if dockerMetrics {
+			config.CollectDockerCPU = true
+			config.CollectDockerMemory = true
+			config.CollectDockerNetwork = true
+		}
 
 	case EnvVM:
 		// VM without containers: collect most things except temperature
@@ -66,7 +69,7 @@ func GetMetricsConfig(env *Environment) *MetricsConfig {
 		config.CollectTemperature = false // Can't read physical sensors
 
 	case EnvVMWithContainers:
-		// VM running Docker: collect VM metrics + Docker metrics
+		// VM running Docker: collect VM metrics
 		config.CollectCPU = true
 		config.CollectMemory = true
 		config.CollectDisk = true
@@ -76,10 +79,12 @@ func GetMetricsConfig(env *Environment) *MetricsConfig {
 		config.CollectSwap = false
 		config.CollectTemperature = false
 
-		// Docker-specific metrics
-		config.CollectDockerCPU = true
-		config.CollectDockerMemory = true
-		config.CollectDockerNetwork = true
+		// Docker metrics only if opt-in
+		if dockerMetrics {
+			config.CollectDockerCPU = true
+			config.CollectDockerMemory = true
+			config.CollectDockerNetwork = true
+		}
 
 	case EnvContainer:
 		// Container: collect limited metrics

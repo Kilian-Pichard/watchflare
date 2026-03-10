@@ -116,6 +116,20 @@ export interface AggregatedMetric {
 	server_count: number;
 }
 
+export interface ContainerMetric {
+	id: string;
+	server_id: string;
+	timestamp: string;
+	container_id: string;
+	container_name: string;
+	image: string;
+	cpu_percent: number;
+	memory_used_bytes: number;
+	memory_limit_bytes: number;
+	network_rx_bytes_per_sec: number;
+	network_tx_bytes_per_sec: number;
+}
+
 export interface MetricsQueryParams {
 	time_range?: TimeRange;
 	limit?: number;
@@ -180,7 +194,7 @@ export interface PackageHistory {
 
 // ===== SSE Events =====
 
-export type SSEEventType = 'connected' | 'server_update' | 'metrics_update' | 'aggregated_metrics_update';
+export type SSEEventType = 'connected' | 'server_update' | 'metrics_update' | 'aggregated_metrics_update' | 'container_metrics_update';
 
 export interface SSEEvent {
 	type: SSEEventType;
@@ -260,6 +274,10 @@ export interface GetAggregatedMetricsResponse {
 
 export interface GetDroppedMetricsResponse {
 	dropped_metrics: DroppedMetric[];
+}
+
+export interface GetContainerMetricsResponse {
+	metrics: ContainerMetric[];
 }
 
 export interface GetPackagesResponse {

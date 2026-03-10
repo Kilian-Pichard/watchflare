@@ -1,4 +1,4 @@
-import type { SSEEvent, Metric } from '../types';
+import type { SSEEvent, Metric, ContainerMetric } from '../types';
 import { API_BASE_URL } from '../api';
 import { logger } from '../utils';
 
@@ -28,6 +28,48 @@ interface MinifiedMetrics {
 	nt: number;      // network_tx_bytes_per_sec
 	tmp: number;     // cpu_temperature_celsius
 	u: number;       // uptime_seconds
+}
+
+/**
+ * Minified container metrics format from backend SSE
+ */
+interface MinifiedContainerMetric {
+	i: string;   // container_id
+	n: string;   // container_name
+	c: number;   // cpu_percent
+	mu: number;  // memory_used_bytes
+	ml: number;  // memory_limit_bytes
+	nr: number;  // network_rx_bytes_per_sec
+	nt: number;  // network_tx_bytes_per_sec
+}
+
+interface MinifiedContainerMetricsUpdate {
+	s: string;   // server_id
+	t: number;   // timestamp (Unix epoch)
+	m: MinifiedContainerMetric[];
+}
+
+/**
+ * Decode minified container metrics to full format
+ */
+function decodeMinifiedContainerMetrics(minified: MinifiedContainerMetricsUpdate): { server_id: string; metrics: ContainerMetric[] } {
+	const timestamp = new Date(minified.t * 1000).toISOString();
+	return {
+		server_id: minified.s,
+		metrics: minified.m.map(cm => ({
+			id: '',
+			server_id: minified.s,
+			timestamp,
+			container_id: cm.i,
+			container_name: cm.n,
+			image: '',
+			cpu_percent: cm.c,
+			memory_used_bytes: cm.mu,
+			memory_limit_bytes: cm.ml,
+			network_rx_bytes_per_sec: cm.nr ?? 0,
+			network_tx_bytes_per_sec: cm.nt ?? 0,
+		}))
+	};
 }
 
 /**
@@ -198,6 +240,12 @@ export class SSEManager {
 		this.eventSource.addEventListener('aggregated_metrics_update', (e: MessageEvent) => {
 			const data = JSON.parse(e.data);
 			this.bufferEvent({ type: 'aggregated_metrics_update', data });
+		});
+
+		this.eventSource.addEventListener('container_metrics_update', (e: MessageEvent) => {
+			const minified = JSON.parse(e.data) as MinifiedContainerMetricsUpdate;
+			const data = decodeMinifiedContainerMetrics(minified);
+			this.bufferEvent({ type: 'container_metrics_update', data });
 		});
 
 		this.eventSource.onerror = (error: Event) => {

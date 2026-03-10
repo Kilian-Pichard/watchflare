@@ -46,10 +46,16 @@ type SystemMetrics struct {
 
 	// Temperature (physical servers only)
 	CPUTemperatureCelsius float64
+
+	// Docker container metrics (only for hosts with containers)
+	ContainerMetrics []ContainerMetric
 }
 
 // Package-level delta tracker for rate-based metrics (disk I/O, network)
 var deltaTracker = NewDeltaTracker()
+
+// Track whether we've already logged a Docker permission error
+var dockerErrorLogged bool
 
 // Collect gathers system metrics based on environment configuration
 // config parameter determines which metrics to collect (e.g., containers don't collect disk)
@@ -120,6 +126,23 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		temp, tempErr := getCPUTemperature()
 		if tempErr == nil {
 			metrics.CPUTemperatureCelsius = temp
+		}
+	}
+
+	// Docker container metrics
+	if config.CollectDockerCPU || config.CollectDockerMemory || config.CollectDockerNetwork {
+		containerMetrics, containerErr := CollectContainerMetrics(deltaTracker)
+		if containerErr != nil {
+			if !dockerErrorLogged {
+				log.Printf("Warning: Failed to collect container metrics: %v", containerErr)
+				dockerErrorLogged = true
+			}
+		} else if containerMetrics != nil {
+			if dockerErrorLogged {
+				log.Printf("Docker container metrics collection recovered")
+				dockerErrorLogged = false
+			}
+			metrics.ContainerMetrics = containerMetrics
 		}
 	}
 

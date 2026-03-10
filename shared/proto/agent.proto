@@ -97,12 +97,25 @@ message Metrics {
   double cpu_temperature_celsius = 16;
 }
 
+// ContainerMetric contains per-container performance data
+message ContainerMetric {
+  string container_id = 1;
+  string container_name = 2;
+  string image = 3;
+  double cpu_percent = 4;
+  uint64 memory_used_bytes = 5;
+  uint64 memory_limit_bytes = 6;
+  uint64 network_rx_bytes_per_sec = 7;
+  uint64 network_tx_bytes_per_sec = 8;
+}
+
 // MetricsRequest contains authentication and metrics data
 message MetricsRequest {
   string agent_id = 1;   // UUID of the server
   string agent_key = 2;  // Authentication key
   Metrics metrics = 3;   // System metrics
   int64 timestamp = 4;   // Unix timestamp in seconds (for anti-replay)
+  repeated ContainerMetric container_metrics = 5;  // Per-container metrics (empty if no containers)
 }
 
 // MetricsResponse acknowledges metric reception

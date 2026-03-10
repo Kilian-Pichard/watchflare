@@ -81,6 +81,24 @@ type AggregatedMetricsUpdate struct {
 	DiskUsedBytes        uint64  `json:"disk_used_bytes"`
 }
 
+// ContainerMetricMinified represents a minified container metric for SSE
+type ContainerMetricMinified struct {
+	ID   string  `json:"i"`  // container_id (short hash)
+	Name string  `json:"n"`  // container_name
+	CPU  float64 `json:"c"`  // cpu_percent
+	MU   uint64  `json:"mu"` // memory_used_bytes
+	ML   uint64  `json:"ml"` // memory_limit_bytes
+	NR   uint64  `json:"nr"` // network_rx_bytes_per_sec
+	NT   uint64  `json:"nt"` // network_tx_bytes_per_sec
+}
+
+// ContainerMetricsUpdate represents container metrics for SSE broadcast
+type ContainerMetricsUpdate struct {
+	ServerID  string                    `json:"s"`
+	Timestamp int64                     `json:"t"`
+	Metrics   []ContainerMetricMinified `json:"m"`
+}
+
 // Client represents an SSE client connection
 type Client struct {
 	ID      string
@@ -179,6 +197,15 @@ func (b *Broker) BroadcastMetricsUpdate(update MetricsUpdate) {
 func (b *Broker) BroadcastAggregatedMetricsUpdate(update AggregatedMetricsUpdate) {
 	event := Event{
 		Type: "aggregated_metrics_update",
+		Data: update,
+	}
+	b.Broadcast(event)
+}
+
+// BroadcastContainerMetricsUpdate sends container metrics to all SSE clients
+func (b *Broker) BroadcastContainerMetricsUpdate(update ContainerMetricsUpdate) {
+	event := Event{
+		Type: "container_metrics_update",
 		Data: update,
 	}
 	b.Broadcast(event)

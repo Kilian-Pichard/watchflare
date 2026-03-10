@@ -302,6 +302,47 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 		UptimeSeconds:         metric.UptimeSeconds,
 	})
 
+	// Save and broadcast container metrics if present
+	if len(req.ContainerMetrics) > 0 {
+		var containerModels []models.ContainerMetric
+		var sseContainerMetrics []sse.ContainerMetricMinified
+
+		for _, cm := range req.ContainerMetrics {
+			containerModels = append(containerModels, models.ContainerMetric{
+				ServerID:             server.ID,
+				Timestamp:            metric.Timestamp,
+				ContainerID:          cm.ContainerId,
+				ContainerName:        cm.ContainerName,
+				Image:                cm.Image,
+				CPUPercent:           cm.CpuPercent,
+				MemoryUsedBytes:      cm.MemoryUsedBytes,
+				MemoryLimitBytes:     cm.MemoryLimitBytes,
+				NetworkRxBytesPerSec: cm.NetworkRxBytesPerSec,
+				NetworkTxBytesPerSec: cm.NetworkTxBytesPerSec,
+			})
+
+			sseContainerMetrics = append(sseContainerMetrics, sse.ContainerMetricMinified{
+				ID:   cm.ContainerId,
+				Name: cm.ContainerName,
+				CPU:  cm.CpuPercent,
+				MU:   cm.MemoryUsedBytes,
+				ML:   cm.MemoryLimitBytes,
+				NR:   cm.NetworkRxBytesPerSec,
+				NT:   cm.NetworkTxBytesPerSec,
+			})
+		}
+
+		if err := database.DB.Create(&containerModels).Error; err != nil {
+			log.Printf("Warning: Failed to save container metrics: %v", err)
+		}
+
+		broker.BroadcastContainerMetricsUpdate(sse.ContainerMetricsUpdate{
+			ServerID:  server.ID,
+			Timestamp: metric.Timestamp.Unix(),
+			Metrics:   sseContainerMetrics,
+		})
+	}
+
 	return &pb.MetricsResponse{
 		Success: true,
 		Message: "Metrics received successfully",

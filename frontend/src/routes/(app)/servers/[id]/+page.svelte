@@ -6,7 +6,7 @@
     import { sseStore } from "$lib/stores/sse";
     import { handleSSEReactivation, logger } from "$lib/utils";
     import { MAX_METRICS_POINTS_DETAIL } from "$lib/constants";
-    import type { Server, Metric, PackageStats, SSEEvent, TimeRange } from "$lib/types";
+    import type { Server, Metric, ContainerMetric, PackageStats, SSEEvent, TimeRange } from "$lib/types";
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
     import Modal from "$lib/components/Modal.svelte";
     import ServerDetailHeader from "$lib/components/server/ServerDetailHeader.svelte";
@@ -28,6 +28,7 @@
     let copiedToken = $state(false);
     let packageStats: PackageStats | null = $state(null);
     let metrics: Metric[] = $state([]);
+    let containerMetrics: ContainerMetric[] = $state([]);
     let timeRange: TimeRange = $state("1h");
     let sseUnsubscribe: (() => void) | null = null;
 
@@ -62,6 +63,20 @@
                 // Keep only last N points to avoid memory issues
                 if (metrics.length > MAX_METRICS_POINTS_DETAIL) {
                     metrics = metrics.slice(-MAX_METRICS_POINTS_DETAIL);
+                }
+            }
+        }
+
+        // Handle container_metrics_update events for this specific server
+        if (event.type === "container_metrics_update") {
+            const update = event.data as { server_id: string; metrics: ContainerMetric[] };
+            if (server && update.server_id === server.id) {
+                containerMetrics = [...containerMetrics, ...update.metrics];
+
+                // Keep only last N points per container to avoid memory issues
+                const maxPoints = MAX_METRICS_POINTS_DETAIL * 5; // More points since multiple containers
+                if (containerMetrics.length > maxPoints) {
+                    containerMetrics = containerMetrics.slice(-maxPoints);
                 }
             }
         }
@@ -112,6 +127,15 @@
             metrics = data.metrics || [];
         } catch (err) {
             logger.error("Failed to load metrics:", err);
+        }
+
+        // Load container metrics
+        try {
+            const containerData = await api.getContainerMetrics(serverId, timeRange);
+            containerMetrics = containerData.metrics || [];
+        } catch (err) {
+            logger.error("Failed to load container metrics:", err);
+            containerMetrics = [];
         }
     }
 
@@ -304,6 +328,7 @@
 
     <ServerMetricsCharts
         {metrics}
+        {containerMetrics}
         bind:timeRange
         onTimeRangeChange={handleTimeRangeChange}
     />

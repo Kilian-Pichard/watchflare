@@ -125,6 +125,28 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 	return results, nil
 }
 
+// GetContainerMetrics retrieves container metrics for a server within a time range
+func GetContainerMetrics(serverID string, start, end time.Time) ([]models.ContainerMetric, error) {
+	// Verify server exists
+	var server models.Server
+	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("server not found")
+		}
+		return nil, err
+	}
+
+	var metrics []models.ContainerMetric
+	if err := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
+		serverID, start, end).
+		Order("timestamp ASC").
+		Find(&metrics).Error; err != nil {
+		return nil, err
+	}
+
+	return metrics, nil
+}
+
 // getContinuousAggregateTable returns the appropriate continuous aggregate table for the given interval
 func getContinuousAggregateTable(interval string) (string, error) {
 	// Map intervals to their continuous aggregate views

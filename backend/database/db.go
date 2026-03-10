@@ -29,6 +29,9 @@ var environmentDetectionSQL string
 //go:embed migrations/006_new_metrics.sql
 var newMetricsSQL string
 
+//go:embed migrations/007_container_metrics.sql
+var containerMetricsSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -160,6 +163,11 @@ func Connect() error {
 		log.Printf("Warning: Failed to run new metrics migration: %v", err)
 	}
 
+	// Run container metrics migration
+	if err := RunContainerMetricsMigration(); err != nil {
+		log.Printf("Warning: Failed to run container metrics migration: %v", err)
+	}
+
 	return nil
 }
 
@@ -265,6 +273,20 @@ func RunNewMetricsMigration() error {
 		return err
 	}
 	log.Println("✓ New metrics migration completed successfully")
+	return nil
+}
+
+// RunContainerMetricsMigration runs the container metrics migration
+func RunContainerMetricsMigration() error {
+	log.Println("Running container metrics migration...")
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
+	}
+	if err := execStatementsOutsideTx(sqlDB, containerMetricsSQL); err != nil {
+		return err
+	}
+	log.Println("✓ Container metrics migration completed successfully")
 	return nil
 }
 
