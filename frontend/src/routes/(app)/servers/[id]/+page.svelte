@@ -32,12 +32,34 @@
     let timeRange: TimeRange = $state("1h");
     let sseUnsubscribe: (() => void) | null = null;
 
+    // SSE throttle: buffer metrics and flush every 30s to avoid re-rendering 10 charts on each SSE event
+    let pendingMetrics: Metric[] = [];
+    let pendingContainerMetrics: ContainerMetric[] = [];
+    let chartUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
     const serverId = $derived($page.params.id);
+
+    function flushChartUpdates() {
+        if (pendingMetrics.length > 0) {
+            metrics = [...metrics, ...pendingMetrics].slice(-MAX_METRICS_POINTS_DETAIL);
+            pendingMetrics = [];
+        }
+        if (pendingContainerMetrics.length > 0) {
+            containerMetrics = [...containerMetrics, ...pendingContainerMetrics].slice(-MAX_METRICS_POINTS_DETAIL);
+            pendingContainerMetrics = [];
+        }
+        chartUpdateTimer = null;
+    }
+
+    function scheduleChartUpdate() {
+        if (chartUpdateTimer) return;
+        chartUpdateTimer = setTimeout(flushChartUpdates, 30_000);
+    }
 
     function handleSSEMessage(event: SSEEvent) {
         handleSSEReactivation(event);
 
-        // Handle server_update events for this specific server
+        // Handle server_update events for this specific server (immediate, no chart)
         if (event.type === "server_update") {
             const update = event.data;
             if (server && update.id === server.id) {
@@ -53,30 +75,21 @@
             }
         }
 
-        // Handle metrics_update events for this specific server
+        // Handle metrics_update events — buffer for batched chart update
         if (event.type === "metrics_update") {
             const metric = event.data;
             if (server && metric.server_id === server.id) {
-                // Add new metric to the array
-                metrics = [...metrics, metric];
-
-                // Keep only last N points to avoid memory issues
-                if (metrics.length > MAX_METRICS_POINTS_DETAIL) {
-                    metrics = metrics.slice(-MAX_METRICS_POINTS_DETAIL);
-                }
+                pendingMetrics.push(metric);
+                scheduleChartUpdate();
             }
         }
 
-        // Handle container_metrics_update events for this specific server
+        // Handle container_metrics_update events — buffer for batched chart update
         if (event.type === "container_metrics_update") {
             const update = event.data as { server_id: string; metrics: ContainerMetric[] };
             if (server && update.server_id === server.id) {
-                containerMetrics = [...containerMetrics, ...update.metrics];
-
-                // Keep only last N points to avoid memory issues
-                if (containerMetrics.length > MAX_METRICS_POINTS_DETAIL) {
-                    containerMetrics = containerMetrics.slice(-MAX_METRICS_POINTS_DETAIL);
-                }
+                pendingContainerMetrics.push(...update.metrics);
+                scheduleChartUpdate();
             }
         }
     }
@@ -88,6 +101,9 @@
     onDestroy(() => {
         if (sseUnsubscribe) {
             sseUnsubscribe();
+        }
+        if (chartUpdateTimer) {
+            clearTimeout(chartUpdateTimer);
         }
     });
 

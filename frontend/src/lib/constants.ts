@@ -1,6 +1,6 @@
 // Metrics retention limits (number of data points kept in memory)
 export const MAX_METRICS_POINTS_DASHBOARD = 50;
-export const MAX_METRICS_POINTS_DETAIL = 200;
+export const MAX_METRICS_POINTS_DETAIL = 120;
 export const MAX_AGGREGATED_POINTS = 200;
 
 // Pagination
