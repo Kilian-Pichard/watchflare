@@ -1,59 +1,44 @@
 <script lang="ts">
-	import { LineChart } from 'layerchart';
-	import { scaleTime } from 'd3-scale';
-	import * as ChartUI from '$lib/components/ui/chart';
-	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_PERCENT } from '$lib/chart-utils';
+	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import type { Metric, AggregatedMetric, TimeRange } from '$lib/types';
+	import type uPlot from 'uplot';
 
 	let { data = [], timeRange }: { data: (Metric | AggregatedMetric)[]; timeRange?: TimeRange } =
 		$props();
 
-	let chartData = $derived(
-		data
-			.filter((d) => d.cpu_temperature_celsius > 0)
-			.map((d) => ({
-				date: new Date(d.timestamp),
-				temp: d.cpu_temperature_celsius
-			}))
-	);
+	let chartData = $derived.by(() => {
+		const filtered = data.filter(d => d.cpu_temperature_celsius > 0);
+		if (filtered.length === 0) return [[], []] as uPlot.AlignedData;
+		const timestamps: number[] = [];
+		const temp: (number | null)[] = [];
+		for (const d of filtered) {
+			timestamps.push(new Date(d.timestamp).getTime() / 1000);
+			temp.push(d.cpu_temperature_celsius);
+		}
+		return [timestamps, temp] as uPlot.AlignedData;
+	});
 
-	let xDomain = $derived(computeXDomain(chartData, timeRange));
-	let visibleData = $derived(filterByDomain(chartData, xDomain));
+	const series: uPlot.Series[] = [
+		{
+			label: 'CPU Temp',
+			stroke: 'var(--chart-1)',
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(1) + '°C' : '—',
+		}
+	];
 
-	const chartConfig = {
-		temp: { label: 'CPU Temperature', color: 'var(--chart-1)' }
-	};
+	const scales: uPlot.Scales = { y: { range: [0, 120] } };
+
+	const axes: uPlot.Axis[] = [
+		{},
+		{ values: (_u: uPlot, ticks: number[]) => ticks.map(v => v + '°C') }
+	];
+
+	let hasData = $derived(chartData[0].length > 0);
 </script>
 
-{#if visibleData.length > 0}
-	<div class="h-48 sm:h-64">
-		<ChartUI.Container config={chartConfig} class="h-full w-full">
-			<LineChart
-				data={visibleData}
-				x="date"
-				xScale={scaleTime()}
-				{xDomain}
-				yDomain={[0, 120]}
-				padding={CHART_PADDING_PERCENT}
-				series={[
-					{
-						key: 'temp',
-						label: 'CPU Temp',
-						color: chartConfig.temp.color
-					}
-				]}
-				props={{
-					line: { class: 'stroke-2 stroke-[var(--chart-1)]' },
-					xAxis: { format: formatXAxis }
-				}}
-			>
-				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => v.toFixed(1) + '°C'} />
-				{/snippet}
-			</LineChart>
-		</ChartUI.Container>
-	</div>
+{#if hasData}
+	<UPlotChart data={chartData} {series} {axes} {scales} />
 {:else}
-	<div class="h-64 flex items-center justify-center text-muted-foreground">No data available</div>
+	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
 {/if}

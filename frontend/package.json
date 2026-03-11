@@ -1,6 +1,6 @@
 {
   "name": "watchflare-frontend",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "private": true,
   "scripts": {
     "dev": "vite dev",
@@ -19,7 +19,6 @@
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^25.0.2",
     "bits-ui": "^2.14.4",
-    "layerchart": "^2.0.0-next.43",
     "svelte": "^5.45.6",
     "tailwind-variants": "^3.2.2",
     "tailwindcss": "^4.1.18",
@@ -33,6 +32,7 @@
     "clsx": "^2.1.1",
     "lucide-svelte": "^0.564.0",
     "tailwind-merge": "^3.4.0",
+    "uplot": "^1.6.32",
     "zod": "^4.3.6"
   }
 }

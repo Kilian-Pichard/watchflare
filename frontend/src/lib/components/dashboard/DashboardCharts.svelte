@@ -20,12 +20,6 @@
 		timeRange: TimeRange;
 	} = $props();
 
-	// Create a unique key based on the last metric's timestamp to force chart re-render
-	let chartKey = $derived(
-		aggregatedMetrics.length > 0
-			? aggregatedMetrics[aggregatedMetrics.length - 1].timestamp
-			: 'empty'
-	);
 </script>
 
 <!-- Central Charts (CPU + Memory only) -->
@@ -39,9 +33,7 @@
 					{formatPercent(stats.avgCPU)}
 				</span>
 			</div>
-			{#key chartKey}
-				<CPUChart data={aggregatedMetrics} {timeRange} />
-			{/key}
+			<CPUChart data={aggregatedMetrics} {timeRange} />
 		</div>
 
 		<!-- Memory Chart -->
@@ -53,9 +45,7 @@
 					<span class="hidden sm:inline">{formatBytes(stats.usedMemory)} / {formatBytes(stats.totalMemory)} ({formatPercent(stats.totalMemory > 0 ? (stats.usedMemory / stats.totalMemory) * 100 : 0)})</span>
 				</span>
 			</div>
-			{#key chartKey}
-				<MemoryChart data={aggregatedMetrics} {timeRange} />
-			{/key}
+			<MemoryChart data={aggregatedMetrics} {timeRange} />
 		</div>
 	</div>
 </div>

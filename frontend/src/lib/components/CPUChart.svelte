@@ -1,58 +1,41 @@
 <script lang="ts">
-	import { LineChart } from 'layerchart';
-	import { scaleTime } from 'd3-scale';
-	import * as ChartUI from '$lib/components/ui/chart';
-	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_PERCENT } from '$lib/chart-utils';
+	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import type { Metric, AggregatedMetric, TimeRange } from '$lib/types';
+	import type uPlot from 'uplot';
 
 	let { data = [], timeRange }: { data: (Metric | AggregatedMetric)[]; timeRange?: TimeRange } =
 		$props();
 
-	let chartData = $derived(
-		data.map((d) => ({
-			date: new Date(d.timestamp),
-			cpu: d.cpu_usage_percent
-		}))
-	);
+	let chartData = $derived.by(() => {
+		if (data.length === 0) return [[], []] as uPlot.AlignedData;
+		const timestamps: number[] = [];
+		const cpu: (number | null)[] = [];
+		for (const d of data) {
+			timestamps.push(new Date(d.timestamp).getTime() / 1000);
+			cpu.push(d.cpu_usage_percent);
+		}
+		return [timestamps, cpu] as uPlot.AlignedData;
+	});
 
-	let xDomain = $derived(computeXDomain(chartData, timeRange));
-	let visibleData = $derived(filterByDomain(chartData, xDomain));
+	const series: uPlot.Series[] = [
+		{
+			label: 'CPU Usage',
+			stroke: 'var(--chart-1)',
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(1) + '%' : '—',
+		}
+	];
 
-	const chartConfig = {
-		cpu: { label: 'CPU Usage', color: 'var(--chart-1)' }
-	};
+	const scales: uPlot.Scales = { y: { range: [0, 100] } };
+
+	const axes: uPlot.Axis[] = [
+		{},
+		{ values: (_u: uPlot, ticks: number[]) => ticks.map(v => v + '%') }
+	];
 </script>
 
-{#if visibleData.length > 0}
-	<div class="h-48 sm:h-64">
-		<ChartUI.Container config={chartConfig} class="h-full w-full">
-			<LineChart
-				data={visibleData}
-				x="date"
-				xScale={scaleTime()}
-				{xDomain}
-				yDomain={[0, 100]}
-				padding={CHART_PADDING_PERCENT}
-				series={[
-					{
-						key: 'cpu',
-						label: 'CPU Usage',
-						color: chartConfig.cpu.color
-					}
-				]}
-				props={{
-					line: { class: 'stroke-2 stroke-[var(--chart-1)]' },
-					xAxis: { format: formatXAxis },
-					yAxis: { format: (v) => v + '%' }
-				}}
-			>
-				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => v.toFixed(1) + '%'} />
-				{/snippet}
-			</LineChart>
-		</ChartUI.Container>
-	</div>
+{#if data.length > 0}
+	<UPlotChart data={chartData} {series} {axes} {scales} />
 {:else}
-	<div class="h-64 flex items-center justify-center text-muted-foreground">No data available</div>
+	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
 {/if}

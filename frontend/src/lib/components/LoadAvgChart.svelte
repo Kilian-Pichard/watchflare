@@ -1,58 +1,50 @@
 <script lang="ts">
-	import { LineChart } from 'layerchart';
-	import { scaleTime } from 'd3-scale';
-	import * as ChartUI from '$lib/components/ui/chart';
-	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_PERCENT } from '$lib/chart-utils';
+	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import type { Metric, AggregatedMetric, TimeRange } from '$lib/types';
+	import type uPlot from 'uplot';
 
 	let { data = [], timeRange }: { data: (Metric | AggregatedMetric)[]; timeRange?: TimeRange } =
 		$props();
 
-	let chartData = $derived(
-		data.map((d) => ({
-			date: new Date(d.timestamp),
-			load1: d.load_avg_1min,
-			load5: d.load_avg_5min,
-			load15: d.load_avg_15min
-		}))
-	);
+	let chartData = $derived.by(() => {
+		if (data.length === 0) return [[], [], [], []] as uPlot.AlignedData;
+		const timestamps: number[] = [];
+		const l1: (number | null)[] = [];
+		const l5: (number | null)[] = [];
+		const l15: (number | null)[] = [];
+		for (const d of data) {
+			timestamps.push(new Date(d.timestamp).getTime() / 1000);
+			l1.push(d.load_avg_1min);
+			l5.push(d.load_avg_5min);
+			l15.push(d.load_avg_15min);
+		}
+		return [timestamps, l1, l5, l15] as uPlot.AlignedData;
+	});
 
-	let xDomain = $derived(computeXDomain(chartData, timeRange));
-	let visibleData = $derived(filterByDomain(chartData, xDomain));
-
-	const chartConfig = {
-		load1: { label: '1 min', color: 'var(--chart-1)' },
-		load5: { label: '5 min', color: 'var(--chart-2)' },
-		load15: { label: '15 min', color: 'var(--chart-3)' }
-	};
+	const series: uPlot.Series[] = [
+		{
+			label: '1 min',
+			stroke: 'var(--chart-1)',
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(2) : '—',
+		},
+		{
+			label: '5 min',
+			stroke: 'var(--chart-2)',
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(2) : '—',
+		},
+		{
+			label: '15 min',
+			stroke: 'var(--chart-3)',
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(2) : '—',
+		}
+	];
 </script>
 
-{#if visibleData.length > 0}
-	<div class="h-48 sm:h-64">
-		<ChartUI.Container config={chartConfig} class="h-full w-full">
-			<LineChart
-				data={visibleData}
-				x="date"
-				xScale={scaleTime()}
-				{xDomain}
-				padding={CHART_PADDING_PERCENT}
-				series={[
-					{ key: 'load1', label: '1 min', color: chartConfig.load1.color },
-					{ key: 'load5', label: '5 min', color: chartConfig.load5.color },
-					{ key: 'load15', label: '15 min', color: chartConfig.load15.color }
-				]}
-				props={{
-					line: { class: 'stroke-2' },
-					xAxis: { format: formatXAxis }
-				}}
-			>
-				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => v.toFixed(2)} />
-				{/snippet}
-			</LineChart>
-		</ChartUI.Container>
-	</div>
+{#if data.length > 0}
+	<UPlotChart data={chartData} {series} />
 {:else}
-	<div class="h-64 flex items-center justify-center text-muted-foreground">No data available</div>
+	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
 {/if}

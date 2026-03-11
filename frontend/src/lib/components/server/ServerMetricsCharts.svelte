@@ -180,7 +180,7 @@
 				<div class="mb-3">
 					<h3 class="text-sm font-medium">Container Network</h3>
 				</div>
-				<ContainerNetworkChart pivotedData={containerPivots.network} seriesKeys={containerPivots.networkKeys} {containerNames} {timeRange} />
+				<ContainerNetworkChart pivotedData={containerPivots.network} seriesKeys={containerPivots.networkKeys} {timeRange} />
 			</div>
 		</div>
 	</div>

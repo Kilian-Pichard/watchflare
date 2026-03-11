@@ -1,65 +1,59 @@
 <script lang="ts">
-	import { AreaChart } from 'layerchart';
-	import { scaleTime } from 'd3-scale';
+	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import { formatBytes } from '$lib/utils';
-	import * as ChartUI from '$lib/components/ui/chart';
-	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_BYTES } from '$lib/chart-utils';
 	import type { Metric, TimeRange } from '$lib/types';
+	import type uPlot from 'uplot';
 
 	let { data = [], timeRange }: { data: Metric[]; timeRange?: TimeRange } = $props();
-
-	let chartData = $derived(
-		data.map((d) => ({
-			date: new Date(d.timestamp),
-			disk: d.disk_used_bytes
-		}))
-	);
-
-	let xDomain = $derived(computeXDomain(chartData, timeRange));
-	let visibleData = $derived(filterByDomain(chartData, xDomain));
 
 	let maxDisk = $derived(
 		data.length > 0 ? Math.max(...data.map((d) => d.disk_total_bytes)) : 0
 	);
 
-	const chartConfig = {
-		disk: { label: 'Disk Used', color: 'var(--chart-3)' }
-	};
+	let chartData = $derived.by(() => {
+		if (data.length === 0) return [[], []] as uPlot.AlignedData;
+		const timestamps: number[] = [];
+		const disk: (number | null)[] = [];
+		for (const d of data) {
+			timestamps.push(new Date(d.timestamp).getTime() / 1000);
+			disk.push(d.disk_used_bytes);
+		}
+		return [timestamps, disk] as uPlot.AlignedData;
+	});
+
+	function roundBytes(max: number): number {
+		const GB = 1024 ** 3;
+		const MB = 1024 ** 2;
+		const unit = max >= GB ? GB : MB;
+		return Math.round(max / unit) * unit;
+	}
+
+	let scales = $derived({
+		y: { range: [0, roundBytes(maxDisk)] as uPlot.Range.MinMax }
+	} as uPlot.Scales);
+
+	const series: uPlot.Series[] = [
+		{
+			label: 'Disk Used',
+			stroke: 'var(--chart-3)',
+			fill: 'var(--chart-3)',
+			width: 2,
+			fillTo: 0,
+			value: (_u: uPlot, v: number | null) => v != null ? formatBytes(v) : '—',
+		}
+	];
+
+	const axes: uPlot.Axis[] = [
+		{},
+		{
+			values: (_u: uPlot, vals: number[]) => vals.map(v => formatBytes(v)),
+			size: 70,
+		}
+	];
 </script>
 
-{#if visibleData.length > 0}
-	<div class="h-64">
-		<ChartUI.Container config={chartConfig} class="h-full w-full">
-			<AreaChart
-				data={visibleData}
-				x="date"
-				xScale={scaleTime()}
-				{xDomain}
-				yDomain={[0, maxDisk]}
-				padding={CHART_PADDING_BYTES}
-				series={[
-					{
-						key: 'disk',
-						label: 'Disk Used',
-						color: chartConfig.disk.color
-					}
-				]}
-				props={{
-					area: {
-						'fill-opacity': 0.2,
-						line: { class: 'stroke-2' }
-					},
-					xAxis: { format: formatXAxis },
-					yAxis: { format: (d) => formatBytes(d) }
-				}}
-			>
-				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => formatBytes(v)} />
-				{/snippet}
-			</AreaChart>
-		</ChartUI.Container>
-	</div>
+{#if data.length > 0}
+	<UPlotChart data={chartData} {series} {axes} {scales} />
 {:else}
-	<div class="h-64 flex items-center justify-center text-muted-foreground">No data available</div>
+	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
 {/if}

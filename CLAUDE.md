@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.24.0
+**Current version**: 0.25.0
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.25.0` - Migrate charts from layerchart (SVG) to uPlot (Canvas): fixes Firefox OOM on server detail page, new UPlotChart wrapper with custom tooltip plugin, touch support (horizontal swipe), theme-reactive color resolution (oklch→hex for Canvas 2D), responsive resize via window event, cursor snap to nearest data point, clean Y-axis ticks (5 evenly spaced nice values), HH:MM X-axis format, nice rounding for byte/rate scales, removed layerchart/d3-scale dependencies
 - `0.24.0` - Docker per-container metrics: agent collects CPU/memory/network per container via Docker API unix socket, new ContainerMetric protobuf message, backend stores in container_metrics hypertable (migration 007), SSE container_metrics_update event, 3 new chart components (ContainerCPU, ContainerMemory, ContainerNetwork) with dynamic series per container, automatic display on servers with containers
 - `0.23.0` - New server metrics full-stack: agent collects disk I/O, network bandwidth, CPU temperature via delta tracking, protobuf fields 12-16, backend migration 006 (new columns + recreated continuous aggregates), SSE minified fields (dr/dw/nr/nt/tmp), 4 new chart components (LoadAvg, DiskIO, Network, Temperature), custom tooltip with layerchart primitive, yAxis formatting (%, bytes/sec), temperature conditional on physical servers, memory calculation changed to Total-Available
 - `0.22.0` - Docker production deployment: single binary with embedded frontend (go:embed + build tags), multi-stage Dockerfile, docker-compose.prod.yml, SPA mode (adapter-static), API routes prefixed with /api, README and installation guide

@@ -1,11 +1,8 @@
 <script lang="ts">
-	import { LineChart } from 'layerchart';
-	import { scaleTime } from 'd3-scale';
-	import * as ChartUI from '$lib/components/ui/chart';
-	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, filterByDomain, formatXAxis, CHART_PADDING_BYTES } from '$lib/chart-utils';
+	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import { formatBytes } from '$lib/utils';
 	import type { TimeRange } from '$lib/types';
+	import type uPlot from 'uplot';
 
 	const CHART_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
@@ -15,49 +12,42 @@
 		timeRange?: TimeRange;
 	} = $props();
 
-	let xDomain = $derived(computeXDomain(pivotedData as { date: Date }[], timeRange));
-	let visibleData = $derived(filterByDomain(pivotedData as { date: Date }[], xDomain));
-
-	let chartConfig = $derived(
-		Object.fromEntries(
-			containerNames.map((name, i) => [
-				name,
-				{ label: name, color: CHART_COLORS[i % CHART_COLORS.length] }
-			])
-		)
-	);
+	let chartData = $derived.by(() => {
+		if (pivotedData.length === 0 || containerNames.length === 0) return [[]] as uPlot.AlignedData;
+		const timestamps: number[] = [];
+		const columns: (number | null)[][] = containerNames.map(() => []);
+		for (const row of pivotedData) {
+			timestamps.push((row.date as Date).getTime() / 1000);
+			for (let i = 0; i < containerNames.length; i++) {
+				const val = row[containerNames[i]];
+				columns[i].push(val != null ? val as number : null);
+			}
+		}
+		return [timestamps, ...columns] as uPlot.AlignedData;
+	});
 
 	let series = $derived(
-		containerNames.map((name, i) => ({
-			key: name,
+		containerNames.map((name, i): uPlot.Series => ({
 			label: name,
-			color: CHART_COLORS[i % CHART_COLORS.length]
+			stroke: CHART_COLORS[i % CHART_COLORS.length],
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? formatBytes(v) : '—',
 		}))
 	);
+
+	const axes: uPlot.Axis[] = [
+		{},
+		{
+			values: (_u: uPlot, ticks: number[]) => ticks.map(v => formatBytes(v)),
+			size: 70,
+		}
+	];
+
+	let hasData = $derived(pivotedData.length > 0 && containerNames.length > 0);
 </script>
 
-{#if visibleData.length > 0 && series.length > 0}
-	<div class="h-48 sm:h-64">
-		<ChartUI.Container config={chartConfig} class="h-full w-full">
-			<LineChart
-				data={visibleData}
-				x="date"
-				xScale={scaleTime()}
-				{xDomain}
-				padding={CHART_PADDING_BYTES}
-				{series}
-				props={{
-					line: { class: 'stroke-2' },
-					xAxis: { format: formatXAxis },
-					yAxis: { format: (v: number) => formatBytes(v) }
-				}}
-			>
-				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={(v) => formatBytes(v)} />
-				{/snippet}
-			</LineChart>
-		</ChartUI.Container>
-	</div>
+{#if hasData}
+	<UPlotChart data={chartData} {series} {axes} />
 {:else}
-	<div class="h-64 flex items-center justify-center text-muted-foreground">No data available</div>
+	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
 {/if}

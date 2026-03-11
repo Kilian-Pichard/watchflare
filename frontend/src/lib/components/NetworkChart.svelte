@@ -1,56 +1,51 @@
 <script lang="ts">
-	import { LineChart } from 'layerchart';
-	import { scaleTime } from 'd3-scale';
-	import * as ChartUI from '$lib/components/ui/chart';
-	import ChartTooltip from '$lib/components/ChartTooltip.svelte';
-	import { computeXDomain, filterByDomain, formatXAxis, formatRate, CHART_PADDING_RATE } from '$lib/chart-utils';
+	import UPlotChart from '$lib/components/UPlotChart.svelte';
+	import { formatRate } from '$lib/chart-utils';
 	import type { Metric, AggregatedMetric, TimeRange } from '$lib/types';
+	import type uPlot from 'uplot';
 
 	let { data = [], timeRange }: { data: (Metric | AggregatedMetric)[]; timeRange?: TimeRange } =
 		$props();
 
-	let chartData = $derived(
-		data.map((d) => ({
-			date: new Date(d.timestamp),
-			rx: d.network_rx_bytes_per_sec,
-			tx: d.network_tx_bytes_per_sec
-		}))
-	);
+	let chartData = $derived.by(() => {
+		if (data.length === 0) return [[], [], []] as uPlot.AlignedData;
+		const timestamps: number[] = [];
+		const rx: (number | null)[] = [];
+		const tx: (number | null)[] = [];
+		for (const d of data) {
+			timestamps.push(new Date(d.timestamp).getTime() / 1000);
+			rx.push(d.network_rx_bytes_per_sec);
+			tx.push(d.network_tx_bytes_per_sec);
+		}
+		return [timestamps, rx, tx] as uPlot.AlignedData;
+	});
 
-	let xDomain = $derived(computeXDomain(chartData, timeRange));
-	let visibleData = $derived(filterByDomain(chartData, xDomain));
+	const series: uPlot.Series[] = [
+		{
+			label: 'Download (RX)',
+			stroke: 'var(--chart-1)',
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v) : '—',
+		},
+		{
+			label: 'Upload (TX)',
+			stroke: 'var(--chart-2)',
+			width: 2,
+			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v) : '—',
+		}
+	];
 
-	const chartConfig = {
-		rx: { label: 'Download (RX)', color: 'var(--chart-1)' },
-		tx: { label: 'Upload (TX)', color: 'var(--chart-2)' }
-	};
+	const axes: uPlot.Axis[] = [
+		{},
+		{
+			values: (_u: uPlot, ticks: number[]) => ticks.map(v => formatRate(v)),
+			size: 70,
+		}
+	];
 </script>
 
-{#if visibleData.length > 0}
-	<div class="h-48 sm:h-64">
-		<ChartUI.Container config={chartConfig} class="h-full w-full">
-			<LineChart
-				data={visibleData}
-				x="date"
-				xScale={scaleTime()}
-				{xDomain}
-				padding={CHART_PADDING_RATE}
-				series={[
-					{ key: 'rx', label: 'RX', color: chartConfig.rx.color },
-					{ key: 'tx', label: 'TX', color: chartConfig.tx.color }
-				]}
-				props={{
-					line: { class: 'stroke-2' },
-					xAxis: { format: formatXAxis },
-					yAxis: { format: formatRate }
-				}}
-			>
-				{#snippet tooltip()}
-					<ChartTooltip valueFormatter={formatRate} />
-				{/snippet}
-			</LineChart>
-		</ChartUI.Container>
-	</div>
+{#if data.length > 0}
+	<UPlotChart data={chartData} {series} {axes} />
 {:else}
-	<div class="h-64 flex items-center justify-center text-muted-foreground">No data available</div>
+	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
 {/if}
