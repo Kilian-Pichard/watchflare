@@ -45,9 +45,9 @@
         timeRange?: TimeRange;
     } = $props();
 
-    let container: HTMLDivElement;
+    let container: HTMLDivElement | undefined = $state(undefined);
     let chart: uPlot | null = null;
-    let mounted = false;
+    let mounted = $state(false);
     let rawMouseTop = 0;
 
     // Resolve CSS variable to a Canvas-compatible hex color
@@ -621,9 +621,8 @@
 </script>
 
 <div class="h-48 sm:h-64 relative">
-    {#if hasData}
-        <div class="absolute inset-0" bind:this={container}></div>
-    {:else}
+    <div class="absolute inset-0" bind:this={container}></div>
+    {#if !hasData}
         <div
             class="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground"
         >
