@@ -621,8 +621,9 @@
 </script>
 
 <div class="h-48 sm:h-64 relative">
-    <div class="absolute inset-0" bind:this={container}></div>
-    {#if !hasData}
+    {#if hasData}
+        <div class="absolute inset-0" bind:this={container}></div>
+    {:else}
         <div
             class="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground"
         >
