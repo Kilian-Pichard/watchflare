@@ -23,7 +23,7 @@
 </script>
 
 {#if userReady}
-    <div class="min-h-screen bg-background">
+    <div class="min-h-dvh bg-background">
         <Header />
 
         <DesktopSidebar />

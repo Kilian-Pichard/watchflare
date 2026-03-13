@@ -22,6 +22,7 @@
 		{
 			label: 'CPU Temp',
 			stroke: 'var(--chart-1)',
+			fill: 'var(--chart-1)',
 			width: 2,
 			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(1) + '°C' : '—',
 		}
@@ -34,11 +35,6 @@
 		{ values: (_u: uPlot, ticks: number[]) => ticks.map(v => v + '°C') }
 	];
 
-	let hasData = $derived(chartData[0].length > 0);
 </script>
 
-{#if hasData}
-	<UPlotChart data={chartData} {series} {axes} {scales} />
-{:else}
-	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
-{/if}
+<UPlotChart data={chartData} {series} {axes} {scales} {timeRange} />

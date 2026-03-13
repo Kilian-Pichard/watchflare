@@ -25,26 +25,25 @@
 		{
 			label: '1 min',
 			stroke: 'var(--chart-1)',
+			fill: 'var(--chart-1)',
 			width: 2,
 			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(2) : '—',
 		},
 		{
 			label: '5 min',
 			stroke: 'var(--chart-2)',
+			fill: 'var(--chart-2)',
 			width: 2,
 			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(2) : '—',
 		},
 		{
 			label: '15 min',
 			stroke: 'var(--chart-3)',
+			fill: 'var(--chart-3)',
 			width: 2,
 			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(2) : '—',
 		}
 	];
 </script>
 
-{#if data.length > 0}
-	<UPlotChart data={chartData} {series} />
-{:else}
-	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
-{/if}
+<UPlotChart data={chartData} {series} {timeRange} />

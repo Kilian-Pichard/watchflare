@@ -38,7 +38,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <header
-    class="fixed left-0 right-0 top-0 z-30 h-fit py-4 px-2 sm:px-4 bg-transparent {$sidebarCollapsed
+    class="fixed left-0 right-0 top-0 z-30 h-fit pt-4 px-2 sm:px-4 bg-transparent {$sidebarCollapsed
         ? 'lg:left-20'
         : 'lg:left-64'} {$sidebarTransitioning
         ? 'transition-[left] duration-300 ease-in-out'

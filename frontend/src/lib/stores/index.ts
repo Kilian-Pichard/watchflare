@@ -28,7 +28,7 @@ export {
 } from './servers';
 
 // Metrics store
-export { metricsStore, metricsData } from './metrics';
+export { metricsStore, metricsData, latestMetrics } from './metrics';
 
 // Aggregated metrics store
 export {

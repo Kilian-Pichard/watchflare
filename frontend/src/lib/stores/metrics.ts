@@ -5,8 +5,10 @@ import { logger } from '$lib/utils';
 import { MAX_METRICS_POINTS_DASHBOARD } from '$lib/constants';
 
 interface MetricsState {
-	// Map of server ID to array of metrics
+	// Map of server ID to array of metrics (for charts, time-range dependent)
 	data: Record<string, Metric[]>;
+	// Latest real-time metric per server (for table display, independent of time range)
+	latest: Record<string, Metric>;
 	loading: Record<string, boolean>;
 	error: string | null;
 }
@@ -14,6 +16,7 @@ interface MetricsState {
 function createMetricsStore() {
 	const { subscribe, set, update } = writable<MetricsState>({
 		data: {},
+		latest: {},
 		loading: {},
 		error: null
 	});
@@ -31,12 +34,20 @@ function createMetricsStore() {
 
 			try {
 				const data = await getServerMetrics(serverId, { time_range: timeRange });
+				const metricsArray = data.metrics || [];
 
-				update(state => ({
-					...state,
-					data: { ...state.data, [serverId]: data.metrics || [] },
-					loading: { ...state.loading, [serverId]: false }
-				}));
+				update(state => {
+					const lastPoint = metricsArray.length > 0 ? metricsArray[metricsArray.length - 1] : null;
+					return {
+						...state,
+						data: { ...state.data, [serverId]: metricsArray },
+						// Initialize latest if not yet set
+						latest: lastPoint && !state.latest[serverId]
+							? { ...state.latest, [serverId]: lastPoint }
+							: state.latest,
+						loading: { ...state.loading, [serverId]: false }
+					};
+				});
 			} catch (err) {
 				logger.error(`Failed to load metrics for server ${serverId}:`, err);
 
@@ -68,7 +79,9 @@ function createMetricsStore() {
 
 				return {
 					...state,
-					data: { ...state.data, [serverId]: updatedMetrics }
+					data: { ...state.data, [serverId]: updatedMetrics },
+					// Always update latest for real-time display
+					latest: { ...state.latest, [serverId]: metric }
 				};
 			});
 		},
@@ -96,12 +109,15 @@ function createMetricsStore() {
 
 		// Clear all metrics
 		clear(): void {
-			set({ data: {}, loading: {}, error: null });
+			set({ data: {}, latest: {}, loading: {}, error: null });
 		}
 	};
 }
 
 export const metricsStore = createMetricsStore();
 
-// Derived store to get all metrics data
+// Derived store to get all metrics data (for charts, time-range dependent)
 export const metricsData = derived(metricsStore, $store => $store.data);
+
+// Derived store for latest real-time metric per server (for table display)
+export const latestMetrics = derived(metricsStore, $store => $store.latest);

@@ -53,8 +53,4 @@
 	];
 </script>
 
-{#if data.length > 0}
-	<UPlotChart data={chartData} {series} {axes} {scales} />
-{:else}
-	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
-{/if}
+<UPlotChart data={chartData} {series} {axes} {scales} {timeRange} />

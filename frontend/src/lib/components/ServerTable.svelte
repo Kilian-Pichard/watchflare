@@ -2,9 +2,9 @@
 	import { formatPercent, getStatusClass } from '$lib/utils';
 	import type { ServerWithMetrics, Metric } from '$lib/types';
 
-	const { servers, metricsData }: {
+	const { servers, latestMetrics }: {
 		servers: ServerWithMetrics[];
-		metricsData: Record<string, Metric[]>;
+		latestMetrics: Record<string, Metric>;
 	} = $props();
 
 	let sortColumn = $state('name');
@@ -20,42 +20,16 @@
 	}
 
 	function getLastMetrics(serverId: string) {
-		const metrics = metricsData[serverId];
-		if (!metrics || metrics.length === 0) {
+		const latest = latestMetrics[serverId];
+		if (!latest) {
 			return { hasData: false, cpu: 0, memory: 0, disk: 0 };
 		}
 
-		// If only 1-2 points (real-time SSE), use the latest
-		if (metrics.length <= 2) {
-			const latest = metrics[metrics.length - 1];
-			return {
-				hasData: true,
-				cpu: latest.cpu_usage_percent || 0,
-				memory: latest.memory_total_bytes > 0 ? (latest.memory_used_bytes / latest.memory_total_bytes) * 100 : 0,
-				disk: latest.disk_total_bytes > 0 ? (latest.disk_used_bytes / latest.disk_total_bytes) * 100 : 0
-			};
-		}
-
-		// Multiple points (historical range): compute averages
-		let cpuSum = 0, memUsedSum = 0, memTotalSum = 0, diskUsedSum = 0, diskTotalSum = 0;
-		let count = 0;
-		for (const m of metrics) {
-			cpuSum += m.cpu_usage_percent || 0;
-			memUsedSum += m.memory_used_bytes || 0;
-			memTotalSum += m.memory_total_bytes || 0;
-			diskUsedSum += m.disk_used_bytes || 0;
-			diskTotalSum += m.disk_total_bytes || 0;
-			count++;
-		}
-		const avgMemTotal = memTotalSum / count;
-		const avgMemUsed = memUsedSum / count;
-		const avgDiskTotal = diskTotalSum / count;
-		const avgDiskUsed = diskUsedSum / count;
 		return {
 			hasData: true,
-			cpu: cpuSum / count,
-			memory: avgMemTotal > 0 ? (avgMemUsed / avgMemTotal) * 100 : 0,
-			disk: avgDiskTotal > 0 ? (avgDiskUsed / avgDiskTotal) * 100 : 0
+			cpu: latest.cpu_usage_percent || 0,
+			memory: latest.memory_total_bytes > 0 ? (latest.memory_used_bytes / latest.memory_total_bytes) * 100 : 0,
+			disk: latest.disk_total_bytes > 0 ? (latest.disk_used_bytes / latest.disk_total_bytes) * 100 : 0
 		};
 	}
 
@@ -182,7 +156,15 @@
 
 	<!-- Desktop: Table layout -->
 	<div class="hidden md:block overflow-x-auto">
-		<table class="w-full min-w-[1000px]">
+		<table class="w-full table-fixed">
+			<colgroup>
+				<col />
+				<col class="w-[120px]" />
+				<col class="w-[120px]" />
+				<col class="w-[120px]" />
+				<col class="w-[120px]" />
+				<col class="w-[120px]" />
+			</colgroup>
 			<thead>
 				<tr class="border-b bg-muted/30">
 					<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('name')}>
@@ -191,26 +173,26 @@
 							{@render sortIcon('name')}
 						</span>
 					</th>
-					<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('status')}>
-						<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
+					<th scope="col" class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('status')}>
+						<span class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Status
 							{@render sortIcon('status')}
 						</span>
 					</th>
-					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('cpu')}>
-						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
+					<th scope="col" class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('cpu')}>
+						<span class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							CPU
 							{@render sortIcon('cpu')}
 						</span>
 					</th>
-					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('memory')}>
-						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
+					<th scope="col" class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('memory')}>
+						<span class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Memory
 							{@render sortIcon('memory')}
 						</span>
 					</th>
-					<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('disk')}>
-						<span class="group inline-flex items-center gap-1 justify-end h-8 rounded-md px-2.5 ml-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
+					<th scope="col" class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => handleSort('disk')}>
+						<span class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 							Disk
 							{@render sortIcon('disk')}
 						</span>
@@ -242,7 +224,7 @@
 						</td>
 
 						<!-- Status -->
-						<td class="px-4 py-3.5">
+						<td class="px-4 py-3.5 text-center">
 							<span
 								class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
 							>
@@ -252,9 +234,9 @@
 						</td>
 
 						<!-- CPU -->
-						<td class="px-4 py-3.5 text-right">
+						<td class="px-4 py-3.5 text-center">
 							{#if metrics.hasData}
-								<div class="flex flex-col items-end">
+								<div class="flex flex-col items-center">
 									<span class="text-foreground">
 										{formatPercent(metrics.cpu)}
 									</span>
@@ -266,9 +248,9 @@
 						</td>
 
 						<!-- Memory -->
-						<td class="px-4 py-3.5 text-right">
+						<td class="px-4 py-3.5 text-center">
 							{#if metrics.hasData}
-								<div class="flex flex-col items-end">
+								<div class="flex flex-col items-center">
 									<span class="text-foreground">
 										{formatPercent(metrics.memory)}
 									</span>
@@ -280,9 +262,9 @@
 						</td>
 
 						<!-- Disk -->
-						<td class="px-4 py-3.5 text-right">
+						<td class="px-4 py-3.5 text-center">
 							{#if metrics.hasData}
-								<div class="flex flex-col items-end">
+								<div class="flex flex-col items-center">
 									<span class="text-foreground">
 										{formatPercent(metrics.disk)}
 									</span>

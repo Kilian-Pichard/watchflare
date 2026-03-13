@@ -6,10 +6,12 @@ import { logger } from '$lib/utils';
 import { MAX_AGGREGATED_POINTS } from '$lib/constants';
 
 interface AggregatedState {
-	// Current time range metrics
+	// Current time range metrics (for charts)
 	metrics: AggregatedMetric[];
 	// 24h metrics for trend calculation
 	metrics24h: AggregatedMetric[];
+	// Latest real-time metric (for stats cards, independent of time range)
+	latestMetric: AggregatedMetric | null;
 	// Current time range
 	timeRange: TimeRange;
 	loading: boolean;
@@ -20,6 +22,7 @@ function createAggregatedStore() {
 	const { subscribe, set, update } = writable<AggregatedState>({
 		metrics: [],
 		metrics24h: [],
+		latestMetric: null,
 		timeRange: '1h',
 		loading: false,
 		error: null
@@ -39,10 +42,13 @@ function createAggregatedStore() {
 
 		try {
 			const data = await getAggregatedMetrics(timeRange);
+			const metricsArray = data.metrics || [];
 
 			update(state => ({
 				...state,
-				metrics: data.metrics || [],
+				metrics: metricsArray,
+				// Initialize latestMetric from loaded data if not yet set
+				latestMetric: state.latestMetric || (metricsArray.length > 0 ? metricsArray[metricsArray.length - 1] : null),
 				loading: false
 			}));
 		} catch (err) {
@@ -76,32 +82,35 @@ function createAggregatedStore() {
 			let reloadTimeRange: TimeRange = '1h';
 
 			update(state => {
-				if (state.timeRange === '1h') {
+				// Always update latestMetric for real-time stats cards
+				const newState = { ...state, latestMetric: metric };
+
+				if (newState.timeRange === '1h') {
 					// 1h view: add real-time 30s points
-					let updatedMetrics = [...state.metrics, metric];
+					let updatedMetrics = [...newState.metrics, metric];
 					if (updatedMetrics.length > MAX_AGGREGATED_POINTS) {
 						updatedMetrics = updatedMetrics.slice(-MAX_AGGREGATED_POINTS);
 					}
-					return { ...state, metrics: updatedMetrics };
+					return { ...newState, metrics: updatedMetrics };
 				}
 
 				// For non-1h ranges: check if a new completed bucket exists
-				const bucket = bucketMs[state.timeRange];
-				if (bucket && !state.loading) {
+				const bucket = bucketMs[newState.timeRange];
+				if (bucket && !newState.loading) {
 					const now = Date.now();
 					// Last completed bucket end (= labels use bucket end)
 					const lastCompleteBucketEnd = Math.floor(now / bucket) * bucket;
-					const lastPoint = state.metrics[state.metrics.length - 1];
+					const lastPoint = newState.metrics[newState.metrics.length - 1];
 					const lastPointTime = lastPoint ? new Date(lastPoint.timestamp).getTime() : 0;
 
 					if (lastCompleteBucketEnd > lastPointTime) {
 						// New completed bucket available - reload from API
 						shouldReload = true;
-						reloadTimeRange = state.timeRange;
+						reloadTimeRange = newState.timeRange;
 					}
 				}
 
-				return state;
+				return newState;
 			});
 
 			if (shouldReload) {
@@ -119,6 +128,7 @@ function createAggregatedStore() {
 			set({
 				metrics: [],
 				metrics24h: [],
+				latestMetric: null,
 				timeRange: '1h',
 				loading: false,
 				error: null
@@ -199,10 +209,8 @@ function computeStats(
 export const dashboardStats = derived(
 	[aggregatedStore, serversStore],
 	([$aggregated, $servers]) => {
-		const lastPoint =
-			$aggregated.metrics.length > 0
-				? $aggregated.metrics[$aggregated.metrics.length - 1]
-				: null;
+		// Use latestMetric (real-time SSE) for stats cards, independent of time range
+		const lastPoint = $aggregated.latestMetric;
 		const firstPoint24h =
 			$aggregated.metrics24h.length > 0 ? $aggregated.metrics24h[0] : null;
 

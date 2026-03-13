@@ -319,14 +319,6 @@ export interface ToastStore {
 
 // ===== Component Props =====
 
-export interface StatsCardProps {
-	title: string;
-	value: string;
-	trend?: number;
-	trendLabel?: string;
-	icon?: string;
-}
-
 export interface ChartProps {
 	data: Metric[] | AggregatedMetric[];
 }

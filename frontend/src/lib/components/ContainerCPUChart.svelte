@@ -29,6 +29,7 @@
 		containerNames.map((name, i): uPlot.Series => ({
 			label: name,
 			stroke: CHART_COLORS[i % CHART_COLORS.length],
+			fill: CHART_COLORS[i % CHART_COLORS.length],
 			width: 2,
 			value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(1) + '%' : '—',
 		}))
@@ -39,11 +40,6 @@
 		{ values: (_u: uPlot, ticks: number[]) => ticks.map(v => v.toFixed(0) + '%') }
 	];
 
-	let hasData = $derived(pivotedData.length > 0 && containerNames.length > 0);
 </script>
 
-{#if hasData}
-	<UPlotChart data={chartData} {series} {axes} />
-{:else}
-	<div class="h-48 sm:h-64 flex items-center justify-center text-muted-foreground">No data available</div>
-{/if}
+<UPlotChart data={chartData} {series} {axes} {timeRange} />
