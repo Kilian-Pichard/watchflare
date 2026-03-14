@@ -517,6 +517,13 @@
         lastWidth = width;
         lastHeight = height;
 
+        // DEBUG: log data range vs browser clock
+        const firstTs = data[0][0];
+        const lastTs = data[0][data[0].length - 1];
+        const browserNow = Math.floor(Date.now() / 1000);
+        const rangeSeconds = timeRange ? TIME_RANGE_SECONDS[timeRange] : null;
+        console.log(`[UPlotChart] createChart: ${data[0].length} points, timeRange=${timeRange}, firstTs=${firstTs} (${new Date(firstTs * 1000).toISOString()}), lastTs=${lastTs} (${new Date(lastTs * 1000).toISOString()}), browserNow=${browserNow} (${new Date(browserNow * 1000).toISOString()}), xRange=[${rangeSeconds ? browserNow - rangeSeconds : 'auto'}, ${browserNow}], delta=${browserNow - lastTs}s`);
+
         chart = new uPlot(buildOpts(width, height), data, container);
     }
 
