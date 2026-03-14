@@ -50,8 +50,23 @@
     let mounted = $state(false);
     let rawMouseTop = 0;
 
-    // Resolve CSS variable to a Canvas-compatible hex color
+    // Module-level color cache shared across all UPlotChart instances
+    // Invalidated on theme change (class attribute mutation on <html>)
+    const colorCache = new Map<string, string>();
+    let cacheObserver: MutationObserver | null = null;
+
+    if (typeof window !== "undefined" && !cacheObserver) {
+        cacheObserver = new MutationObserver(() => colorCache.clear());
+        cacheObserver.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["class"],
+        });
+    }
+
+    // Resolve CSS variable to a Canvas-compatible hex color (cached)
     function resolveColor(color: string): string {
+        const cached = colorCache.get(color);
+        if (cached) return cached;
         const el = document.createElement("div");
         el.style.color = color;
         document.body.appendChild(el);
@@ -59,7 +74,9 @@
         document.body.removeChild(el);
         const ctx = document.createElement("canvas").getContext("2d")!;
         ctx.fillStyle = computed;
-        return ctx.fillStyle;
+        const hex = ctx.fillStyle;
+        colorCache.set(color, hex);
+        return hex;
     }
 
     function tooltipPlugin(): uPlot.Plugin {
