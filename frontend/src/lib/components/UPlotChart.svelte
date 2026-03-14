@@ -568,6 +568,7 @@
         const scalesChanged = _scales !== prevScalesKey;
         prevScalesKey = _scales;
 
+        const _prevScales = prevScalesKey;
         if (
             chart &&
             _data &&
@@ -578,7 +579,7 @@
             console.log(`[UPlotChart] setData() - ${_data[0].length} points`);
             chart.setData(_data);
         } else if (_data && _data[0].length > 0) {
-            console.log(`[UPlotChart] createChart() - ${_data[0].length} points, chart=${!!chart}, seriesMatch=${chart ? _data.length === chart.series.length : 'N/A'}, scalesChanged=${scalesChanged}, scalesKey=${_scales}, prevKey=${prevScalesKey}`);
+            console.log(`[UPlotChart] createChart() - ${_data[0].length} points, chart=${!!chart}, seriesMatch=${chart ? _data.length === chart.series.length : 'N/A'}, scalesChanged=${scalesChanged}, NEW="${_scales}", OLD="${_prevScales}"`);
             createChart();
         }
     });
