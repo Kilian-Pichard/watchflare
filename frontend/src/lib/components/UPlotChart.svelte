@@ -468,7 +468,16 @@
                 ? {
                       x: {
                           range: (): uPlot.Range.MinMax => {
-                              const now = Math.floor(Date.now() / 1000);
+                              // Use the later of browser clock and last data timestamp
+                              // to tolerate clock skew between browser and server
+                              const browserNow = Math.floor(
+                                  Date.now() / 1000,
+                              );
+                              const lastDataTs =
+                                  data?.[0]?.length > 0
+                                      ? data[0][data[0].length - 1]
+                                      : browserNow;
+                              const now = Math.max(browserNow, lastDataTs);
                               return [
                                   now - TIME_RANGE_SECONDS[timeRange!],
                                   now,
@@ -516,13 +525,6 @@
         if (width === 0 || height === 0) return;
         lastWidth = width;
         lastHeight = height;
-
-        // DEBUG: log data range vs browser clock
-        const firstTs = data[0][0];
-        const lastTs = data[0][data[0].length - 1];
-        const browserNow = Math.floor(Date.now() / 1000);
-        const rangeSeconds = timeRange ? TIME_RANGE_SECONDS[timeRange] : null;
-        console.log(`[UPlotChart] createChart: ${data[0].length} points, timeRange=${timeRange}, firstTs=${firstTs} (${new Date(firstTs * 1000).toISOString()}), lastTs=${lastTs} (${new Date(lastTs * 1000).toISOString()}), browserNow=${browserNow} (${new Date(browserNow * 1000).toISOString()}), xRange=[${rangeSeconds ? browserNow - rangeSeconds : 'auto'}, ${browserNow}], delta=${browserNow - lastTs}s`);
 
         chart = new uPlot(buildOpts(width, height), data, container);
     }
@@ -590,7 +592,12 @@
         const tickId = tickMs
             ? setInterval(() => {
                   if (!chart) return;
-                  const now = Math.floor(Date.now() / 1000);
+                  const browserNow = Math.floor(Date.now() / 1000);
+                  const lastDataTs =
+                      data?.[0]?.length > 0
+                          ? data[0][data[0].length - 1]
+                          : browserNow;
+                  const now = Math.max(browserNow, lastDataTs);
                   chart.setScale("x", [
                       now - TIME_RANGE_SECONDS[timeRange!],
                       now,
