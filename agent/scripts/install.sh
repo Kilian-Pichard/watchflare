@@ -99,22 +99,24 @@ else
     echo ""
     echo "Downloading agent from GitHub releases..."
 
-    BINARY_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${BINARY_NAME}_${PLATFORM}"
+    ARCHIVE_NAME="${BINARY_NAME}_${PLATFORM}.tar.gz"
+    ARCHIVE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${ARCHIVE_NAME}"
+    TMP_ARCHIVE="/tmp/${ARCHIVE_NAME}"
     TMP_BINARY="/tmp/${BINARY_NAME}"
 
-    # Download binary
+    # Download archive
     if command -v curl >/dev/null 2>&1; then
-        echo "  → Downloading ${BINARY_URL}"
-        if ! curl -fsSL "$BINARY_URL" -o "$TMP_BINARY"; then
-            echo -e "${RED}Error: Failed to download binary${NC}"
-            echo "URL: $BINARY_URL"
+        echo "  → Downloading ${ARCHIVE_URL}"
+        if ! curl -fsSL "$ARCHIVE_URL" -o "$TMP_ARCHIVE"; then
+            echo -e "${RED}Error: Failed to download archive${NC}"
+            echo "URL: $ARCHIVE_URL"
             exit 1
         fi
     elif command -v wget >/dev/null 2>&1; then
-        echo "  → Downloading ${BINARY_URL}"
-        if ! wget -q "$BINARY_URL" -O "$TMP_BINARY"; then
-            echo -e "${RED}Error: Failed to download binary${NC}"
-            echo "URL: $BINARY_URL"
+        echo "  → Downloading ${ARCHIVE_URL}"
+        if ! wget -q "$ARCHIVE_URL" -O "$TMP_ARCHIVE"; then
+            echo -e "${RED}Error: Failed to download archive${NC}"
+            echo "URL: $ARCHIVE_URL"
             exit 1
         fi
     else
@@ -123,9 +125,11 @@ else
         exit 1
     fi
 
-    # Make executable
+    # Extract binary
+    tar xzf "$TMP_ARCHIVE" -C /tmp
+    rm -f "$TMP_ARCHIVE"
     chmod +x "$TMP_BINARY"
-    echo -e "  → ${GREEN}Downloaded successfully${NC}"
+    echo -e "  → ${GREEN}Downloaded and extracted successfully${NC}"
 fi
 
 # Step 3: Run installation
