@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.26.2
+**Current version**: 0.26.3
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.26.3` - Add live metrics stats pills on server detail page (CPU, Memory, Disk, Network, Uptime), updated via SSE independently of time range
 - `0.26.2` - Add container metrics continuous aggregates (10min, 15min, 2h, 8h buckets) matching system metrics pattern, backend queries aggregated views for 12h/24h/7d/30d (~90 points vs ~11600 raw), remove debug logs
 - `0.26.1` - Fix charts invisible when browser/server clocks differ (anchor x-axis to max of browser and data timestamps), cache resolveColor() across chart instances, optimize time range switching (setData instead of destroy/recreate, dynamic gap threshold, tick interval in $effect)
 - `0.26.0` - Chart polish: wall-clock x-axis (anchored to Date.now, auto-tick per time range), native gap detection via series.gaps (no synthetic nulls), isolated point dots, custom cursor overlay (dashed line + hover dots aligned via valToPos), area fill on all 10 charts, date labels for 7d/30d views, cleanup unused hasData variables

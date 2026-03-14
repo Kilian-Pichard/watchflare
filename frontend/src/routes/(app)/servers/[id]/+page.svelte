@@ -10,6 +10,7 @@
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
     import Modal from "$lib/components/Modal.svelte";
     import ServerDetailHeader from "$lib/components/server/ServerDetailHeader.svelte";
+    import ServerLiveStats from "$lib/components/server/ServerLiveStats.svelte";
     import ServerAlerts from "$lib/components/server/ServerAlerts.svelte";
     import ServerMetricsCharts from "$lib/components/server/ServerMetricsCharts.svelte";
     import InstallInstructions from "$lib/components/InstallInstructions.svelte";
@@ -29,6 +30,7 @@
     let packageStats: PackageStats | null = $state(null);
     let metrics: Metric[] = $state([]);
     let containerMetrics: ContainerMetric[] = $state([]);
+    let latestMetric: Metric | null = $state(null);
     let timeRange: TimeRange = $state("1h");
     let sseUnsubscribe: (() => void) | null = null;
 
@@ -57,6 +59,7 @@
         if (event.type === "metrics_update") {
             const metric = event.data;
             if (server && metric.server_id === server.id) {
+                latestMetric = metric;
                 metrics = [...metrics, metric];
                 if (metrics.length > MAX_METRICS_POINTS_DETAIL) {
                     metrics = metrics.slice(-MAX_METRICS_POINTS_DETAIL);
@@ -119,6 +122,9 @@
                 time_range: timeRange,
             });
             metrics = data.metrics || [];
+            if (!latestMetric && metrics.length > 0) {
+                latestMetric = metrics[metrics.length - 1];
+            }
         } catch (err) {
             logger.error("Failed to load metrics:", err);
         }
@@ -298,6 +304,10 @@
         onPause={handlePause}
         onResume={handleResume}
     />
+
+    {#if server.status !== 'pending'}
+        <ServerLiveStats metric={latestMetric} />
+    {/if}
 
     {#if regeneratedToken}
         <div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 flex items-center justify-between gap-4 flex-wrap">
