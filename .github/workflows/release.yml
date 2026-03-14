@@ -91,6 +91,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: watchflare-agent_*
           merge-multiple: true
 
       - name: Generate checksums
