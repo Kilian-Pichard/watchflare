@@ -94,7 +94,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ARCHIVE="watchflare_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
-          cp -r frontend/build backend/frontend/dist
+          mkdir -p backend/frontend/dist
+          cp -r frontend/build/* backend/frontend/dist/
           cd backend
           go build -tags embed_frontend -ldflags="-s -w" -o watchflare
           tar czf ../${ARCHIVE} watchflare
