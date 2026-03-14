@@ -126,7 +126,7 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 }
 
 // GetContainerMetrics retrieves container metrics for a server within a time range
-func GetContainerMetrics(serverID string, start, end time.Time) ([]models.ContainerMetric, error) {
+func GetContainerMetrics(serverID string, start, end time.Time, interval string) ([]models.ContainerMetric, error) {
 	// Verify server exists
 	var server models.Server
 	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
@@ -136,11 +136,43 @@ func GetContainerMetrics(serverID string, start, end time.Time) ([]models.Contai
 		return nil, err
 	}
 
+	// Raw data for 1h view
+	if interval == "" {
+		var metrics []models.ContainerMetric
+		if err := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
+			serverID, start, end).
+			Order("timestamp ASC").
+			Find(&metrics).Error; err != nil {
+			return nil, err
+		}
+		return metrics, nil
+	}
+
+	// Use continuous aggregates for longer time ranges
+	tableName, err := getContainerAggregateTable(interval)
+	if err != nil {
+		return nil, err
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			bucket AS timestamp,
+			server_id,
+			container_id,
+			container_name,
+			cpu_percent,
+			CAST(memory_used_bytes AS BIGINT) AS memory_used_bytes,
+			CAST(memory_limit_bytes AS BIGINT) AS memory_limit_bytes,
+			CAST(network_rx_bytes_per_sec AS BIGINT) AS network_rx_bytes_per_sec,
+			CAST(network_tx_bytes_per_sec AS BIGINT) AS network_tx_bytes_per_sec
+		FROM %s
+		WHERE server_id = $1 AND bucket >= $2 AND bucket <= $3
+		ORDER BY bucket ASC, container_name ASC
+	`, tableName)
+
 	var metrics []models.ContainerMetric
-	if err := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
-		serverID, start, end).
-		Order("timestamp ASC").
-		Find(&metrics).Error; err != nil {
+	if err := database.DB.Raw(query, serverID, start, end).
+		Scan(&metrics).Error; err != nil {
 		return nil, err
 	}
 
@@ -149,12 +181,28 @@ func GetContainerMetrics(serverID string, start, end time.Time) ([]models.Contai
 
 // getContinuousAggregateTable returns the appropriate continuous aggregate table for the given interval
 func getContinuousAggregateTable(interval string) (string, error) {
-	// Map intervals to their continuous aggregate views
 	aggregateTables := map[string]string{
 		"10m": "metrics_10min", // Vue 12h
 		"15m": "metrics_15min", // Vue 24h
 		"2h":  "metrics_2h",    // Vue 7j
 		"8h":  "metrics_8h",    // Vue 30j
+	}
+
+	tableName, ok := aggregateTables[interval]
+	if !ok {
+		return "", fmt.Errorf("invalid interval: %s. Valid intervals: 10m, 15m, 2h, 8h", interval)
+	}
+
+	return tableName, nil
+}
+
+// getContainerAggregateTable returns the appropriate container continuous aggregate table
+func getContainerAggregateTable(interval string) (string, error) {
+	aggregateTables := map[string]string{
+		"10m": "container_metrics_10min",
+		"15m": "container_metrics_15min",
+		"2h":  "container_metrics_2h",
+		"8h":  "container_metrics_8h",
 	}
 
 	tableName, ok := aggregateTables[interval]

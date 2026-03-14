@@ -112,24 +112,30 @@ func GetContainerMetrics(c *gin.Context) {
 
 	end := time.Now()
 	var start time.Time
+	var interval string
 
 	switch timeRange {
 	case "1h":
 		start = end.Add(-1 * time.Hour)
+		interval = "" // Raw data
 	case "12h":
 		start = end.Add(-12 * time.Hour)
+		interval = "10m"
 	case "24h":
 		start = end.Add(-24 * time.Hour)
+		interval = "15m"
 	case "7d":
 		start = end.Add(-7 * 24 * time.Hour)
+		interval = "2h"
 	case "30d":
 		start = end.Add(-30 * 24 * time.Hour)
+		interval = "8h"
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time_range. Valid values: 1h, 12h, 24h, 7d, 30d"})
 		return
 	}
 
-	metrics, err := services.GetContainerMetrics(serverID, start, end)
+	metrics, err := services.GetContainerMetrics(serverID, start, end, interval)
 	if err != nil {
 		if err.Error() == "server not found" {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

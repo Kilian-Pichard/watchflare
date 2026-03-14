@@ -32,6 +32,9 @@ var newMetricsSQL string
 //go:embed migrations/007_container_metrics.sql
 var containerMetricsSQL string
 
+//go:embed migrations/008_container_continuous_aggregates.sql
+var containerContinuousAggregatesSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -168,6 +171,11 @@ func Connect() error {
 		log.Printf("Warning: Failed to run container metrics migration: %v", err)
 	}
 
+	// Run container continuous aggregates migration
+	if err := RunContainerContinuousAggregatesMigration(); err != nil {
+		log.Printf("Warning: Failed to run container continuous aggregates migration: %v", err)
+	}
+
 	return nil
 }
 
@@ -287,6 +295,20 @@ func RunContainerMetricsMigration() error {
 		return err
 	}
 	log.Println("✓ Container metrics migration completed successfully")
+	return nil
+}
+
+// RunContainerContinuousAggregatesMigration runs the container continuous aggregates migration
+func RunContainerContinuousAggregatesMigration() error {
+	log.Println("Running container continuous aggregates migration...")
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
+	}
+	if err := execStatementsOutsideTx(sqlDB, containerContinuousAggregatesSQL); err != nil {
+		return err
+	}
+	log.Println("✓ Container continuous aggregates migration completed successfully")
 	return nil
 }
 
