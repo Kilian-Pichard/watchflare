@@ -18,6 +18,8 @@ RUN cd backend && CGO_ENABLED=0 go build -tags embed_frontend -o watchflare-back
 
 # Stage 3: Runtime
 FROM alpine:3.21
+LABEL org.opencontainers.image.source="https://github.com/Kilian-Pichard/watchflare"
+LABEL org.opencontainers.image.description="Watchflare Server Monitoring"
 RUN apk add --no-cache ca-certificates
 COPY --from=backend-builder /app/backend/watchflare-backend /usr/local/bin/watchflare-backend
 RUN mkdir -p /var/lib/watchflare/pki

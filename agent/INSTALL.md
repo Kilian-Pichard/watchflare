@@ -278,5 +278,5 @@ Supported package managers on macOS:
 ### Support
 
 For issues or questions:
-- GitHub Issues: https://github.com/yourusername/watchflare
+- GitHub Issues: https://github.com/Kilian-Pichard/watchflare
 - Documentation: https://watchflare.example.com/docs

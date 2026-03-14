@@ -117,7 +117,7 @@ func printHelp() {
 }
 
 // Version is set at build time via ldflags: -X 'main.Version=...'
-var Version = "0.26.3"
+var Version = "0.27.0"
 
 func printVersion() {
 	fmt.Printf("Watchflare Agent v%s\n", Version)

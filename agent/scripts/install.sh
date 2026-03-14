@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-GITHUB_REPO="tonorg/watchflare"
+GITHUB_REPO="Kilian-Pichard/watchflare"
 BINARY_NAME="watchflare-agent"
 
 # Check if --local flag is present

@@ -75,7 +75,7 @@ On the machine you want to monitor, download and install the agent.
 
 ```bash
 # Download the agent binary
-curl -L https://github.com/youruser/watchflare/releases/latest/download/watchflare-agent-linux-amd64 \
+curl -L https://github.com/Kilian-Pichard/watchflare/releases/latest/download/watchflare-agent-linux-amd64 \
   -o watchflare-agent
 chmod +x watchflare-agent
 
@@ -90,7 +90,7 @@ sudo ./install-linux.sh \
 
 ```bash
 # Download the agent binary
-curl -L https://github.com/youruser/watchflare/releases/latest/download/watchflare-agent-darwin-arm64 \
+curl -L https://github.com/Kilian-Pichard/watchflare/releases/latest/download/watchflare-agent-darwin-arm64 \
   -o watchflare-agent
 chmod +x watchflare-agent
 
