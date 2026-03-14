@@ -1,0 +1,22 @@
+# Go builds
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Compiled binaries
+watchflare
+watchflare-agent
+
+# Test coverage
+*.out
+coverage.txt
+
+# Temporary files
+/tmp/
+/temp/
+
+# Build artifacts
+/dist/

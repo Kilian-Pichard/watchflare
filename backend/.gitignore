@@ -1,0 +1,29 @@
+# Go builds
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+backend
+watchflare-backend
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime data (PKI certificates, etc.)
+data/
+
+# Temporary files
+/tmp/
+/temp/
+
+# Test coverage
+*.out
+coverage.txt
+tests_report.txt
+
+# Test files
+test_grpc_client.go

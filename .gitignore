@@ -1,0 +1,52 @@
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+.svelte-kit/
+*.exe
+*.out
+
+# Go binaries
+watchflare-agent*
+!watchflare-agent.service
+watchflare-backend*
+*_linux
+test_env_*
+
+# Test artifacts
+coverage.out
+
+# Logs
+*.log
+logs/
+
+# TLS Certificates
+certs/
+*.pem
+*.crt
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+tmp/
+temp/

@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Watchflare Design System - Light Theme */
+  --radius: 0.5rem; /* More minimal */
+
+  /* Base colors - Cream background */
+  --background: oklch(0.98 0.005 85); /* #FAFAF9 cream */
+  --foreground: oklch(0.2 0.01 120); /* Almost black with hint of green */
+
+  /* Card colors */
+  --card: oklch(1 0 0); /* Pure white cards on cream bg */
+  --card-foreground: oklch(0.2 0.01 120);
+
+  /* Popover colors */
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.01 120);
+
+  /* Primary - Military Green (#3A5235) */
+  --primary: oklch(0.35 0.08 145);
+  --primary-foreground: oklch(1 0 0);
+
+  /* Secondary */
+  --secondary: oklch(0.96 0.005 145);
+  --secondary-foreground: oklch(0.2 0.01 120);
+
+  /* Muted - Subtle gray with green tint */
+  --muted: oklch(0.95 0.003 145);
+  --muted-foreground: oklch(0.5 0.01 145);
+
+  /* Accent - Light military green */
+  --accent: oklch(0.94 0.02 145);
+  --accent-foreground: oklch(0.2 0.01 120);
+
+  /* Destructive - Red */
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(1 0 0);
+
+  /* Borders & Input - Subtle */
+  --border: oklch(0.9 0.005 145);
+  --input: oklch(0.9 0.005 145);
+  --ring: oklch(0.35 0.08 145);
+
+  /* Monitoring Status Colors */
+  --success: oklch(0.5 0.12 145); /* Military green - 0-70% */
+  --warning: oklch(0.65 0.15 60); /* Muted orange - 70-90% */
+  --danger: oklch(0.55 0.22 27); /* Muted red - >90% */
+
+  /* Chart Colors - Earthy, minimal palette */
+  --chart-1: oklch(0.35 0.08 145); /* Military green - CPU */
+  --chart-2: oklch(0.5 0.12 175); /* Teal - Memory */
+  --chart-3: oklch(0.45 0.10 120); /* Forest green - Disk */
+  --chart-4: oklch(0.6 0.12 90); /* Olive - Load */
+  --chart-5: oklch(0.55 0.08 200); /* Slate blue - Network */
+
+  /* Surface - Elevated surfaces (sidebar, header, inputs, selects) */
+  --surface: oklch(1 0 0); /* Pure white */
+  --surface-foreground: oklch(0.2 0.01 120);
+  --surface-primary: oklch(0.35 0.08 145); /* Military green */
+  --surface-primary-foreground: oklch(1 0 0);
+  --surface-accent: oklch(0.96 0.005 145);
+  --surface-accent-foreground: oklch(0.2 0.01 120);
+  --surface-border: oklch(0.9 0.005 145);
+  --surface-ring: oklch(0.35 0.08 145);
+}
+
+.dark {
+  --background: oklch(0.13 0.028 261.692);
+  --foreground: oklch(0.985 0.002 247.839);
+  --card: oklch(0.21 0.034 264.665);
+  --card-foreground: oklch(0.985 0.002 247.839);
+  --popover: oklch(0.21 0.034 264.665);
+  --popover-foreground: oklch(0.985 0.002 247.839);
+  --primary: oklch(0.928 0.006 264.531);
+  --primary-foreground: oklch(0.21 0.034 264.665);
+  --secondary: oklch(0.278 0.033 256.848);
+  --secondary-foreground: oklch(0.985 0.002 247.839);
+  --muted: oklch(0.278 0.033 256.848);
+  --muted-foreground: oklch(0.707 0.022 261.325);
+  --accent: oklch(0.278 0.033 256.848);
+  --accent-foreground: oklch(0.985 0.002 247.839);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --surface: oklch(0.21 0.034 264.665);
+  --surface-foreground: oklch(0.985 0.002 247.839);
+  --surface-primary: oklch(0.488 0.243 264.376);
+  --surface-primary-foreground: oklch(0.985 0.002 247.839);
+  --surface-accent: oklch(0.278 0.033 256.848);
+  --surface-accent-foreground: oklch(0.985 0.002 247.839);
+  --surface-border: oklch(1 0 0 / 10%);
+  --surface-ring: oklch(0.551 0.027 264.364);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-surface-primary: var(--surface-primary);
+  --color-surface-primary-foreground: var(--surface-primary-foreground);
+  --color-surface-accent: var(--surface-accent);
+  --color-surface-accent-foreground: var(--surface-accent-foreground);
+  --color-surface-border: var(--surface-border);
+  --color-surface-ring: var(--surface-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button, select, [role="button"] {
+    cursor: pointer;
+  }
+  main > * {
+    max-width: 1440px;
+    margin-inline: auto;
+  }
+}

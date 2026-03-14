@@ -1,1 +1,88 @@
 # Watchflare
+
+Self-hosted server monitoring with real-time dashboards. Lightweight agents report metrics over gRPC/TLS to a central backend, served as a single binary with an embedded web UI.
+
+## Features
+
+- **Real-time monitoring** — CPU, memory, disk, network, and swap via SSE streaming
+- **Lightweight agents** — Single binary, ~10MB, runs as a system service (Linux/macOS)
+- **Secure by default** — TLS 1.3 (auto-generated PKI), HMAC-signed RPCs, JWT authentication
+- **Package inventory** — Tracks installed packages across 28 package managers with daily delta detection
+- **Write-ahead log** — Agents buffer metrics locally when the backend is unreachable
+- **Single binary** — Frontend embedded in the Go backend via `go:embed`
+- **TimescaleDB** — Automatic partitioning, compression, continuous aggregates, 30-day retention
+
+## Architecture
+
+```
+Agents (Linux/macOS)
+  │
+  │ gRPC + mTLS 1.3 + HMAC
+  ▼
+Backend (Go)
+  │
+  ├── HTTP API + Embedded Frontend
+  ├── SSE (real-time updates)
+  └── TimescaleDB (metrics storage)
+        │
+        ▼
+  Web Dashboard (SvelteKit)
+```
+
+## Quick Start
+
+### Docker Compose (recommended)
+
+```bash
+git clone <your-repo-url>
+cd watchflare
+
+# Configure environment
+cp .env.example .env
+# Edit .env: set POSTGRES_PASSWORD and JWT_SECRET
+
+# Start
+docker compose -f docker-compose.prod.yml up -d
+
+# Open http://localhost:8080 and create your admin account
+```
+
+See [docs/install.md](docs/install.md) for the full installation guide including agent setup and reverse proxy configuration.
+
+### Development
+
+```bash
+# Start database
+docker compose up -d
+
+# Backend (terminal 1)
+cd backend
+cp .env.example .env
+go run .
+
+# Frontend (terminal 2)
+cd frontend
+npm install
+npm run dev
+```
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Backend | Go, Gin, gRPC, GORM |
+| Frontend | SvelteKit 5, Tailwind CSS, LayerChart |
+| Database | PostgreSQL + TimescaleDB |
+| Agent | Go, gopsutil |
+| Security | TLS 1.3, HMAC-SHA256, JWT, bcrypt |
+
+## Documentation
+
+- [Installation Guide](docs/install.md) — Production deployment with Docker
+- [Architecture](docs/architecture.md) — System design and data flows
+- [Security](docs/security.md) — TLS, HMAC, JWT, key management
+- [Internals](docs/internals.md) — Detailed component breakdown
+
+## License
+
+MIT

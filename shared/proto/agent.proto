@@ -1,0 +1,200 @@
+syntax = "proto3";
+
+package agent;
+
+option go_package = "watchflare/shared/proto";
+
+// AgentService handles agent registration and heartbeats
+service AgentService {
+  // RegisterServer is called when an agent first connects
+  rpc RegisterServer(RegisterRequest) returns (RegisterResponse);
+
+  // Heartbeat is called every 5 seconds by the agent
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // SendMetrics sends system metrics to the backend
+  rpc SendMetrics(MetricsRequest) returns (MetricsResponse);
+
+  // ReportDroppedMetrics reports metrics that were dropped after max retries
+  rpc ReportDroppedMetrics(DroppedMetricsReport) returns (DroppedMetricsResponse);
+
+  // SendPackageInventory sends package inventory to the backend
+  rpc SendPackageInventory(PackageInventoryRequest) returns (PackageInventoryResponse);
+}
+
+// RegisterRequest contains information sent during initial registration
+message RegisterRequest {
+  string registration_token = 1;   // The registration token from CreateAgent
+  string hostname = 2;
+  string ip_address_v4 = 3;
+  string ip_address_v6 = 4;
+  string platform = 5;              // "macOS", "Linux", "Windows"
+  string platform_version = 6;      // "15.6.1", "22.04.3"
+  string platform_family = 7;       // "darwin", "linux", "windows"
+  string architecture = 8;          // "arm64", "amd64"
+  string kernel = 9;                // "24.6.0", "5.15.0-97-generic"
+  int64 timestamp = 10;             // Unix timestamp in seconds (for anti-replay)
+
+  // Environment detection (added for smart metrics collection)
+  string environment_type = 11;     // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
+  string hypervisor = 12;           // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
+  string container_runtime = 13;    // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
+
+  // Existing agent UUID (for re-registration without creating new agent)
+  // If provided and exists in DB, the agent will be reactivated instead of creating a new one
+  string existing_agent_uuid = 14;  // UUID from /var/lib/watchflare/agent.uuid (empty if first registration)
+}
+
+// RegisterResponse is sent back after successful registration
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+  string agent_id = 3;      // UUID of the server
+  string agent_key = 4;     // Key for authenticating future requests
+  string ca_cert = 5;       // CA certificate in PEM format for TLS verification
+  string server_name = 6;   // Server name for TLS SNI verification (e.g., "watchflare-backend")
+  bool reactivated = 7;     // True if existing agent was reactivated (UUID reused), false if new registration
+}
+
+// HeartbeatRequest contains info sent with each heartbeat
+message HeartbeatRequest {
+  string agent_id = 1;      // UUID of the server
+  string agent_key = 2;     // Authentication key
+  string ip_address_v4 = 3; // Current IPv4 (may change)
+  string ip_address_v6 = 4; // Current IPv6 (may change)
+  int64 timestamp = 5;      // Unix timestamp in seconds (for anti-replay)
+}
+
+// HeartbeatResponse acknowledges the heartbeat
+message HeartbeatResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Metrics contains system performance data
+message Metrics {
+  double cpu_usage_percent = 1;
+  uint64 memory_total_bytes = 2;
+  uint64 memory_used_bytes = 3;
+  uint64 memory_available_bytes = 4;
+  double load_avg_1min = 5;
+  double load_avg_5min = 6;
+  double load_avg_15min = 7;
+  uint64 disk_total_bytes = 8;
+  uint64 disk_used_bytes = 9;
+  uint64 uptime_seconds = 10;
+  int64 timestamp = 11;  // Unix timestamp
+
+  // Disk I/O metrics (bytes per second, computed from delta)
+  uint64 disk_read_bytes_per_sec = 12;
+  uint64 disk_write_bytes_per_sec = 13;
+
+  // Network metrics (bytes per second, computed from delta)
+  uint64 network_rx_bytes_per_sec = 14;
+  uint64 network_tx_bytes_per_sec = 15;
+
+  // Temperature (physical servers only, 0 if unavailable)
+  double cpu_temperature_celsius = 16;
+}
+
+// ContainerMetric contains per-container performance data
+message ContainerMetric {
+  string container_id = 1;
+  string container_name = 2;
+  string image = 3;
+  double cpu_percent = 4;
+  uint64 memory_used_bytes = 5;
+  uint64 memory_limit_bytes = 6;
+  uint64 network_rx_bytes_per_sec = 7;
+  uint64 network_tx_bytes_per_sec = 8;
+}
+
+// MetricsRequest contains authentication and metrics data
+message MetricsRequest {
+  string agent_id = 1;   // UUID of the server
+  string agent_key = 2;  // Authentication key
+  Metrics metrics = 3;   // System metrics
+  int64 timestamp = 4;   // Unix timestamp in seconds (for anti-replay)
+  repeated ContainerMetric container_metrics = 5;  // Per-container metrics (empty if no containers)
+}
+
+// MetricsResponse acknowledges metric reception
+message MetricsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// BufferedMetric represents a metric stored in the WAL buffer
+// This message is used for disk serialization, NOT for gRPC transport
+message BufferedMetric {
+  string agent_id = 1;      // UUID of the agent
+  string agent_key = 2;     // Authentication key
+  Metrics metrics = 3;      // System metrics
+  int64 collected_at = 4;   // Unix timestamp when metric was collected
+  uint32 retry_count = 5;   // Number of retry attempts (0 = first attempt)
+}
+
+// DroppedMetricsReport contains information about metrics that were dropped
+message DroppedMetricsReport {
+  string agent_id = 1;       // UUID of the agent
+  string agent_key = 2;      // Authentication key
+  int64 timestamp = 3;       // Unix timestamp when report was sent
+  int32 count = 4;           // Number of metrics dropped
+  int64 first_dropped_at = 5; // Timestamp of first dropped metric
+  int64 last_dropped_at = 6;  // Timestamp of last dropped metric
+  string reason = 7;          // Reason for dropping (e.g., "max_retries_exceeded")
+}
+
+// DroppedMetricsResponse acknowledges the dropped metrics report
+message DroppedMetricsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// =====================================================
+// Package Inventory Messages
+// =====================================================
+
+// Package represents a single installed package
+message Package {
+  string name = 1;                   // Package name (e.g., "nginx", "postgresql-15")
+  string version = 2;                // Version string (e.g., "1.24.0-1", "15.4-1")
+  string architecture = 3;           // Architecture (e.g., "amd64", "arm64", "all")
+  string package_manager = 4;        // Package manager type (e.g., "dpkg", "rpm", "brew")
+  string source = 5;                 // Repository or source URL
+  int64 installed_at = 6;            // Unix timestamp of installation (0 if unknown)
+  int64 package_size = 7;            // Package size in bytes
+  string description = 8;            // Short description (max 100 chars)
+}
+
+// PackageInventoryRequest sends package inventory (delta or full) to backend
+message PackageInventoryRequest {
+  string agent_id = 1;               // UUID of the server
+  string agent_key = 2;              // Authentication key
+  int64 timestamp = 3;               // Request timestamp (for anti-replay)
+
+  // Inventory type: "delta" or "full"
+  // - "delta": Only sends changes (added/removed/updated)
+  // - "full": Sends complete package list (used on first run or if state corrupted)
+  string inventory_type = 4;
+
+  // Delta inventory (only populated if inventory_type = "delta")
+  repeated Package added_packages = 5;    // Newly installed packages
+  repeated Package removed_packages = 6;  // Uninstalled packages
+  repeated Package updated_packages = 7;  // Packages with version changes
+
+  // Full inventory (only populated if inventory_type = "full")
+  repeated Package all_packages = 8;      // Complete package list
+
+  // Collection metadata
+  int64 collection_duration_ms = 9;  // Time taken to collect packages (milliseconds)
+  int32 total_package_count = 10;    // Total number of packages on system
+}
+
+// PackageInventoryResponse acknowledges inventory reception
+message PackageInventoryResponse {
+  bool success = 1;
+  string message = 2;
+  int32 packages_processed = 3;      // Number of packages processed
+  int32 changes_detected = 4;        // Number of changes detected (added+removed+updated)
+}
