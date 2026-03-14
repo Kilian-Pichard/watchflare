@@ -99,8 +99,16 @@ else
     echo ""
     echo "Downloading agent from GitHub releases..."
 
-    ARCHIVE_NAME="${BINARY_NAME}_${PLATFORM}.tar.gz"
-    ARCHIVE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${ARCHIVE_NAME}"
+    # Get latest version tag
+    VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
+    if [ -z "$VERSION" ]; then
+        echo -e "${RED}Error: Failed to detect latest version${NC}"
+        exit 1
+    fi
+    echo -e "  → Latest version: ${YELLOW}${VERSION}${NC}"
+
+    ARCHIVE_NAME="${BINARY_NAME}_${VERSION}_${PLATFORM}.tar.gz"
+    ARCHIVE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/${ARCHIVE_NAME}"
     TMP_ARCHIVE="/tmp/${ARCHIVE_NAME}"
     TMP_BINARY="/tmp/${BINARY_NAME}"
 

@@ -42,14 +42,68 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="watchflare-agent_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
           cd agent
           go build -ldflags="-X 'main.Version=${VERSION}'" -o watchflare-agent
-          tar czf ../watchflare-agent_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz watchflare-agent
+          tar czf ../${ARCHIVE} watchflare-agent
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: watchflare-agent_${{ matrix.goos }}_${{ matrix.goarch }}
-          path: watchflare-agent_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}
+
+  build-app:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Build and package app
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="watchflare_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
+          cp -r frontend/build backend/frontend/dist
+          cd backend
+          go build -tags embed_frontend -ldflags="-s -w" -o watchflare
+          tar czf ../${ARCHIVE} watchflare
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}
 
   build-docker:
     runs-on: ubuntu-latest
@@ -85,13 +139,13 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: [build-agent, build-docker]
+    needs: [build-agent, build-app, build-docker]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: watchflare-agent_*
+          pattern: watchflare*_*.tar.gz
           merge-multiple: true
 
       - name: Generate checksums
