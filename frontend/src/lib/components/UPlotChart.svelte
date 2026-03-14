@@ -575,8 +575,10 @@
             _data.length === chart.series.length &&
             !scalesChanged
         ) {
+            console.log(`[UPlotChart] setData() - ${_data[0].length} points`);
             chart.setData(_data);
         } else if (_data && _data[0].length > 0) {
+            console.log(`[UPlotChart] createChart() - ${_data[0].length} points, chart=${!!chart}, seriesMatch=${chart ? _data.length === chart.series.length : 'N/A'}, scalesChanged=${scalesChanged}, scalesKey=${_scales}, prevKey=${prevScalesKey}`);
             createChart();
         }
     });
