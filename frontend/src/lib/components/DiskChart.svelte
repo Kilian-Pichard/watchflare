@@ -6,10 +6,6 @@
 
 	let { data = [], timeRange }: { data: Metric[]; timeRange?: TimeRange } = $props();
 
-	let maxDisk = $derived(
-		data.length > 0 ? Math.max(...data.map((d) => d.disk_total_bytes)) : 0
-	);
-
 	let chartData = $derived.by(() => {
 		if (data.length === 0) return [[], []] as uPlot.AlignedData;
 		const timestamps: number[] = [];
@@ -28,9 +24,14 @@
 		return Math.round(max / unit) * unit;
 	}
 
-	let scales = $derived({
-		y: { range: [0, roundBytes(maxDisk)] as uPlot.Range.MinMax }
-	} as uPlot.Scales);
+	const scales: uPlot.Scales = {
+		y: {
+			range: () => {
+				const max = data.length > 0 ? Math.max(...data.map((d) => d.disk_total_bytes)) : 0;
+				return [0, max > 0 ? roundBytes(max) : 1] as uPlot.Range.MinMax;
+			}
+		}
+	};
 
 	const series: uPlot.Series[] = [
 		{
