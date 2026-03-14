@@ -361,40 +361,37 @@
         };
     }
 
-    // Native uPlot gaps function: break lines where timestamp gap exceeds threshold
-    function makeGaps(threshold: number) {
-        return (
-            u: uPlot,
-            seriesIdx: number,
-            idx0: number,
-            idx1: number,
-            nullGaps: number[][],
-        ) => {
-            const gaps: number[][] = [...nullGaps];
-            const timestamps = u.data[0];
-            const vals = u.data[seriesIdx];
+    // Native uPlot gaps function: reads timeRange reactively at each call
+    const gapsFn = (
+        u: uPlot,
+        seriesIdx: number,
+        idx0: number,
+        idx1: number,
+        nullGaps: number[][],
+    ) => {
+        const threshold = timeRange ? GAP_THRESHOLDS[timeRange] : null;
+        if (!threshold) return nullGaps;
+        const gaps: number[][] = [...nullGaps];
+        const timestamps = u.data[0];
+        const vals = u.data[seriesIdx];
 
-            for (let i = idx0 + 1; i <= idx1; i++) {
-                if (vals[i] == null || vals[i - 1] == null) continue;
-                if (timestamps[i] - timestamps[i - 1] > threshold) {
-                    const leftPx = Math.round(
-                        u.valToPos(timestamps[i - 1], "x", true),
-                    );
-                    const rightPx = Math.round(
-                        u.valToPos(timestamps[i], "x", true),
-                    );
-                    gaps.push([leftPx, rightPx]);
-                }
+        for (let i = idx0 + 1; i <= idx1; i++) {
+            if (vals[i] == null || vals[i - 1] == null) continue;
+            if (timestamps[i] - timestamps[i - 1] > threshold) {
+                const leftPx = Math.round(
+                    u.valToPos(timestamps[i - 1], "x", true),
+                );
+                const rightPx = Math.round(
+                    u.valToPos(timestamps[i], "x", true),
+                );
+                gaps.push([leftPx, rightPx]);
             }
+        }
 
-            return gaps;
-        };
-    }
+        return gaps;
+    };
 
     function buildOpts(width: number, chartHeight: number): uPlot.Options {
-        const threshold = timeRange ? GAP_THRESHOLDS[timeRange] : null;
-        const gapsFn = threshold ? makeGaps(threshold) : undefined;
-
         const resolvedSeries: uPlot.Series[] = series.map((s) => {
             const resolved: uPlot.Series = { ...s };
             if (s.stroke) resolved.stroke = resolveColor(s.stroke as string);
@@ -405,7 +402,7 @@
                 const b = parseInt(hex.slice(5, 7), 16);
                 resolved.fill = `rgba(${r},${g},${b},0.2)`;
             }
-            if (gapsFn) resolved.gaps = gapsFn;
+            resolved.gaps = gapsFn;
             return resolved;
         });
 
@@ -556,8 +553,8 @@
     // Track series identity for recreation
     let seriesKey = $derived(series.map((s) => s.label).join(","));
 
-    // Track scales + timeRange for recreation when range changes
-    let scalesKey = $derived(JSON.stringify(scales || {}) + (timeRange || ""));
+    // Track scales for recreation (timeRange excluded: handled via setData + reactive range fn)
+    let scalesKey = $derived(JSON.stringify(scales || {}));
     let prevScalesKey = "";
 
     // When data, series, or scales change, update or recreate the chart
@@ -584,6 +581,27 @@
         }
     });
 
+    // Tick the x-axis forward on a wall-clock timer (re-creates interval when timeRange changes)
+    $effect(() => {
+        if (!chart || !timeRange) return;
+        const tickMs = TICK_INTERVALS[timeRange];
+        if (!tickMs) return;
+        const id = setInterval(() => {
+            if (!chart) return;
+            const browserNow = Math.floor(Date.now() / 1000);
+            const lastDataTs =
+                data?.[0]?.length > 0
+                    ? data[0][data[0].length - 1]
+                    : browserNow;
+            const now = Math.max(browserNow, lastDataTs);
+            chart.setScale("x", [
+                now - TIME_RANGE_SECONDS[timeRange!],
+                now,
+            ]);
+        }, tickMs);
+        return () => clearInterval(id);
+    });
+
     onMount(() => {
         mounted = true;
         createChart();
@@ -604,24 +622,6 @@
         }
         window.addEventListener("resize", onResize);
 
-        // Tick the x-axis forward on a wall-clock timer
-        const tickMs = timeRange ? TICK_INTERVALS[timeRange] : null;
-        const tickId = tickMs
-            ? setInterval(() => {
-                  if (!chart) return;
-                  const browserNow = Math.floor(Date.now() / 1000);
-                  const lastDataTs =
-                      data?.[0]?.length > 0
-                          ? data[0][data[0].length - 1]
-                          : browserNow;
-                  const now = Math.max(browserNow, lastDataTs);
-                  chart.setScale("x", [
-                      now - TIME_RANGE_SECONDS[timeRange!],
-                      now,
-                  ]);
-              }, tickMs)
-            : null;
-
         // Recreate chart on theme change (colors are baked into canvas)
         const themeObserver = new MutationObserver(() => {
             createChart();
@@ -633,7 +633,6 @@
 
         return () => {
             window.removeEventListener("resize", onResize);
-            if (tickId) clearInterval(tickId);
             themeObserver.disconnect();
         };
     });
