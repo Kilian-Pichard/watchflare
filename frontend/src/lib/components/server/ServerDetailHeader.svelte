@@ -1,155 +1,230 @@
 <script lang="ts">
-	import { getStatusClass, formatRelativeTime } from '$lib/utils';
-	import { Pause, Play } from 'lucide-svelte';
-	import type { Server, PackageStats } from '$lib/types';
+    import {
+        getStatusClass,
+        formatRelativeTime,
+        formatUptime,
+    } from "$lib/utils";
+    import {
+        Pause,
+        Play,
+        Pencil,
+        Globe,
+        RefreshCw,
+        Trash2,
+        EllipsisVertical,
+        Server as ServerIcon,
+        Monitor,
+        Cpu,
+        Network,
+        Clock,
+    } from "lucide-svelte";
+    import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+    import type { Server, PackageStats, Metric } from "$lib/types";
 
-	const {
-		server,
-		packageStats,
-		onDelete,
-		onRegenerateToken,
-		onChangeIP,
-		onRename,
-		onPause,
-		onResume,
-	}: {
-		server: Server;
-		packageStats: PackageStats | null;
-		onDelete: () => void;
-		onRegenerateToken: () => void;
-		onChangeIP: () => void;
-		onRename: () => void;
-		onPause: () => void;
-		onResume: () => void;
-	} = $props();
+    const {
+        server,
+        packageStats,
+        metric = null,
+        onDelete,
+        onRegenerateToken,
+        onChangeIP,
+        onRename,
+        onPause,
+        onResume,
+    }: {
+        server: Server;
+        packageStats: PackageStats | null;
+        metric?: Metric | null;
+        onDelete: () => void;
+        onRegenerateToken: () => void;
+        onChangeIP: () => void;
+        onRename: () => void;
+        onPause: () => void;
+        onResume: () => void;
+    } = $props();
+
+    let open = $state(false);
+
+    const details = $derived(
+        [
+            server.hostname
+                ? { icon: ServerIcon, text: server.hostname }
+                : null,
+            server.platform
+                ? {
+                      icon: Monitor,
+                      text: server.platform_version
+                          ? `${server.platform} ${server.platform_version}`
+                          : server.platform,
+                  }
+                : null,
+            server.architecture
+                ? { icon: Cpu, text: server.architecture }
+                : null,
+            server.ip_address_v4 || server.configured_ip
+                ? {
+                      icon: Network,
+                      text: server.ip_address_v4 || server.configured_ip,
+                  }
+                : null,
+            metric && metric.uptime_seconds > 0
+                ? { icon: Clock, text: formatUptime(metric.uptime_seconds) }
+                : null,
+            server.last_seen &&
+            (server.status === "offline" || server.status === "paused")
+                ? {
+                      icon: Clock,
+                      text: `Last seen ${formatRelativeTime(server.last_seen)}`,
+                  }
+                : null,
+        ].filter(Boolean) as { icon: typeof ServerIcon; text: string }[],
+    );
 </script>
 
 <div class="mb-6 rounded-lg border bg-card p-4 md:p-6">
-	<!-- Top: Name, status, actions -->
-	<div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-		<div class="flex items-center gap-3 flex-wrap">
-			<h1 class="text-xl sm:text-2xl font-semibold text-foreground">
-				{server.name}
-			</h1>
-			<span
-				class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(server.status)}"
-			>
-				<span
-					class="h-1.5 w-1.5 rounded-full {server.status === 'online' ? 'bg-success' : server.status === 'offline' ? 'bg-danger' : 'bg-muted-foreground'}"
-				></span>
-				{server.status}
-			</span>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			<button
-				onclick={onRename}
-				class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
-			>
-				Rename
-			</button>
-			<button
-				onclick={onChangeIP}
-				class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
-			>
-				Change IP
-			</button>
-			{#if server.status === 'pending'}
-				<button
-					onclick={onRegenerateToken}
-					class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
-				>
-					Regenerate Token
-				</button>
-			{/if}
-			{#if server.status !== 'pending'}
-				{#if server.status === 'paused'}
-					<button
-						onclick={onResume}
-						class="inline-flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
-					>
-						<Play class="h-3.5 w-3.5" />
-						Resume
-					</button>
-				{:else}
-					<button
-						onclick={onPause}
-						class="inline-flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
-					>
-						<Pause class="h-3.5 w-3.5" />
-						Pause
-					</button>
-				{/if}
-			{/if}
-			<button
-				onclick={onDelete}
-				class="rounded-lg border border-destructive bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20 whitespace-nowrap"
-			>
-				Delete
-			</button>
-		</div>
-	</div>
+    <!-- Top: Name, status, actions menu -->
+    <div class="flex items-start justify-between">
+        <div class="flex items-center gap-3 flex-wrap">
+            <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
+                {server.name}
+            </h1>
+            <span
+                class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(
+                    server.status,
+                )}"
+            >
+                <span
+                    class="h-1.5 w-1.5 rounded-full {server.status === 'online'
+                        ? 'bg-success'
+                        : server.status === 'offline'
+                          ? 'bg-danger'
+                          : 'bg-muted-foreground'}"
+                ></span>
+                {server.status}
+            </span>
+        </div>
+        <DropdownMenu.Root bind:open>
+            <DropdownMenu.Trigger>
+                {#snippet child({ props })}
+                    <button
+                        {...props}
+                        class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        title="Server actions"
+                    >
+                        <EllipsisVertical class="h-5 w-5" />
+                    </button>
+                {/snippet}
+            </DropdownMenu.Trigger>
 
-	<!-- Server details grid -->
-	<div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
-		{#if server.hostname}
-			<div>
-				<p class="text-xs text-muted-foreground">Hostname</p>
-				<p class="text-sm font-medium text-foreground">{server.hostname}</p>
-			</div>
-		{/if}
-		{#if server.platform}
-			<div>
-				<p class="text-xs text-muted-foreground">OS</p>
-				<p class="text-sm font-medium text-foreground">
-					{server.platform_version ? `${server.platform} ${server.platform_version}` : server.platform}
-				</p>
-			</div>
-		{/if}
-		{#if server.architecture}
-			<div>
-				<p class="text-xs text-muted-foreground">Architecture</p>
-				<p class="text-sm font-medium text-foreground">{server.architecture}</p>
-			</div>
-		{/if}
-		{#if server.ip_address_v4 || server.configured_ip}
-			<div>
-				<p class="text-xs text-muted-foreground">IP Address</p>
-				<p class="text-sm font-medium text-foreground">{server.ip_address_v4 || server.configured_ip}</p>
-			</div>
-		{/if}
-		{#if server.last_seen && (server.status === 'offline' || server.status === 'paused')}
-			<div>
-				<p class="text-xs text-muted-foreground">Last Seen</p>
-				<p class="text-sm font-medium text-foreground">{formatRelativeTime(server.last_seen)}</p>
-			</div>
-		{/if}
-	</div>
+            <DropdownMenu.Content side="bottom" align="end">
+                <DropdownMenu.Item
+                    onclick={() => {
+                        open = false;
+                        onRename();
+                    }}
+                >
+                    <Pencil class="h-4 w-4" />
+                    Rename
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                    onclick={() => {
+                        open = false;
+                        onChangeIP();
+                    }}
+                >
+                    <Globe class="h-4 w-4" />
+                    Change IP
+                </DropdownMenu.Item>
+                {#if server.status === "pending"}
+                    <DropdownMenu.Item
+                        onclick={() => {
+                            open = false;
+                            onRegenerateToken();
+                        }}
+                    >
+                        <RefreshCw class="h-4 w-4" />
+                        Regenerate Token
+                    </DropdownMenu.Item>
+                {/if}
+                {#if server.status !== "pending"}
+                    {#if server.status === "paused"}
+                        <DropdownMenu.Item
+                            onclick={() => {
+                                open = false;
+                                onResume();
+                            }}
+                        >
+                            <Play class="h-4 w-4" />
+                            Resume
+                        </DropdownMenu.Item>
+                    {:else}
+                        <DropdownMenu.Item
+                            onclick={() => {
+                                open = false;
+                                onPause();
+                            }}
+                        >
+                            <Pause class="h-4 w-4" />
+                            Pause
+                        </DropdownMenu.Item>
+                    {/if}
+                {/if}
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item
+                    onclick={() => {
+                        open = false;
+                        onDelete();
+                    }}
+                    class="text-destructive data-highlighted:text-destructive"
+                >
+                    <Trash2 class="h-4 w-4" />
+                    Delete
+                </DropdownMenu.Item>
+            </DropdownMenu.Content>
+        </DropdownMenu.Root>
+    </div>
 
-	<!-- Packages -->
-	{#if packageStats}
-		<div class="mt-4 pt-4 border-t flex items-center justify-between">
-			<div class="flex items-center gap-4">
-				<div>
-					<p class="text-xs text-muted-foreground">Packages</p>
-					<p class="text-sm font-medium text-foreground">
-						{packageStats.total_packages || 0} installed
-					</p>
-				</div>
-				{#if packageStats.recent_changes}
-					<div>
-						<p class="text-xs text-muted-foreground">Recent Changes</p>
-						<p class="text-sm font-medium text-foreground">
-							{packageStats.recent_changes} in the last 30d
-						</p>
-					</div>
-				{/if}
-			</div>
-			<a
-				href="/servers/{server.id}/packages"
-				class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
-			>
-				View Packages →
-			</a>
-		</div>
-	{/if}
+    <!-- Server details -->
+    <div
+        class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground"
+    >
+        {#each details as detail, i}
+            {#if i > 0}
+                <span>·</span>
+            {/if}
+            <span class="inline-flex items-center gap-1">
+                <detail.icon class="h-3.5 w-3.5" />{detail.text}
+            </span>
+        {/each}
+    </div>
+
+    <!-- Packages -->
+    {#if packageStats}
+        <div class="mt-4 pt-4 border-t flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div>
+                    <p class="text-xs text-muted-foreground">Packages</p>
+                    <p class="text-sm font-medium text-foreground">
+                        {packageStats.total_packages || 0} installed
+                    </p>
+                </div>
+                {#if packageStats.recent_changes}
+                    <div>
+                        <p class="text-xs text-muted-foreground">
+                            Recent Changes
+                        </p>
+                        <p class="text-sm font-medium text-foreground">
+                            {packageStats.recent_changes} in the last 30d
+                        </p>
+                    </div>
+                {/if}
+            </div>
+            <a
+                href="/servers/{server.id}/packages"
+                class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
+            >
+                View Packages →
+            </a>
+        </div>
+    {/if}
 </div>

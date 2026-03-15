@@ -653,7 +653,7 @@
     let hasData = $derived(data && data[0] && data[0].length > 0);
 </script>
 
-<div class="h-48 sm:h-64 relative">
+<div class="-mx-2 sm:mx-0 h-48 sm:h-64 relative">
     {#if hasData}
         <div class="absolute inset-0" bind:this={container}></div>
     {:else}
