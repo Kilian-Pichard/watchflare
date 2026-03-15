@@ -15,7 +15,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 ## Versioning
 
-**Current version**: 0.27.2
+**Current version**: 0.27.3
 
 **Versioning scheme** (pre-v1.0):
 - `0.x.0` - Major features, redesigns, significant architectural changes
@@ -31,6 +31,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - User validation complete
 
 **Version history:**
+- `0.27.3` - Redesign server detail header: action buttons replaced by dropdown menu (EllipsisVertical), inline server details with icons and dot separators, uptime moved to header, ServerLiveStats cards removed, chart negative margin on mobile for more width
 - `0.27.2` - Align agent metrics to wall clock boundaries (Telegraf-style round_interval): wait for next clock boundary before first tick, round timestamps to nearest interval slot, hide chart data point markers, tighten gap thresholds to 1.5x bucket interval
 - `0.27.1` - Full codebase audit bugfixes: WAL nil file handle recovery, filepath.Dir() for CA cert path, Docker uint64 underflow guard, container ID bounds check, reusable Docker HTTP client, Docker API v1.25 compat, grpc.Dial 30s timeout, backend graceful shutdown (signal handler + worker stop), agent graceful shutdown (sender wait channel), email duplicate 409 Conflict, getUserID() safe type assertion, DB error checks in packages/auth handlers, DeleteServer 404 status, formatBytes/formatRate negative guard, SSE buffer discard on error, aggregated store load guard, time range race protection, dashboardStats value-based memoization, alerts store keeps data on error, getPackageHistory generic type
 - `0.27.0` - CI/CD: GitHub Actions release workflow (agent builds 4 architectures + Docker image on GHCR), agent install script with get.watchflare.io, injectable agent version via ldflags, fix all GitHub repo URLs

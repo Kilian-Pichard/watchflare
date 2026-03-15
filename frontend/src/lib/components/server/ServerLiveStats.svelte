@@ -20,28 +20,28 @@
 </script>
 
 {#if metric}
-	<div class="mb-6 flex flex-wrap gap-3">
-		<div class="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+	<div class="no-scrollbar mb-6 flex gap-3 overflow-x-auto">
+		<div class="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2">
 			<Cpu class="h-3.5 w-3.5 text-muted-foreground" />
 			<span class="text-xs text-muted-foreground">CPU</span>
 			<span class="text-sm font-medium text-foreground">{metric.cpu_usage_percent.toFixed(1)}%</span>
 		</div>
-		<div class="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+		<div class="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2">
 			<MemoryStick class="h-3.5 w-3.5 text-muted-foreground" />
 			<span class="text-xs text-muted-foreground">Memory</span>
 			<span class="text-sm font-medium text-foreground">{formatPercent(memoryPercent)}</span>
 		</div>
-		<div class="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+		<div class="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2">
 			<HardDrive class="h-3.5 w-3.5 text-muted-foreground" />
 			<span class="text-xs text-muted-foreground">Disk</span>
 			<span class="text-sm font-medium text-foreground">{formatPercent(diskPercent)}</span>
 		</div>
-		<div class="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+		<div class="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2">
 			<Network class="h-3.5 w-3.5 text-muted-foreground" />
 			<span class="text-xs text-muted-foreground">Net</span>
 			<span class="text-sm font-medium text-foreground">↓ {formatRate(metric.network_rx_bytes_per_sec)} ↑ {formatRate(metric.network_tx_bytes_per_sec)}</span>
 		</div>
-		<div class="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+		<div class="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2">
 			<Clock class="h-3.5 w-3.5 text-muted-foreground" />
 			<span class="text-xs text-muted-foreground">Uptime</span>
 			<span class="text-sm font-medium text-foreground">{formatUptime(metric.uptime_seconds)}</span>

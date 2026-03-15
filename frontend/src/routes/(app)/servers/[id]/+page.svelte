@@ -10,7 +10,6 @@
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
     import Modal from "$lib/components/Modal.svelte";
     import ServerDetailHeader from "$lib/components/server/ServerDetailHeader.svelte";
-    import ServerLiveStats from "$lib/components/server/ServerLiveStats.svelte";
     import ServerAlerts from "$lib/components/server/ServerAlerts.svelte";
     import ServerMetricsCharts from "$lib/components/server/ServerMetricsCharts.svelte";
     import InstallInstructions from "$lib/components/InstallInstructions.svelte";
@@ -302,6 +301,7 @@
     <ServerDetailHeader
         {server}
         {packageStats}
+        metric={latestMetric}
         onDelete={() => (showDeleteConfirm = true)}
         onRegenerateToken={() => (showRegenerateConfirm = true)}
         onChangeIP={() => (showChangeIP = true)}
@@ -310,9 +310,6 @@
         onResume={handleResume}
     />
 
-    {#if server.status !== 'pending'}
-        <ServerLiveStats metric={latestMetric} />
-    {/if}
 
     {#if regeneratedToken}
         <div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 flex items-center justify-between gap-4 flex-wrap">
