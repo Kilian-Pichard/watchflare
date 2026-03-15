@@ -77,18 +77,19 @@ func (s *Sender) Run(ctx context.Context) error {
 
 	select {
 	case <-time.After(waitDuration):
-		// Aligned — do first collection immediately
-		s.collectAndSend()
+		// Aligned — start ticker BEFORE first collection so it stays on boundary
 	case <-ctx.Done():
 		log.Println("Sender shutting down before first collection")
 		return nil
 	}
 
-	// Start ticker from aligned position
 	ticker := time.NewTicker(s.metricsInterval)
 	defer ticker.Stop()
 
 	log.Printf("Sender started (interval: %v)", s.metricsInterval)
+
+	// First collection at boundary (ticker will fire next at boundary + interval)
+	s.collectAndSend()
 
 	for {
 		select {
