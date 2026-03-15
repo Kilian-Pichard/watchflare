@@ -276,25 +276,31 @@ func GetPackageStats(c *gin.Context) {
 
 	// Total packages
 	var totalPackages int64
-	database.DB.Model(&models.Package{}).Where("server_id = ?", serverID).Count(&totalPackages)
+	if err := database.DB.Model(&models.Package{}).Where("server_id = ?", serverID).Count(&totalPackages).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count packages"})
+		return
+	}
 
 	// Recent changes (last 30 days)
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
 	var recentChanges int64
-	database.DB.Model(&models.PackageHistory{}).
+	if err := database.DB.Model(&models.PackageHistory{}).
 		Where("server_id = ? AND timestamp >= ? AND change_type != 'initial'", serverID, thirtyDaysAgo).
-		Count(&recentChanges)
+		Count(&recentChanges).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count recent changes"})
+		return
+	}
 
 	// Last collection
 	var lastCollection models.PackageCollection
 	database.DB.Where("server_id = ?", serverID).
 		Order("timestamp DESC").
-		First(&lastCollection)
+		First(&lastCollection) // Ignore ErrRecordNotFound — zero value is fine
 
 	c.JSON(http.StatusOK, gin.H{
-		"total_packages":      totalPackages,
-		"by_package_manager":  managerStats,
-		"recent_changes":      recentChanges,
-		"last_collection":     lastCollection,
+		"total_packages":     totalPackages,
+		"by_package_manager": managerStats,
+		"recent_changes":     recentChanges,
+		"last_collection":    lastCollection,
 	})
 }

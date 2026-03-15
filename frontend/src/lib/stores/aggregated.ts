@@ -36,8 +36,13 @@ function createAggregatedStore() {
 		'30d': 8 * 60 * 60 * 1000
 	};
 
+	// Guard to prevent concurrent loads (race condition from rapid SSE updates)
+	let loadInFlight = false;
+
 	// Extracted as local function so addMetricPoint can call it
 	async function load(timeRange: TimeRange): Promise<void> {
+		if (loadInFlight) return;
+		loadInFlight = true;
 		update(state => ({ ...state, loading: true, error: null, timeRange }));
 
 		try {
@@ -55,6 +60,8 @@ function createAggregatedStore() {
 			const error = err instanceof Error ? err.message : 'Failed to load aggregated metrics';
 			update(state => ({ ...state, loading: false, error }));
 			logger.error('Failed to load aggregated metrics:', err);
+		} finally {
+			loadInFlight = false;
 		}
 	}
 
@@ -218,11 +225,13 @@ export const dashboardStats = derived(
 		const onlineCount = activeServers.filter(s => s.server.status === 'online').length;
 		const totalCount = activeServers.length;
 
-		// Skip recalculation if inputs haven't changed
+		// Skip recalculation if inputs haven't changed (compare by value for SSE objects)
 		if (
 			cachedStats &&
-			lastPoint === cachedLastPoint &&
-			firstPoint24h === cachedFirstPoint24h &&
+			lastPoint?.timestamp === cachedLastPoint?.timestamp &&
+			lastPoint?.cpu_usage_percent === cachedLastPoint?.cpu_usage_percent &&
+			lastPoint?.memory_used_bytes === cachedLastPoint?.memory_used_bytes &&
+			firstPoint24h?.timestamp === cachedFirstPoint24h?.timestamp &&
 			onlineCount === cachedOnlineCount &&
 			totalCount === cachedTotalCount
 		) {

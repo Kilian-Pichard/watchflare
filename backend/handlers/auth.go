@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"watchflare/backend/config"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
@@ -9,6 +10,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// getUserID extracts the authenticated user ID from the Gin context
+func getUserID(c *gin.Context) (string, bool) {
+	val, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return "", false
+	}
+	id, ok := val.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
+		return "", false
+	}
+	return id, true
+}
 
 // RegisterRequest represents the registration request body
 type RegisterRequest struct {
@@ -133,14 +149,12 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// Get user ID from context (set by JWT middleware)
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+	userID, ok := getUserID(c)
+	if !ok {
 		return
 	}
 
-	err := services.ChangePassword(userID.(string), req.CurrentPassword, req.NewPassword)
+	err := services.ChangePassword(userID, req.CurrentPassword, req.NewPassword)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -159,14 +173,17 @@ func ChangeEmail(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+	userID, ok := getUserID(c)
+	if !ok {
 		return
 	}
 
-	if err := database.DB.Model(&models.User{}).Where("id = ?", userID.(string)).Update("email", req.NewEmail).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update email"})
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Update("email", req.NewEmail).Error; err != nil {
+		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update email"})
+		}
 		return
 	}
 
@@ -178,7 +195,10 @@ func ChangeEmail(c *gin.Context) {
 // SetupRequired checks if initial setup is required (no users exist)
 func SetupRequired(c *gin.Context) {
 	var count int64
-	database.DB.Model(&models.User{}).Count(&count)
+	if err := database.DB.Model(&models.User{}).Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check setup status"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"setup_required": count == 0,
@@ -187,15 +207,13 @@ func SetupRequired(c *gin.Context) {
 
 // GetCurrentUser returns the authenticated user's information including preferences
 func GetCurrentUser(c *gin.Context) {
-	// Get user ID from context (set by JWT middleware)
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+	userID, ok := getUserID(c)
+	if !ok {
 		return
 	}
 
 	var user models.User
-	if err := database.DB.Where("id = ?", userID.(string)).First(&user).Error; err != nil {
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -213,10 +231,8 @@ func UpdatePreferences(c *gin.Context) {
 		return
 	}
 
-	// Get user ID from context (set by JWT middleware)
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+	userID, ok := getUserID(c)
+	if !ok {
 		return
 	}
 
@@ -251,14 +267,17 @@ func UpdatePreferences(c *gin.Context) {
 		updates["theme"] = req.Theme
 	}
 
-	if err := database.DB.Model(&models.User{}).Where("id = ?", userID.(string)).Updates(updates).Error; err != nil {
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update preferences"})
 		return
 	}
 
 	// Fetch updated user
 	var user models.User
-	database.DB.Where("id = ?", userID.(string)).First(&user)
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated user"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Preferences updated successfully",

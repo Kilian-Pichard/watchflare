@@ -143,7 +143,7 @@ across servers. Interval mapping:
 | `12h` | 12 hours | 10 min |
 | `24h` | 24 hours | 20 min |
 | `7d` | 7 days | 2 h |
-| `30d` | 30 days | 10 h |
+| `30d` | 30 days | 8 h |
 
 **metrics.go** — `GetMetrics`: per-server historical metrics. Accepts `time_range`
 or explicit `start`/`end`/`interval`. Routes to raw data or continuous aggregate

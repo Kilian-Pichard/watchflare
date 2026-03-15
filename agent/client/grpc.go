@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"watchflare-agent/metrics"
@@ -53,7 +54,11 @@ func New(host, port, caCertFile, serverName string) (*Client, error) {
 	creds := credentials.NewTLS(tlsConfig)
 	opts = append(opts, grpc.WithTransportCredentials(creds))
 
-	conn, err := grpc.Dial(addr, opts...)
+	// Connect with timeout to avoid blocking indefinitely
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer dialCancel()
+
+	conn, err := grpc.DialContext(dialCtx, addr, append(opts, grpc.WithBlock())...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
@@ -82,7 +87,11 @@ func NewForRegistration(host, port string) (*Client, error) {
 	creds := credentials.NewTLS(tlsConfig)
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
 
-	conn, err := grpc.Dial(addr, opts...)
+	// Connect with timeout to avoid blocking indefinitely
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer dialCancel()
+
+	conn, err := grpc.DialContext(dialCtx, addr, append(opts, grpc.WithBlock())...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
@@ -155,15 +164,15 @@ func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion
 
 // SaveCACertificate saves the CA certificate to disk
 // The directory will be created if it doesn't exist
-func SaveCACertificate(caCertPEM, filepath string) error {
+func SaveCACertificate(caCertPEM, certPath string) error {
 	// Create directory if it doesn't exist
-	dir := filepath[:len(filepath)-len("/ca.pem")]
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	dir := filepath.Dir(certPath)
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create PKI directory: %w", err)
 	}
 
 	// Write CA certificate with restricted permissions
-	if err := os.WriteFile(filepath, []byte(caCertPEM), 0644); err != nil {
+	if err := os.WriteFile(certPath, []byte(caCertPEM), 0644); err != nil {
 		return fmt.Errorf("failed to write CA certificate: %w", err)
 	}
 

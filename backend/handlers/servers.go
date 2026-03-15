@@ -304,8 +304,12 @@ func ResumeServer(c *gin.Context) {
 func DeleteServer(c *gin.Context) {
 	serverID := c.Param("id")
 
-	if err := services.DeleteServer(serverID); err != nil{
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := services.DeleteServer(serverID); err != nil {
+		if err.Error() == "server not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 

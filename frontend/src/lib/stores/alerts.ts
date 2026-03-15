@@ -29,11 +29,13 @@ function createAlertsStore() {
 				update(state => ({
 					...state,
 					droppedMetrics: data.dropped_metrics || [],
-					loading: false
+					loading: false,
+					error: null
 				}));
 			} catch (err) {
 				logger.error('Failed to load dropped metrics:', err);
 
+				// Keep existing droppedMetrics on error instead of clearing them
 				update(state => ({
 					...state,
 					loading: false,

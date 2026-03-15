@@ -4,7 +4,8 @@ Self-hosted server monitoring with real-time dashboards. Lightweight agents repo
 
 ## Features
 
-- **Real-time monitoring** — CPU, memory, disk, network, and swap via SSE streaming
+- **Real-time monitoring** — CPU, memory, disk, network, load average, temperature via SSE streaming
+- **Docker container metrics** — Per-container CPU, memory, network tracking via Docker API
 - **Lightweight agents** — Single binary, ~10MB, runs as a system service (Linux/macOS)
 - **Secure by default** — TLS 1.3 (auto-generated PKI), HMAC-signed RPCs, JWT authentication
 - **Package inventory** — Tracks installed packages across 28 package managers with daily delta detection
@@ -17,7 +18,7 @@ Self-hosted server monitoring with real-time dashboards. Lightweight agents repo
 ```
 Agents (Linux/macOS)
   │
-  │ gRPC + mTLS 1.3 + HMAC
+  │ gRPC + TLS 1.3 + HMAC-SHA256
   ▼
 Backend (Go)
   │
@@ -34,11 +35,11 @@ Backend (Go)
 ### Docker Compose (recommended)
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Kilian-Pichard/watchflare.git
 cd watchflare
 
 # Configure environment
-cp .env.example .env
+cp backend/.env.example .env
 # Edit .env: set POSTGRES_PASSWORD and JWT_SECRET
 
 # Start
@@ -47,7 +48,12 @@ docker compose -f docker-compose.prod.yml up -d
 # Open http://localhost:8080 and create your admin account
 ```
 
-See [docs/install.md](docs/install.md) for the full installation guide including agent setup and reverse proxy configuration.
+### Install an Agent
+
+```bash
+curl -sSL https://get.watchflare.io | sudo bash -s -- \
+  --token=wf_reg_xxx --host=your-server --port=50051
+```
 
 ### Development
 
@@ -71,7 +77,7 @@ npm run dev
 | Component | Technology |
 |-----------|------------|
 | Backend | Go, Gin, gRPC, GORM |
-| Frontend | SvelteKit 5, Tailwind CSS, LayerChart |
+| Frontend | SvelteKit 5, Tailwind CSS, uPlot |
 | Database | PostgreSQL + TimescaleDB |
 | Agent | Go, gopsutil |
 | Security | TLS 1.3, HMAC-SHA256, JWT, bcrypt |
@@ -85,4 +91,4 @@ npm run dev
 
 ## License
 
-MIT
+AGPL-3.0 — See [LICENSE](LICENSE) for details.

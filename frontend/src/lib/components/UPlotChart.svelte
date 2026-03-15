@@ -23,12 +23,13 @@
     };
 
     // Max gap before breaking the line (per time range)
+    // Set to 1.5× the bucket interval so a single missing point creates a gap
     const GAP_THRESHOLDS: Record<string, number> = {
-        "1h": 90, // 3 × 30s
-        "12h": 1200, // 2 × 10min
-        "24h": 1800, // 2 × 15min
-        "7d": 14400, // 2 × 2h
-        "30d": 57600, // 2 × 8h
+        "1h": 45, // 1.5 × 30s
+        "12h": 900, // 1.5 × 10min
+        "24h": 1350, // 1.5 × 15min
+        "7d": 10800, // 1.5 × 2h
+        "30d": 43200, // 1.5 × 8h
     };
 
     let {
@@ -403,6 +404,7 @@
                 resolved.fill = `rgba(${r},${g},${b},0.2)`;
             }
             resolved.gaps = gapsFn;
+            resolved.points = { show: false };
             return resolved;
         });
 

@@ -288,8 +288,11 @@ func (w *WAL) Truncate() error {
 	// If crash before rename → old WAL intact
 	// If crash after rename → new WAL already in place
 	if err := os.Rename(tmpPath, w.path); err != nil {
-		// Try to reopen old file on rename failure
-		w.file, _ = os.OpenFile(w.path, os.O_RDWR, 0644)
+		// Try to reopen old file on rename failure (with O_CREATE in case it was removed)
+		newFile, reopenErr := os.OpenFile(w.path, os.O_CREATE|os.O_RDWR, 0644)
+		if reopenErr == nil {
+			w.file = newFile
+		}
 		return fmt.Errorf("failed to rename temp to WAL: %w", err)
 	}
 
