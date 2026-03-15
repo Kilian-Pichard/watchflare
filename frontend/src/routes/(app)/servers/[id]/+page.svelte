@@ -116,11 +116,16 @@
         }
     }
 
+    let metricsLoadId = 0;
+
     async function loadMetrics() {
+        const thisLoadId = ++metricsLoadId;
         try {
             const data = await api.getServerMetrics(serverId, {
                 time_range: timeRange,
             });
+            // Discard stale response if a newer load was started
+            if (thisLoadId !== metricsLoadId) return;
             metrics = data.metrics || [];
             if (!latestMetric && metrics.length > 0) {
                 latestMetric = metrics[metrics.length - 1];

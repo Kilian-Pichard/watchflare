@@ -360,8 +360,8 @@ export class SSEManager {
 	 * Cleanup resources
 	 */
 	private cleanup(): void {
-		// Flush any remaining buffered events
-		this.flushBuffer();
+		// Discard buffered events on error (stale data from broken connection)
+		this.eventBuffer = [];
 
 		if (this.bufferTimer) {
 			clearTimeout(this.bufferTimer);

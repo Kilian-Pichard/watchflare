@@ -384,5 +384,5 @@ export async function getPackageHistory(
 	params: CollectionQueryParams = {}
 ): Promise<GetPackageHistoryResponse> {
 	const query = buildQueryString({ limit: params.limit, offset: params.offset });
-	return apiRequest(`/servers/${serverId}/packages/history${query}`);
+	return apiRequest<GetPackageHistoryResponse>(`/servers/${serverId}/packages/history${query}`);
 }

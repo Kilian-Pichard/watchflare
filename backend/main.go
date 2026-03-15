@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
-	"sync"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 	"watchflare/backend/cache"
 	"watchflare/backend/config"
@@ -68,30 +71,63 @@ func main() {
 	aggregatedMetricsScheduler := services.NewAggregatedMetricsScheduler(30 * time.Second)
 	go aggregatedMetricsScheduler.Start()
 
-	// Use WaitGroup to run both servers concurrently
-	var wg sync.WaitGroup
-	wg.Add(2)
+	// Setup HTTP server
+	router := setupRouter()
+	httpServer := &http.Server{
+		Addr:    ":" + config.AppConfig.Port,
+		Handler: router.Handler(),
+	}
 
 	// Start HTTP server
 	go func() {
-		defer wg.Done()
-		router := setupRouter()
 		log.Printf("Starting HTTP server on port %s", config.AppConfig.Port)
-		if err := router.Run(":" + config.AppConfig.Port); err != nil {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start HTTP server: %v", err)
 		}
 	}()
 
 	// Start gRPC server
+	grpcServer, err := createGRPCServer(config.AppConfig, pkiInstance)
+	if err != nil {
+		log.Fatalf("Failed to create gRPC server: %v", err)
+	}
+
+	grpcListener, err := net.Listen("tcp", ":"+config.AppConfig.GRPCPort)
+	if err != nil {
+		log.Fatalf("Failed to listen on gRPC port: %v", err)
+	}
+
 	go func() {
-		defer wg.Done()
-		if err := startGRPCServer(config.AppConfig.GRPCPort, config.AppConfig, pkiInstance); err != nil {
+		log.Printf("Starting gRPC server on port %s", config.AppConfig.GRPCPort)
+		if err := grpcServer.Serve(grpcListener); err != nil {
 			log.Fatalf("Failed to start gRPC server: %v", err)
 		}
 	}()
 
 	log.Println("Watchflare backend started successfully")
-	wg.Wait()
+
+	// Wait for shutdown signal
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	sig := <-sigCh
+	log.Printf("Received signal %v, shutting down gracefully...", sig)
+
+	// Graceful shutdown with 10s timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Stop workers
+	syncWorker.Stop()
+	staleChecker.Stop()
+	aggregatedMetricsScheduler.Stop()
+
+	// Stop servers
+	grpcServer.GracefulStop()
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	}
+
+	log.Println("Shutdown complete")
 }
 
 func setupRouter() *gin.Engine {
@@ -195,19 +231,14 @@ func setupRouter() *gin.Engine {
 	return router
 }
 
-// startGRPCServer initializes and starts the gRPC server
-func startGRPCServer(port string, cfg *config.Config, pkiInstance *pki.PKI) error {
-	listener, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		return err
-	}
-
+// createGRPCServer initializes the gRPC server (does not start serving)
+func createGRPCServer(cfg *config.Config, pkiInstance *pki.PKI) (*grpc.Server, error) {
 	var opts []grpc.ServerOption
 
 	// TLS configuration (mandatory)
 	tlsConfig, err := pkiInstance.GetTLSConfig()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	creds := credentials.NewTLS(tlsConfig)
@@ -225,6 +256,5 @@ func startGRPCServer(port string, cfg *config.Config, pkiInstance *pki.PKI) erro
 	agentService := grpcservice.NewAgentServer()
 	pb.RegisterAgentServiceServer(grpcServer, agentService)
 
-	log.Printf("Starting gRPC server on port %s", port)
-	return grpcServer.Serve(listener)
+	return grpcServer, nil
 }

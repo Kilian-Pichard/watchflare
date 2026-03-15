@@ -88,7 +88,9 @@ func Run() {
 	go runHeartbeat(ctx, grpcClient, cfg)
 
 	// Start sender in background
+	senderDone := make(chan struct{})
 	go func() {
+		defer close(senderDone)
 		if err := sender.Run(ctx); err != nil {
 			log.Printf("Sender error: %v", err)
 		}
@@ -104,8 +106,13 @@ func Run() {
 	// Cancel context (triggers shutdown in sender and heartbeat)
 	cancel()
 
-	// Give sender time to flush (handled internally with 5s timeout)
-	time.Sleep(100 * time.Millisecond)
+	// Wait for sender to finish flushing (up to 6s: sender has internal 5s timeout)
+	select {
+	case <-senderDone:
+		log.Println("Sender stopped cleanly")
+	case <-time.After(6 * time.Second):
+		log.Println("Sender shutdown timed out")
+	}
 
 	log.Println("Shutdown complete")
 }

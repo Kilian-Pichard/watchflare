@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+// dockerAPIVersion is the Docker Engine API version used for requests.
+// v1.25 is the minimum version supporting the stats endpoint format we use,
+// and is compatible with Docker 1.13+ (2017).
+const dockerAPIVersion = "v1.25"
+
 // ContainerMetric represents metrics for a single Docker container
 type ContainerMetric struct {
 	ContainerID          string
@@ -58,24 +63,22 @@ type dockerContainer struct {
 	State string   `json:"State"`
 }
 
-// dockerHTTPClient creates an HTTP client that connects via Unix socket
-func dockerHTTPClient() *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", "/var/run/docker.sock")
-			},
+// dockerClient is a reusable HTTP client for Docker API calls via Unix socket
+var dockerClient = &http.Client{
+	Transport: &http.Transport{
+		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+			return net.Dial("unix", "/var/run/docker.sock")
 		},
-		Timeout: 10 * time.Second,
-	}
+	},
+	Timeout: 10 * time.Second,
 }
 
 // CollectContainerMetrics collects metrics for all running Docker containers
 func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
-	httpClient := dockerHTTPClient()
+	httpClient := dockerClient
 
 	// List running containers
-	resp, err := httpClient.Get("http://localhost/v1.43/containers/json")
+	resp, err := httpClient.Get("http://localhost/" + dockerAPIVersion + "/containers/json")
 	if err != nil {
 		return nil, err
 	}
@@ -103,16 +106,16 @@ func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
 
 		stats, err := getContainerStats(httpClient, c.ID)
 		if err != nil {
-			log.Printf("Warning: Failed to get stats for container %s: %v", c.ID[:12], err)
+			log.Printf("Warning: Failed to get stats for container %s: %v", truncateID(c.ID), err)
 			continue
 		}
 
 		// Compute CPU percentage
 		cpuPercent := computeCPUPercent(stats)
 
-		// Compute memory (exclude cache for actual usage)
+		// Compute memory (exclude cache for actual usage, guard against underflow)
 		memUsed := stats.MemoryStats.Usage
-		if stats.MemoryStats.Stats.InactiveFile > 0 {
+		if stats.MemoryStats.Stats.InactiveFile > 0 && stats.MemoryStats.Stats.InactiveFile < stats.MemoryStats.Usage {
 			memUsed -= stats.MemoryStats.Stats.InactiveFile
 		}
 
@@ -128,13 +131,13 @@ func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
 		rxRate, txRate := tracker.ComputeContainerNetworkRate(c.ID, totalRx, totalTx, now)
 
 		// Clean container name (remove leading /)
-		name := c.ID[:12]
+		name := truncateID(c.ID)
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
 
 		result = append(result, ContainerMetric{
-			ContainerID:          c.ID[:12],
+			ContainerID:          truncateID(c.ID),
 			ContainerName:        name,
 			Image:                c.Image,
 			CPUPercent:           cpuPercent,
@@ -148,9 +151,17 @@ func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
 	return result, nil
 }
 
+// truncateID safely truncates a container ID to 12 characters
+func truncateID(id string) string {
+	if len(id) >= 12 {
+		return id[:12]
+	}
+	return id
+}
+
 // getContainerStats fetches one-shot stats for a container
 func getContainerStats(client *http.Client, containerID string) (*dockerStatsResponse, error) {
-	resp, err := client.Get("http://localhost/v1.43/containers/" + containerID + "/stats?stream=false")
+	resp, err := client.Get("http://localhost/" + dockerAPIVersion + "/containers/" + containerID + "/stats?stream=false")
 	if err != nil {
 		return nil, err
 	}

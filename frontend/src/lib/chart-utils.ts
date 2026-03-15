@@ -11,7 +11,7 @@ export function formatTooltipDate(date: Date): string {
 
 // Format bytes per second (for disk I/O and network charts)
 export function formatRate(bytesPerSec: number): string {
-	if (bytesPerSec === 0) return '0 B/s';
+	if (bytesPerSec <= 0) return '0 B/s';
 	const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
 	let value = bytesPerSec;
 	let unitIndex = 0;
