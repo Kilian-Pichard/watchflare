@@ -66,7 +66,25 @@ func (s *Sender) Run(ctx context.Context) error {
 		log.Printf("Warning: Failed to replay WAL: %v", err)
 	}
 
-	// Start ticker
+	// Align first tick to the next wall clock boundary (e.g., :00, :30 for 30s interval)
+	// This ensures all agents produce timestamps at consistent round intervals
+	now := time.Now()
+	intervalSec := int64(s.metricsInterval.Seconds())
+	nextBoundary := time.Unix(((now.Unix()/intervalSec)+1)*intervalSec, 0)
+	waitDuration := time.Until(nextBoundary)
+
+	log.Printf("Sender aligning to clock boundary (waiting %v until %s)", waitDuration, nextBoundary.Format("15:04:05"))
+
+	select {
+	case <-time.After(waitDuration):
+		// Aligned — do first collection immediately
+		s.collectAndSend()
+	case <-ctx.Done():
+		log.Println("Sender shutting down before first collection")
+		return nil
+	}
+
+	// Start ticker from aligned position
 	ticker := time.NewTicker(s.metricsInterval)
 	defer ticker.Stop()
 
@@ -139,6 +157,11 @@ func (s *Sender) collectAndSend() {
 		log.Printf("Failed to collect metrics: %v", err)
 		return
 	}
+
+	// Round timestamp to nearest interval boundary (e.g., 10:00:34 → 10:00:30)
+	// This absorbs collection time (~1s for CPU) and produces clean aligned timestamps
+	intervalSec := int64(s.metricsInterval.Seconds())
+	m.Timestamp = ((m.Timestamp + intervalSec/2) / intervalSec) * intervalSec
 
 	// Container metrics are sent with the current metrics only (not WAL'd)
 	// They are point-in-time snapshots; stale container data is useless
