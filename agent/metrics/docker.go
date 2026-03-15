@@ -12,9 +12,8 @@ import (
 )
 
 // dockerAPIVersion is the Docker Engine API version used for requests.
-// v1.25 is the minimum version supporting the stats endpoint format we use,
-// and is compatible with Docker 1.13+ (2017).
-const dockerAPIVersion = "v1.25"
+// v1.40 is the minimum supported by modern Docker engines (Docker 19.03+).
+const dockerAPIVersion = "v1.40"
 
 // ContainerMetric represents metrics for a single Docker container
 type ContainerMetric struct {
