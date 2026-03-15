@@ -33,8 +33,9 @@ coverage.out
 *.log
 logs/
 
-# TLS Certificates
+# TLS Certificates & PKI
 certs/
+backend/data/
 *.pem
 *.crt
 *.key
