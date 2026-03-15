@@ -403,6 +403,7 @@
                 resolved.fill = `rgba(${r},${g},${b},0.2)`;
             }
             resolved.gaps = gapsFn;
+            resolved.points = { show: false };
             return resolved;
         });
 
