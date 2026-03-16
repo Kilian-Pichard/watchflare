@@ -16,7 +16,7 @@ Self-hosted server monitoring with real-time dashboards. Lightweight agents repo
 ## Architecture
 
 ```
-Agents (Linux/macOS)
+Agents (Linux/macOS) (Windows support coming soon)
   │
   │ gRPC + TLS 1.3 + HMAC-SHA256
   ▼
@@ -84,10 +84,7 @@ npm run dev
 
 ## Documentation
 
-- [Installation Guide](docs/install.md) — Production deployment with Docker
-- [Architecture](docs/architecture.md) — System design and data flows
-- [Security](docs/security.md) — TLS, HMAC, JWT, key management
-- [Internals](docs/internals.md) — Detailed component breakdown
+Full documentation coming soon at [watchflare.io/docs](https://watchflare.io/docs).
 
 ## License
 
