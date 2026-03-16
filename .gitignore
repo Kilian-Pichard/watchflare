@@ -40,6 +40,9 @@ backend/data/
 *.crt
 *.key
 
+# Documentation (kept locally, published on watchflare.io/docs)
+docs/
+
 # IDE
 .vscode/
 .idea/

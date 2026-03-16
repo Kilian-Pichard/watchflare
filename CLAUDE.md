@@ -23,6 +23,8 @@ Watchflare is a self-hosted server monitoring platform with three components:
 
 **Rule**: Every commit MUST bump the version (major, minor, or patch). Update `frontend/package.json` and this file accordingly.
 
+**Version history rotation**: Keep the current minor and the previous minor in this file. When bumping to a new minor (e.g., 0.27.x → 0.28.0), move all versions older than the previous minor to `docs/version-history.md`. Example: at 0.28.0, keep 0.28.x and 0.27.x here, archive 0.26.x and below.
+
 **v1.0 criteria** (not yet reached):
 - All planned features implemented
 - UI/UX polished and finalized
@@ -39,48 +41,7 @@ Watchflare is a self-hosted server monitoring platform with three components:
 - `0.26.2` - Add container metrics continuous aggregates (10min, 15min, 2h, 8h buckets) matching system metrics pattern, backend queries aggregated views for 12h/24h/7d/30d (~90 points vs ~11600 raw), remove debug logs
 - `0.26.1` - Fix charts invisible when browser/server clocks differ (anchor x-axis to max of browser and data timestamps), cache resolveColor() across chart instances, optimize time range switching (setData instead of destroy/recreate, dynamic gap threshold, tick interval in $effect)
 - `0.26.0` - Chart polish: wall-clock x-axis (anchored to Date.now, auto-tick per time range), native gap detection via series.gaps (no synthetic nulls), isolated point dots, custom cursor overlay (dashed line + hover dots aligned via valToPos), area fill on all 10 charts, date labels for 7d/30d views, cleanup unused hasData variables
-- `0.25.0` - Migrate charts from layerchart (SVG) to uPlot (Canvas): fixes Firefox OOM on server detail page, new UPlotChart wrapper with custom tooltip plugin, touch support (horizontal swipe), theme-reactive color resolution (oklch→hex for Canvas 2D), responsive resize via window event, cursor snap to nearest data point, clean Y-axis ticks (5 evenly spaced nice values), HH:MM X-axis format, nice rounding for byte/rate scales, removed layerchart/d3-scale dependencies
-- `0.24.0` - Docker per-container metrics: agent collects CPU/memory/network per container via Docker API unix socket, new ContainerMetric protobuf message, backend stores in container_metrics hypertable (migration 007), SSE container_metrics_update event, 3 new chart components (ContainerCPU, ContainerMemory, ContainerNetwork) with dynamic series per container, automatic display on servers with containers
-- `0.23.0` - New server metrics full-stack: agent collects disk I/O, network bandwidth, CPU temperature via delta tracking, protobuf fields 12-16, backend migration 006 (new columns + recreated continuous aggregates), SSE minified fields (dr/dw/nr/nt/tmp), 4 new chart components (LoadAvg, DiskIO, Network, Temperature), custom tooltip with layerchart primitive, yAxis formatting (%, bytes/sec), temperature conditional on physical servers, memory calculation changed to Total-Available
-- `0.22.0` - Docker production deployment: single binary with embedded frontend (go:embed + build tags), multi-stage Dockerfile, docker-compose.prod.yml, SPA mode (adapter-static), API routes prefixed with /api, README and installation guide
-- `0.21.0` - Pause/resume server monitoring (server-side): backend ignores heartbeats/metrics for paused servers, stale checker skips them, aggregated scheduler skips empty broadcasts, offline badge now red pastel, paused badge grey, pause/resume button on server detail page, status filter option
-- `0.20.1` - Fix chart overflow when data has gaps (sleep/wake), filter data points to xDomain window
-- `0.20.0` - Fix macOS APFS disk metrics (platform-specific diskutil collection), unified chart architecture (shared xDomain/tooltip/formatting in chart-utils.ts + ChartTooltip component), xDomain anchored to last data point for time range coverage, responsive chart headers (% only on mobile), tooltip color bar fix, formatBytes switched to base 1024 (IEC)
-- `0.19.2` - Replace exact metric values with colored progress bars in server table, neutral text for percentages
-- `0.19.1` - Full user settings page: email change, password change (migrated from /settings), preferences (theme + time range), standalone themeStore for cross-component reactivity, layout-level user loading with ready gate, /settings placeholder
-- `0.19.0` - User menu in sidebar: dropdown with avatar/email replacing logout button, theme switcher (light/dark/system) with backend persistence, dropdown-menu UI components (bits-ui), placeholder user settings page
-- `0.18.5` - Persist Global Metrics collapse state in localStorage across page refresh and reconnection
-- `0.18.4` - UI polish: sort buttons as rounded hover pills on table headers (h-8, hover:bg-muted), default sort order changed to descending, removed environment filter from server list
-- `0.18.3` - Rename server: new PUT /servers/:id/rename endpoint, rename modal in server detail page with pre-filled current name, 2-64 char validation
-- `0.18.2` - Token regeneration: restricted to pending servers only (backend + frontend), replaced token modal with InstallInstructions component showing curl commands, added warning banner with copy token button, 24h expiry notice
-- `0.18.1` - Collapsible Global Metrics: chevron toggle on dashboard, cards animate to compact mode (no icon/trend, smaller text), charts slide in/out with 250ms transitions, state persisted in UI store
-- `0.18.0` - P5 polish: extracted buildQueryString() utility (6 API functions refactored), normalized handler names (handle* convention), added 24 new tests (toasts store, metrics store, buildQueryString) bringing total to 111
-- `0.17.1` - P4 accessibility: added scope="col" to all 21 table headers (3 files), aria-invalid/aria-describedby on 10 form fields (4 files), RightSidebar close button already compliant
-- `0.17.0` - P3 stores & performance: extracted 12 named constants replacing magic numbers, memoized dashboardStats derived store (skips recalculation on irrelevant SSE heartbeats), normalized store APIs with resetSidebar() and documented store categories in index.ts
-- `0.16.0` - P2 component architecture: eliminated props drilling (alertCount store, authActions store, RightSidebar uses servers store directly), extracted 5 server sub-components (ServerDetailHeader, ServerAlerts, ServerMetricsCharts, ServerFilters, ServerListTable), server detail page 630→280 lines, server list page 550→200 lines
-- `0.15.0` - P1 deduplication: extracted Modal, ConfirmDialog, Pagination reusable components, refactored 5 modals and 2 paginations, shared handleSSEReactivation utility across 3 pages, removed unused toasts imports
-- `0.14.0` - P0 cleanup: all components migrated to Svelte 5 runes ($props, $state, $derived), TypeScript annotations on all .svelte files, InstallInstructions rewritten with Tailwind design tokens replacing 30 hardcoded colors, fixed PackageStats type to match backend
-- `0.13.0` - Redesign header: command palette search (Cmd+K), Add Server button, always-visible alerts, centered W logo on mobile linking to dashboard
-- `0.12.0` - Redesign server detail page: compact header card with inline info grid, live metrics in chart headers, packages section promoted with dedicated link
-- `0.11.0` - Custom Select components (bits-ui) replacing native selects, dynamic width, renamed sidebar token to surface
-- `0.10.1` - Harmonized right sidebar with floating card design (rounded-2xl, border, margin), wrapped servers page in card
-- `0.10.0` - Shared layout: extracted sidebar/header/main wrapper into (app) route group layout, cleaned 6 pages from duplicated boilerplate
-- `0.9.1` - Sidebar collapse UX: smooth width transition with text opacity animation, centered square icon backgrounds when collapsed (46x46px), Lucide nav icons, centered logo/SSE dot/logout when collapsed
-- `0.9.0` - Frontend optimization: configurable API URL, deduplicated utils (getStatusClass, formatRelativeTime, countAlerts, generateAlerts), replaced any types, CSS design tokens, fixed Svelte 5 anti-patterns, dev-only logger, Escape key on modals, Lucide icons replacing {@html}, removed unused svelte.config alias
-- `0.8.0` - Responsive redesign: harmonized breakpoints (sm/md/lg/xl), overlay alerts panel with bell badge, smooth sidebar collapse transition with text clipping, backend server sort/filter/search, mobile-first layouts on all pages
-- `0.7.2` - Expand API tests with fetch mocking: login, register, CRUD servers, changePassword, metrics (82 tests)
-- `0.7.1` - Frontend unit tests with Vitest: validation schemas, utility functions, API error handling (67 tests)
-- `0.7.0` - Zod form validation (login, register, add server, change password), server list pagination (20/page), dashboard lazy loading (SSE-only for individual metrics), fix 401 redirect loop on auth pages
-- `0.6.2` - Fix aggregated charts: bucket labels now represent end time (08:40 = avg 08:30-08:40), exclude incomplete buckets, fill CA materialization gap with raw metrics, auto-reload on bucket completion
-- `0.6.1` - Fix SSE metrics polluting charts on 12h/24h/7d/30d views by snapping to correct time buckets
-- `0.6.0` - Database optimization: global metrics endpoint now uses continuous aggregates (metrics_10min/15min/2h/8h) for 12h/24h/7d/30d time ranges, cross-server aggregation with JOIN + GROUP BY, raw metrics kept for 1h view
-- `0.5.0` - SSE optimization: centralized SSE manager with auto-reconnection, connection pooling across pages, fixed aggregated metrics scheduler (2s latency vs 27s), real-time chart updates with {#key} reactivity, SSE status indicator in sidebar
-- `0.4.0` - Centralized state management: 7 new stores (user, servers, metrics, aggregated, alerts, ui), refactored +page.svelte (-120 lines), fixed TimeRangeSelector reactivity
-- `0.3.0` - Complete TypeScript migration: converted all .js to .ts, centralized types, improved error handling with ApiError class, refactored dashboard components
-- `0.2.1` - Responsive improvements: fixed header, separate mobile/desktop sidebars with smooth animations
-- `0.2.0` - Dashboard layout improvements: collapsible sidebars, stats cards with trends, right panel with alerts
-- `0.1.1` - Fix macOS CPU metrics always showing 0% (gopsutil initialization bug)
-- `0.1.0` - Initial frontend redesign with military green theme, sidebar navigation, table layouts
+*(older versions archived in docs/version-history.md)*
 
 **Commit messages:**
 - First line: Short summary (required)
@@ -317,6 +278,8 @@ All embedded at compile time (`//go:embed`).
 - Containers: Skip disk metrics (shared with host, would double-count)
 - VMs: Skip swap and temperature (no physical access)
 
+**Docker requirement**: Container metrics collection requires Docker Engine API v1.40+ (Docker 19.03+). The agent communicates via Unix socket (`/var/run/docker.sock`), and the `watchflare` user must be in the `docker` group.
+
 ---
 
 ## Critical Entry Points
@@ -352,7 +315,7 @@ All embedded at compile time (`//go:embed`).
 - `cache/sync_worker.go:StaleChecker()` - Offline detection (10s scan, 15s threshold)
 - `services/aggregated_metrics_scheduler.go:Start()` - Cross-server metrics (30s)
 
-*For complete API surface, see `docs/internals.md`*
+*For complete API surface, see `docs/internals.md` (local, gitignored)*
 
 ---
 
@@ -546,9 +509,6 @@ SELECT * FROM packages LIMIT 10;       # View packages
 
 ## Documentation
 
-- `docs/architecture.md`: System overview, data flows, deployment
-- `docs/internals.md`: Detailed component breakdown (every package/module)
-- `docs/security.md`: Security model (TLS, HMAC, JWT, key management)
-- `agent/INSTALL.md`: Agent installation guide (macOS)
-- `agent/INSTALL-LINUX.md`: Agent installation guide (Linux/systemd)
-- `README.md`: (Currently minimal)
+- `README.md`: Project introduction and quick start
+- `SECURITY.md`: Security policy
+- `docs/` (local only, gitignored): architecture, internals, security details, install guides, version history
