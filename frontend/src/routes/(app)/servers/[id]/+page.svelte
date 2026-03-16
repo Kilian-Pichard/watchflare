@@ -71,8 +71,13 @@
             const update = event.data as { server_id: string; metrics: ContainerMetric[] };
             if (server && update.server_id === server.id) {
                 containerMetrics = [...containerMetrics, ...update.metrics];
-                if (containerMetrics.length > MAX_METRICS_POINTS_DETAIL) {
-                    containerMetrics = containerMetrics.slice(-MAX_METRICS_POINTS_DETAIL);
+
+                // Limit by unique timestamps (not total entries) to keep
+                // MAX_METRICS_POINTS_DETAIL timestamps regardless of container count
+                const uniqueTs = [...new Set(containerMetrics.map(m => m.timestamp))].sort();
+                if (uniqueTs.length > MAX_METRICS_POINTS_DETAIL) {
+                    const cutoff = uniqueTs[uniqueTs.length - MAX_METRICS_POINTS_DETAIL];
+                    containerMetrics = containerMetrics.filter(m => m.timestamp >= cutoff);
                 }
             }
         }
