@@ -5,7 +5,6 @@
     import * as api from "$lib/api.js";
     import { sseStore } from "$lib/stores/sse";
     import { handleSSEReactivation, logger } from "$lib/utils";
-    import { MAX_METRICS_POINTS_DETAIL } from "$lib/constants";
     import type { Server, Metric, ContainerMetric, PackageStats, SSEEvent, TimeRange } from "$lib/types";
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
     import Modal from "$lib/components/Modal.svelte";
@@ -13,6 +12,20 @@
     import ServerAlerts from "$lib/components/server/ServerAlerts.svelte";
     import ServerMetricsCharts from "$lib/components/server/ServerMetricsCharts.svelte";
     import InstallInstructions from "$lib/components/InstallInstructions.svelte";
+
+    const TIME_RANGE_SECONDS: Record<string, number> = {
+        "1h": 3600,
+        "12h": 43200,
+        "24h": 86400,
+        "7d": 604800,
+        "30d": 2592000,
+    };
+
+    /** Drop metrics older than the current time range window (+ 60s buffer) */
+    function pruneMetricsByTime(arr: Metric[], range: TimeRange): Metric[] {
+        const cutoff = Date.now() / 1000 - (TIME_RANGE_SECONDS[range] || 3600) - 60;
+        return arr.filter(m => new Date(m.timestamp).getTime() / 1000 >= cutoff);
+    }
 
     let server: Server | null = $state(null);
     let loading = $state(true);
@@ -59,10 +72,7 @@
             const metric = event.data;
             if (server && metric.server_id === server.id) {
                 latestMetric = metric;
-                metrics = [...metrics, metric];
-                if (metrics.length > MAX_METRICS_POINTS_DETAIL) {
-                    metrics = metrics.slice(-MAX_METRICS_POINTS_DETAIL);
-                }
+                metrics = pruneMetricsByTime([...metrics, metric], timeRange);
             }
         }
 
@@ -70,15 +80,10 @@
         if (event.type === "container_metrics_update") {
             const update = event.data as { server_id: string; metrics: ContainerMetric[] };
             if (server && update.server_id === server.id) {
-                containerMetrics = [...containerMetrics, ...update.metrics];
-
-                // Limit by unique timestamps (not total entries) to keep
-                // MAX_METRICS_POINTS_DETAIL timestamps regardless of container count
-                const uniqueTs = [...new Set(containerMetrics.map(m => m.timestamp))].sort();
-                if (uniqueTs.length > MAX_METRICS_POINTS_DETAIL) {
-                    const cutoff = uniqueTs[uniqueTs.length - MAX_METRICS_POINTS_DETAIL];
-                    containerMetrics = containerMetrics.filter(m => m.timestamp >= cutoff);
-                }
+                const cutoff = Date.now() / 1000 - (TIME_RANGE_SECONDS[timeRange] || 3600) - 60;
+                containerMetrics = [...containerMetrics, ...update.metrics].filter(
+                    m => new Date(m.timestamp).getTime() / 1000 >= cutoff
+                );
             }
         }
     }
