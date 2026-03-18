@@ -34,9 +34,6 @@
 				<p class="text-sm text-muted-foreground mt-1">
 					The agent's system clock is out of sync with the backend (>5 min difference). Heartbeats are being rejected.
 				</p>
-				<div class="mt-2 rounded-md bg-muted px-3 py-2">
-					<code class="text-xs text-foreground">sudo timedatectl set-ntp true && sudo systemctl restart watchflare-agent</code>
-				</div>
 			</div>
 		</div>
 	</div>

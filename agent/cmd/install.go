@@ -183,10 +183,8 @@ func Install() {
 				fmt.Println(" ⚠")
 				fmt.Println()
 				fmt.Println("  ⚠ WARNING: Clock synchronization error detected!")
-				fmt.Println("  Your system clock is out of sync with the backend (>5min difference).")
-				fmt.Println("  Fix:")
-				fmt.Println("     sudo timedatectl set-ntp true")
-				fmt.Println("     sudo systemctl restart watchflare-agent")
+				fmt.Println("  The system clock is out of sync with the backend (>5min difference).")
+				fmt.Println("  Ensure the system clock is synchronized and restart the agent.")
 			} else {
 				fmt.Println(" ✓")
 			}
