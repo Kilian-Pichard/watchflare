@@ -85,7 +85,9 @@
     <!-- Top: Name, status, actions menu -->
     <div class="flex items-start justify-between">
         <div class="flex items-center gap-3 flex-wrap">
-            <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
+            <h1
+                class="text-xl sm:text-2xl font-semibold text-foreground break-all"
+            >
                 {server.name}
             </h1>
             <span
@@ -108,7 +110,7 @@
                 {#snippet child({ props })}
                     <button
                         {...props}
-                        class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        class="rounded-lg p-1.5 ml-3 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         title="Server actions"
                     >
                         <EllipsisVertical class="h-5 w-5" />

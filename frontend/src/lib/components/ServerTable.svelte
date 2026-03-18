@@ -1,14 +1,30 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
     import { formatBytes, formatPercent, getStatusClass } from "$lib/utils";
-    import type { ServerWithMetrics, Metric } from "$lib/types";
+    import {
+        EllipsisVertical,
+        Pencil,
+        Pause,
+        Play,
+        Trash2,
+    } from "lucide-svelte";
+    import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+    import type { ServerWithMetrics, Metric, Server } from "$lib/types";
 
     const {
         servers,
         latestMetrics,
+        onRename,
+        onPause,
+        onResume,
+        onDelete,
     }: {
         servers: ServerWithMetrics[];
         latestMetrics: Record<string, Metric>;
+        onRename: (server: Server) => void;
+        onPause: (serverId: string) => void;
+        onResume: (serverId: string) => void;
+        onDelete: (server: Server) => void;
     } = $props();
 
     let sortColumn = $state("name");
@@ -181,12 +197,12 @@
                                   ? 'bg-danger'
                                   : 'bg-muted-foreground'}"
                         ></span>
-                        <span class="font-medium text-foreground truncate"
+                        <span class="font-medium text-foreground break-all"
                             >{server.name}</span
                         >
                     </div>
                     <span
-                        class="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {getStatusClass(
+                        class="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 ml-3 text-xs font-medium {getStatusClass(
                             server.status,
                         )}"
                     >
@@ -292,7 +308,7 @@
 
     <!-- Desktop: Table layout -->
     <div class="hidden md:block overflow-x-auto">
-        <table class="w-full table-fixed min-w-280">
+        <table class="w-full min-w-280">
             <colgroup>
                 <col class="min-w-50" />
                 <col class="w-30" />
@@ -300,7 +316,7 @@
                 <col class="w-30" />
                 <col class="w-30" />
                 <col class="w-35" />
-                <col class="w-32.5" />
+                <col class="w-40" />
                 <col class="w-17.5" />
                 <col class="w-25" />
             </colgroup>
@@ -406,7 +422,6 @@
                         scope="col"
                         class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
                     >
-                        Updates
                     </th>
                 </tr>
             </thead>
@@ -421,12 +436,14 @@
                         <td class="px-4 py-3.5">
                             <div class="group flex flex-col">
                                 <span
-                                    class="font-medium text-foreground group-hover:text-primary transition-colors"
+                                    class="font-medium text-foreground group-hover:text-primary transition-colors whitespace-nowrap"
                                 >
                                     {server.name}
                                 </span>
                                 {#if server.hostname}
-                                    <span class="text-xs text-muted-foreground">
+                                    <span
+                                        class="text-xs text-muted-foreground whitespace-nowrap"
+                                    >
                                         {server.hostname}
                                     </span>
                                 {/if}
@@ -511,7 +528,9 @@
                         <!-- Network -->
                         <td class="px-4 py-3.5 text-center">
                             {#if metrics.hasData}
-                                <div class="flex flex-col items-center text-sm">
+                                <div
+                                    class="flex flex-col items-center text-sm whitespace-nowrap"
+                                >
                                     <span class="text-foreground"
                                         >{formatBytes(metrics.netRx)}/s ↓</span
                                     >
@@ -537,11 +556,49 @@
                             {/if}
                         </td>
 
-                        <!-- Updates (MCO/MCS) - Placeholder -->
-                        <td class="px-4 py-3.5 text-center">
-                            <span class="text-xs text-muted-foreground">
-                                -
-                            </span>
+                        <!-- Actions menu -->
+                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                        <td class="px-4 py-3.5 text-center" onclick={(e) => e.stopPropagation()}>
+                            <DropdownMenu.Root>
+                                <DropdownMenu.Trigger>
+                                    {#snippet child({ props })}
+                                        <button
+                                            {...props}
+                                            class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                            title="Server actions"
+                                        >
+                                            <EllipsisVertical class="h-5 w-5" />
+                                        </button>
+                                    {/snippet}
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Content side="bottom" align="end">
+                                    <DropdownMenu.Item onclick={(e) => { e.stopPropagation(); onRename(server); }}>
+                                        <Pencil class="h-4 w-4" />
+                                        Rename
+                                    </DropdownMenu.Item>
+                                    {#if server.status !== "pending"}
+                                        {#if server.status === "paused"}
+                                            <DropdownMenu.Item onclick={(e) => { e.stopPropagation(); onResume(server.id); }}>
+                                                <Play class="h-4 w-4" />
+                                                Resume
+                                            </DropdownMenu.Item>
+                                        {:else}
+                                            <DropdownMenu.Item onclick={(e) => { e.stopPropagation(); onPause(server.id); }}>
+                                                <Pause class="h-4 w-4" />
+                                                Pause
+                                            </DropdownMenu.Item>
+                                        {/if}
+                                    {/if}
+                                    <DropdownMenu.Separator />
+                                    <DropdownMenu.Item
+                                        onclick={(e) => { e.stopPropagation(); onDelete(server); }}
+                                        class="text-destructive data-highlighted:text-destructive"
+                                    >
+                                        <Trash2 class="h-4 w-4" />
+                                        Delete
+                                    </DropdownMenu.Item>
+                                </DropdownMenu.Content>
+                            </DropdownMenu.Root>
                         </td>
                     </tr>
                 {/each}
