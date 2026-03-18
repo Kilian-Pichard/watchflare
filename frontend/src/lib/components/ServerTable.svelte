@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { goto } from "$app/navigation";
     import { formatBytes, formatPercent, getStatusClass } from "$lib/utils";
     import type { ServerWithMetrics, Metric } from "$lib/types";
 
@@ -169,98 +170,119 @@
                 href="/servers/{server.id}"
                 class="block p-4 hover:bg-muted/20 transition-colors"
             >
-                <div class="flex items-center justify-between mb-2">
-                    <div>
-                        <span class="font-medium text-foreground"
-                            >{server.name}</span
-                        >
-                        {#if server.hostname}
-                            <span class="text-xs text-muted-foreground ml-2"
-                                >{server.hostname}</span
-                            >
-                        {/if}
-                    </div>
-                    <span
-                        class="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium {getStatusClass(
-                            server.status,
-                        )}"
-                    >
+                <!-- Header: name + status -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 min-w-0">
                         <span
-                            class="h-1.5 w-1.5 rounded-full {server.status ===
+                            class="h-2 w-2 shrink-0 rounded-full {server.status ===
                             'online'
                                 ? 'bg-success'
                                 : server.status === 'offline'
                                   ? 'bg-danger'
                                   : 'bg-muted-foreground'}"
                         ></span>
+                        <span class="font-medium text-foreground truncate"
+                            >{server.name}</span
+                        >
+                    </div>
+                    <span
+                        class="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {getStatusClass(
+                            server.status,
+                        )}"
+                    >
                         {server.status}
                     </span>
                 </div>
+                {#if server.hostname}
+                    <p class="text-xs text-muted-foreground mt-0.5 ml-4">
+                        {server.hostname}
+                    </p>
+                {/if}
+
                 {#if metrics.hasData}
-                    <div class="grid grid-cols-3 gap-3 text-sm">
-                        <div>
-                            <span class="text-xs text-muted-foreground"
-                                >CPU</span
-                            >
-                            <p class="text-foreground">
-                                {formatPercent(metrics.cpu)}
-                            </p>
-                            {@render metricBar(metrics.cpu)}
-                        </div>
-                        <div>
-                            <span class="text-xs text-muted-foreground"
-                                >Memory</span
-                            >
-                            <p class="text-foreground">
-                                {formatPercent(metrics.memory)}
-                            </p>
-                            {@render metricBar(metrics.memory)}
-                        </div>
-                        <div>
-                            <span class="text-xs text-muted-foreground"
-                                >Disk</span
-                            >
-                            <p class="text-foreground">
-                                {formatPercent(metrics.disk)}
-                            </p>
-                            {@render metricBar(metrics.disk)}
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-3 text-sm mt-2">
-                        <div>
-                            <span class="text-xs text-muted-foreground"
-                                >Load</span
-                            >
-                            <p class="text-foreground text-xs">
-                                {metrics.load1.toFixed(2)}
-                                {metrics.load5.toFixed(2)}
-                                {metrics.load15.toFixed(2)}
-                            </p>
-                        </div>
-                        <div>
-                            <span class="text-xs text-muted-foreground"
-                                >Net</span
-                            >
-                            <p class="text-foreground text-xs">
-                                {formatBytes(metrics.netRx)}/s ↓
-                            </p>
-                            <p class="text-foreground text-xs">
-                                {formatBytes(metrics.netTx)}/s ↑
-                            </p>
-                        </div>
-                        {#if metrics.temp > 0}
-                            <div>
-                                <span class="text-xs text-muted-foreground"
-                                    >Temp</span
+                    <!-- < 640px: vertical bars with max-width -->
+                    <div class="sm:hidden mt-3 space-y-3">
+                        {#each [{ label: "CPU", value: metrics.cpu }, { label: "Mem", value: metrics.memory }, { label: "Disk", value: metrics.disk }] as { label, value }}
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-8 text-xs text-muted-foreground shrink-0"
+                                    >{label}</span
                                 >
-                                <p class="text-foreground">
-                                    {Math.round(metrics.temp)}°C
-                                </p>
+                                <div
+                                    class="flex-1 max-w-40 h-2.5 rounded-full bg-muted"
+                                >
+                                    <div
+                                        class="h-full rounded-full {getBarColor(
+                                            value,
+                                        )}"
+                                        style="width: {Math.min(value, 100)}%"
+                                    ></div>
+                                </div>
+                                <span
+                                    class="w-12 text-xs text-foreground text-left shrink-0"
+                                    >{formatPercent(value)}</span
+                                >
                             </div>
+                        {/each}
+                    </div>
+
+                    <!-- 640-768px: grid cols -->
+                    <div class="hidden sm:grid my-4 grid-cols-3 gap-12">
+                        {#each [{ label: "CPU", value: metrics.cpu }, { label: "Mem", value: metrics.memory }, { label: "Disk", value: metrics.disk }] as { label, value }}
+                            <div>
+                                <div
+                                    class="flex items-center justify-between text-xs mb-1"
+                                >
+                                    <span class="text-muted-foreground"
+                                        >{label}</span
+                                    >
+                                    <span class="text-foreground"
+                                        >{formatPercent(value)}</span
+                                    >
+                                </div>
+                                <div class="h-2 rounded-full bg-muted">
+                                    <div
+                                        class="h-full rounded-full {getBarColor(
+                                            value,
+                                        )}"
+                                        style="width: {Math.min(value, 100)}%"
+                                    ></div>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+
+                    <!-- Secondary metrics -->
+                    <div
+                        class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs"
+                    >
+                        <span>
+                            <span class="text-muted-foreground">Load</span>
+                            <span class="text-foreground"
+                                >{metrics.load1.toFixed(2)}
+                                {metrics.load5.toFixed(2)}
+                                {metrics.load15.toFixed(2)}</span
+                            >
+                        </span>
+                        <span>
+                            <span class="text-muted-foreground">Net</span>
+                            <span class="text-foreground"
+                                >↓{formatBytes(metrics.netRx)}/s ↑{formatBytes(
+                                    metrics.netTx,
+                                )}/s</span
+                            >
+                        </span>
+                        {#if metrics.temp > 0}
+                            <span>
+                                <span class="text-muted-foreground">Temp</span>
+                                <span class="text-foreground"
+                                    >{Math.round(metrics.temp)}°C</span
+                                >
+                            </span>
                         {/if}
                     </div>
                 {:else}
-                    <p class="text-xs text-muted-foreground">
+                    <p class="text-xs text-muted-foreground mt-2">
                         No metrics available
                     </p>
                 {/if}
@@ -391,13 +413,13 @@
             <tbody class="divide-y divide-border">
                 {#each sortedServers() as { server }}
                     {@const metrics = getLastMetrics(server.id)}
-                    <tr class="hover:bg-muted/20 transition-colors">
+                    <tr
+                        onclick={() => goto(`/servers/${server.id}`)}
+                        class="hover:bg-muted/20 transition-colors cursor-pointer"
+                    >
                         <!-- Server Name -->
                         <td class="px-4 py-3.5">
-                            <a
-                                href="/servers/{server.id}"
-                                class="group flex flex-col"
-                            >
+                            <div class="group flex flex-col">
                                 <span
                                     class="font-medium text-foreground group-hover:text-primary transition-colors"
                                 >
@@ -408,7 +430,7 @@
                                         {server.hostname}
                                     </span>
                                 {/if}
-                            </a>
+                            </div>
                         </td>
 
                         <!-- Status -->

@@ -34,7 +34,7 @@
 </script>
 
 <aside
-    class="fixed left-0 top-0 z-40 py-4 pl-4 hidden lg:block h-screen bg-transparent {collapsed
+    class="fixed left-0 top-0 z-40 py-4 pl-4 hidden lg:block h-svh bg-transparent {collapsed
         ? 'w-20'
         : 'w-64'} {transitioning
         ? 'transition-[width] duration-300 ease-in-out'
@@ -85,7 +85,7 @@
 
             <!-- User Menu -->
             <div class="px-2 pb-3">
-                <UserMenuButton collapsed={collapsed} {textClass} />
+                <UserMenuButton {collapsed} {textClass} />
             </div>
         </div>
     </div>
