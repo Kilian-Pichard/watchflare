@@ -255,6 +255,7 @@ export interface RegenerateTokenResponse {
 
 export interface GetServerResponse {
 	server: Server;
+	clock_desync: boolean;
 }
 
 export interface ListServersResponse {

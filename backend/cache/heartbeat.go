@@ -7,12 +7,13 @@ import (
 
 // HeartbeatData represents cached heartbeat information for an agent
 type HeartbeatData struct {
-	AgentID     string
-	LastSeen    time.Time
-	Status      string // "online" or "offline"
-	IPv4Address string
-	IPv6Address string
-	Updated     bool // Flag indicating if data has been updated since last DB sync
+	AgentID      string
+	LastSeen     time.Time
+	Status       string // "online" or "offline"
+	IPv4Address  string
+	IPv6Address  string
+	Updated      bool // Flag indicating if data has been updated since last DB sync
+	ClockDesync  bool // True if agent's clock is out of sync (timestamp rejected)
 }
 
 // HeartbeatCache stores heartbeat data in memory
@@ -50,6 +51,7 @@ func (c *HeartbeatCache) Update(agentID, ipv4, ipv6 string) {
 		existing.IPv4Address = ipv4
 		existing.IPv6Address = ipv6
 		existing.Updated = true
+		existing.ClockDesync = false
 	} else {
 		// Create new entry
 		c.cache[agentID] = &HeartbeatData{
@@ -81,6 +83,7 @@ func (c *HeartbeatCache) Get(agentID string) (*HeartbeatData, bool) {
 		IPv4Address: data.IPv4Address,
 		IPv6Address: data.IPv6Address,
 		Updated:     data.Updated,
+		ClockDesync: data.ClockDesync,
 	}, true
 }
 
@@ -98,6 +101,7 @@ func (c *HeartbeatCache) GetAll() []*HeartbeatData {
 			IPv4Address: data.IPv4Address,
 			IPv6Address: data.IPv6Address,
 			Updated:     data.Updated,
+			ClockDesync: data.ClockDesync,
 		})
 	}
 	return result
@@ -130,6 +134,26 @@ func (c *HeartbeatCache) CheckStale(timeout time.Duration) []string {
 	}
 
 	return staleAgents
+}
+
+// SetClockDesync marks an agent as having clock synchronization issues
+func (c *HeartbeatCache) SetClockDesync(agentID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if data, ok := c.cache[agentID]; ok {
+		data.ClockDesync = true
+		data.Updated = true
+	} else {
+		// Agent not in cache yet (first heartbeat failed), create entry
+		c.cache[agentID] = &HeartbeatData{
+			AgentID:     agentID,
+			LastSeen:    time.Now(),
+			Status:      "online",
+			ClockDesync: true,
+			Updated:     true,
+		}
+	}
 }
 
 // Remove removes a specific agent from the cache

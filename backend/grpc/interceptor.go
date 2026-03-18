@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"watchflare/backend/cache"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 
@@ -68,6 +69,10 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 
 		if err := ValidateTimestamp(timestamp, timestampWindow); err != nil {
 			log.Printf("Timestamp validation failed for agent %s: %v", agentID, err)
+			// Track clock desync for heartbeat RPCs so frontend can show a banner
+			if info.FullMethod == "/agent.AgentService/Heartbeat" || info.FullMethod == "/agent.AgentService/SendMetrics" {
+				cache.GetCache().SetClockDesync(agentID)
+			}
 			return nil, status.Error(codes.InvalidArgument, "Timestamp outside acceptable window")
 		}
 

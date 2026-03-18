@@ -39,6 +39,7 @@
     let regeneratedToken = $state("");
     let backendHost = $state("");
     let copiedToken = $state(false);
+    let clockDesync = $state(false);
     let packageStats: PackageStats | null = $state(null);
     let metrics: Metric[] = $state([]);
     let containerMetrics: ContainerMetric[] = $state([]);
@@ -64,6 +65,7 @@
                     ignore_ip_mismatch: update.ignore_ip_mismatch,
                     last_seen: update.last_seen,
                 };
+                clockDesync = update.clock_desync || false;
             }
         }
 
@@ -110,6 +112,7 @@
         try {
             const response = await api.getServer(serverId);
             server = response.server;
+            clockDesync = response.clock_desync || false;
 
             if (server.status === "online") {
                 try {
@@ -337,6 +340,7 @@
     <ServerAlerts
         {server}
         {showIPMismatchWarning}
+        {clockDesync}
         onUpdateIP={handleUpdateIP}
         onIgnoreIP={handleIgnoreIP}
         onDismissReactivation={handleDismissReactivation}
