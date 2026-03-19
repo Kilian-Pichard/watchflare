@@ -9,6 +9,7 @@
         Trash2,
     } from "lucide-svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+    import ServerFilters from "$lib/components/server/ServerFilters.svelte";
     import type { ServerWithMetrics, Metric, Server } from "$lib/types";
 
     const {
@@ -29,6 +30,16 @@
 
     let sortColumn = $state("name");
     let sortOrder = $state<"asc" | "desc">("asc");
+    let searchQuery = $state("");
+    let statusFilter = $state("");
+
+    function handleSearchInput(e: Event) {
+        searchQuery = (e.target as HTMLInputElement).value;
+    }
+
+    function handleStatusChange(value: string) {
+        statusFilter = value;
+    }
 
     function handleSort(column: string) {
         if (sortColumn === column) {
@@ -84,7 +95,17 @@
     }
 
     const sortedServers = $derived(() => {
-        const sorted = [...servers].sort((a, b) => {
+        const query = searchQuery.toLowerCase();
+        const filtered = servers.filter((s) => {
+            if (statusFilter && s.server.status !== statusFilter) return false;
+            if (query) {
+                const name = (s.server.name || "").toLowerCase();
+                const hostname = (s.server.hostname || "").toLowerCase();
+                if (!name.includes(query) && !hostname.includes(query)) return false;
+            }
+            return true;
+        });
+        const sorted = [...filtered].sort((a, b) => {
             let valA, valB;
             switch (sortColumn) {
                 case "name":
@@ -177,16 +198,24 @@
     </div>
 {/snippet}
 
-<div class="rounded-lg border bg-card">
+<ServerFilters
+    {searchQuery}
+    {statusFilter}
+    onSearchInput={handleSearchInput}
+    onStatusChange={handleStatusChange}
+/>
+
+<div class="md:rounded-lg md:border md:bg-card">
     <!-- Mobile: Cards layout -->
-    <div class="md:hidden divide-y divide-border">
+    <div class="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
         {#each sortedServers() as { server }}
             {@const metrics = getLastMetrics(server.id)}
             <a
                 href="/servers/{server.id}"
-                class="block p-4 hover:bg-muted/20 transition-colors"
+                class="block rounded-lg border bg-card hover:bg-muted/20 transition-colors"
             >
-                <!-- Header: name + status -->
+                <!-- Header: name + status + actions -->
+                <div class="rounded-t-lg bg-muted/30 px-4 py-3 border-b border-border">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2 min-w-0">
                         <span
@@ -201,100 +230,109 @@
                             >{server.name}</span
                         >
                     </div>
-                    <span
-                        class="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 ml-3 text-xs font-medium {getStatusClass(
-                            server.status,
-                        )}"
-                    >
-                        {server.status}
-                    </span>
+                    <div class="flex items-center gap-1 shrink-0 ml-3">
+                        <span
+                            class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {getStatusClass(
+                                server.status,
+                            )}"
+                        >
+                            {server.status}
+                        </span>
+                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                        <div
+                            onclick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }}
+                            class="ml-2"
+                        >
+                            <DropdownMenu.Root>
+                                <DropdownMenu.Trigger>
+                                    {#snippet child({ props })}
+                                        <button
+                                            {...props}
+                                            class="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                            title="Server actions"
+                                        >
+                                            <EllipsisVertical class="h-4 w-4" />
+                                        </button>
+                                    {/snippet}
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Content side="bottom" align="end">
+                                    <DropdownMenu.Item
+                                        onclick={() => onRename(server)}
+                                    >
+                                        <Pencil class="h-4 w-4" />
+                                        Rename
+                                    </DropdownMenu.Item>
+                                    {#if server.status !== "pending"}
+                                        {#if server.status === "paused"}
+                                            <DropdownMenu.Item
+                                                onclick={() =>
+                                                    onResume(server.id)}
+                                            >
+                                                <Play class="h-4 w-4" />
+                                                Resume
+                                            </DropdownMenu.Item>
+                                        {:else}
+                                            <DropdownMenu.Item
+                                                onclick={() =>
+                                                    onPause(server.id)}
+                                            >
+                                                <Pause class="h-4 w-4" />
+                                                Pause
+                                            </DropdownMenu.Item>
+                                        {/if}
+                                    {/if}
+                                    <DropdownMenu.Separator />
+                                    <DropdownMenu.Item
+                                        onclick={() => onDelete(server)}
+                                        class="text-destructive data-highlighted:text-destructive"
+                                    >
+                                        <Trash2 class="h-4 w-4" />
+                                        Delete
+                                    </DropdownMenu.Item>
+                                </DropdownMenu.Content>
+                            </DropdownMenu.Root>
+                        </div>
+                    </div>
                 </div>
                 {#if server.hostname}
                     <p class="text-xs text-muted-foreground mt-0.5 ml-4">
                         {server.hostname}
                     </p>
                 {/if}
+                </div>
 
+                <div class="px-4 py-3">
                 {#if metrics.hasData}
-                    <!-- < 640px: vertical bars with max-width -->
-                    <div class="sm:hidden mt-3 space-y-3">
+                    <div class="space-y-2 text-xs">
                         {#each [{ label: "CPU", value: metrics.cpu }, { label: "Mem", value: metrics.memory }, { label: "Disk", value: metrics.disk }] as { label, value }}
                             <div class="flex items-center gap-2">
-                                <span
-                                    class="w-8 text-xs text-muted-foreground shrink-0"
-                                    >{label}</span
-                                >
-                                <div
-                                    class="flex-1 max-w-40 h-2.5 rounded-full bg-muted"
-                                >
+                                <span class="w-8 text-muted-foreground shrink-0">{label}</span>
+                                <div class="flex-1 h-2.5 rounded-full bg-muted">
                                     <div
-                                        class="h-full rounded-full {getBarColor(
-                                            value,
-                                        )}"
+                                        class="h-full rounded-full {getBarColor(value)}"
                                         style="width: {Math.min(value, 100)}%"
                                     ></div>
                                 </div>
-                                <span
-                                    class="w-12 text-xs text-foreground text-left shrink-0"
-                                    >{formatPercent(value)}</span
-                                >
+                                <span class="w-12 text-foreground text-left shrink-0">{formatPercent(value)}</span>
                             </div>
                         {/each}
-                    </div>
-
-                    <!-- 640-768px: grid cols -->
-                    <div class="hidden sm:grid my-4 grid-cols-3 gap-12">
-                        {#each [{ label: "CPU", value: metrics.cpu }, { label: "Mem", value: metrics.memory }, { label: "Disk", value: metrics.disk }] as { label, value }}
-                            <div>
-                                <div
-                                    class="flex items-center justify-between text-xs mb-1"
-                                >
-                                    <span class="text-muted-foreground"
-                                        >{label}</span
-                                    >
-                                    <span class="text-foreground"
-                                        >{formatPercent(value)}</span
-                                    >
-                                </div>
-                                <div class="h-2 rounded-full bg-muted">
-                                    <div
-                                        class="h-full rounded-full {getBarColor(
-                                            value,
-                                        )}"
-                                        style="width: {Math.min(value, 100)}%"
-                                    ></div>
-                                </div>
-                            </div>
-                        {/each}
-                    </div>
-
-                    <!-- Secondary metrics -->
-                    <div
-                        class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs"
-                    >
-                        <span>
-                            <span class="text-muted-foreground">Load</span>
-                            <span class="text-foreground"
-                                >{metrics.load1.toFixed(2)}
-                                {metrics.load5.toFixed(2)}
-                                {metrics.load15.toFixed(2)}</span
-                            >
-                        </span>
-                        <span>
-                            <span class="text-muted-foreground">Net</span>
-                            <span class="text-foreground"
-                                >↓{formatBytes(metrics.netRx)}/s ↑{formatBytes(
-                                    metrics.netTx,
-                                )}/s</span
-                            >
-                        </span>
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 text-muted-foreground shrink-0">Load</span>
+                            <span class="text-foreground">{metrics.load1.toFixed(2)} {metrics.load5.toFixed(2)} {metrics.load15.toFixed(2)}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 text-muted-foreground shrink-0">Net</span>
+                            <span class="text-foreground">↓{formatBytes(metrics.netRx)}/s ↑{formatBytes(metrics.netTx)}/s</span>
+                        </div>
                         {#if metrics.temp > 0}
-                            <span>
-                                <span class="text-muted-foreground">Temp</span>
-                                <span class="text-foreground"
-                                    >{Math.round(metrics.temp)}°C</span
-                                >
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 text-muted-foreground shrink-0">Temp</span>
+                                <span class="text-foreground">{Math.round(metrics.temp)}°C</span>
+                            </div>
                         {/if}
                     </div>
                 {:else}
@@ -302,6 +340,7 @@
                         No metrics available
                     </p>
                 {/if}
+                </div>
             </a>
         {/each}
     </div>
@@ -558,7 +597,10 @@
 
                         <!-- Actions menu -->
                         <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <td class="px-4 py-3.5 text-center" onclick={(e) => e.stopPropagation()}>
+                        <td
+                            class="px-4 py-3.5 text-center"
+                            onclick={(e) => e.stopPropagation()}
+                        >
                             <DropdownMenu.Root>
                                 <DropdownMenu.Trigger>
                                     {#snippet child({ props })}
@@ -572,18 +614,33 @@
                                     {/snippet}
                                 </DropdownMenu.Trigger>
                                 <DropdownMenu.Content side="bottom" align="end">
-                                    <DropdownMenu.Item onclick={(e) => { e.stopPropagation(); onRename(server); }}>
+                                    <DropdownMenu.Item
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            onRename(server);
+                                        }}
+                                    >
                                         <Pencil class="h-4 w-4" />
                                         Rename
                                     </DropdownMenu.Item>
                                     {#if server.status !== "pending"}
                                         {#if server.status === "paused"}
-                                            <DropdownMenu.Item onclick={(e) => { e.stopPropagation(); onResume(server.id); }}>
+                                            <DropdownMenu.Item
+                                                onclick={(e) => {
+                                                    e.stopPropagation();
+                                                    onResume(server.id);
+                                                }}
+                                            >
                                                 <Play class="h-4 w-4" />
                                                 Resume
                                             </DropdownMenu.Item>
                                         {:else}
-                                            <DropdownMenu.Item onclick={(e) => { e.stopPropagation(); onPause(server.id); }}>
+                                            <DropdownMenu.Item
+                                                onclick={(e) => {
+                                                    e.stopPropagation();
+                                                    onPause(server.id);
+                                                }}
+                                            >
                                                 <Pause class="h-4 w-4" />
                                                 Pause
                                             </DropdownMenu.Item>
@@ -591,7 +648,10 @@
                                     {/if}
                                     <DropdownMenu.Separator />
                                     <DropdownMenu.Item
-                                        onclick={(e) => { e.stopPropagation(); onDelete(server); }}
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            onDelete(server);
+                                        }}
                                         class="text-destructive data-highlighted:text-destructive"
                                     >
                                         <Trash2 class="h-4 w-4" />
@@ -606,7 +666,7 @@
         </table>
     </div>
 
-    {#if servers.length === 0}
+    {#if sortedServers().length === 0}
         <div
             class="flex flex-col items-center justify-center py-12 text-center"
         >
@@ -623,10 +683,14 @@
                     d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
                 />
             </svg>
-            <p class="text-sm text-muted-foreground">No servers found</p>
-            <p class="text-xs text-muted-foreground mt-1">
-                Add your first server to start monitoring
-            </p>
+            {#if servers.length === 0}
+                <p class="text-sm text-muted-foreground">No servers found</p>
+                <p class="text-xs text-muted-foreground mt-1">
+                    Add your first server to start monitoring
+                </p>
+            {:else}
+                <p class="text-sm text-muted-foreground">No matching servers</p>
+            {/if}
         </div>
     {/if}
 </div>
