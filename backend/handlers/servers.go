@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"watchflare/backend/cache"
 	"watchflare/backend/database"
 	"watchflare/backend/services"
 	"watchflare/backend/sse"
@@ -149,8 +150,15 @@ func GetServer(c *gin.Context) {
 		return
 	}
 
+	// Check cache for clock desync flag
+	clockDesync := false
+	if cachedData, ok := cache.GetCache().Get(server.AgentID); ok {
+		clockDesync = cachedData.ClockDesync
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"server": server,
+		"server":       server,
+		"clock_desync": clockDesync,
 	})
 }
 

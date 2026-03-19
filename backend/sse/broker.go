@@ -25,6 +25,7 @@ type ServerUpdate struct {
 	LastSeen         string `json:"last_seen"`
 	Reactivated      bool   `json:"reactivated,omitempty"`      // True if agent was reactivated (UUID reused)
 	Hostname         string `json:"hostname,omitempty"`         // Hostname for reactivation notification
+	ClockDesync      bool   `json:"clock_desync,omitempty"`     // True if agent's clock is out of sync
 }
 
 // MetricsUpdate represents a real-time metrics update

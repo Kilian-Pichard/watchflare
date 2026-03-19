@@ -16,16 +16,26 @@ func Register() bool {
 	log.Println("Watchflare Agent Registration")
 	log.Println("==============================")
 
-	// Parse command line arguments
+	// Parse command line arguments (supports both --flag=value and --flag value)
 	var token, host, port string
 	for i := 2; i < len(os.Args); i++ {
 		arg := os.Args[i]
-		if len(arg) > 8 && arg[:8] == "--token=" {
+		switch {
+		case len(arg) > 8 && arg[:8] == "--token=":
 			token = arg[8:]
-		} else if len(arg) > 7 && arg[:7] == "--host=" {
+		case arg == "--token" && i+1 < len(os.Args):
+			i++
+			token = os.Args[i]
+		case len(arg) > 7 && arg[:7] == "--host=":
 			host = arg[7:]
-		} else if len(arg) > 7 && arg[:7] == "--port=" {
+		case arg == "--host" && i+1 < len(os.Args):
+			i++
+			host = os.Args[i]
+		case len(arg) > 7 && arg[:7] == "--port=":
 			port = arg[7:]
+		case arg == "--port" && i+1 < len(os.Args):
+			i++
+			port = os.Args[i]
 		}
 	}
 

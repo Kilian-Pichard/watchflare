@@ -276,11 +276,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 		UptimeSeconds:         req.Metrics.UptimeSeconds,
 	}
 
-	if err := database.DB.Create(metric).Error; err != nil {
-		return nil, fmt.Errorf("failed to save metrics: %w", err)
-	}
-
-	// Broadcast metrics update via SSE
+	// Broadcast SSE first for low-latency real-time display (Netdata/Prometheus pattern)
 	broker := sse.GetBroker()
 	broker.BroadcastMetricsUpdate(sse.MetricsUpdate{
 		ServerID:             server.ID,
@@ -302,7 +298,6 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 		UptimeSeconds:         metric.UptimeSeconds,
 	})
 
-	// Save and broadcast container metrics if present
 	if len(req.ContainerMetrics) > 0 {
 		var containerModels []models.ContainerMetric
 		var sseContainerMetrics []sse.ContainerMetricMinified
@@ -332,15 +327,21 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 			})
 		}
 
-		if err := database.DB.Create(&containerModels).Error; err != nil {
-			log.Printf("Warning: Failed to save container metrics: %v", err)
-		}
-
 		broker.BroadcastContainerMetricsUpdate(sse.ContainerMetricsUpdate{
 			ServerID:  server.ID,
 			Timestamp: metric.Timestamp.Unix(),
 			Metrics:   sseContainerMetrics,
 		})
+
+		// Persist container metrics to DB (after SSE for lower latency)
+		if err := database.DB.Create(&containerModels).Error; err != nil {
+			log.Printf("Warning: Failed to save container metrics: %v", err)
+		}
+	}
+
+	// Persist system metric to DB (after SSE for lower latency)
+	if err := database.DB.Create(metric).Error; err != nil {
+		return nil, fmt.Errorf("failed to save metrics: %w", err)
 	}
 
 	return &pb.MetricsResponse{

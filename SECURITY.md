@@ -30,4 +30,4 @@ Watchflare uses multiple security layers:
 | Web authentication | JWT in HttpOnly cookie |
 | Password storage | bcrypt (cost 10) |
 
-For full details, see [docs/security.md](docs/security.md).
+Full security documentation will be available at [watchflare.io/docs](https://watchflare.io/docs).

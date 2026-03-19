@@ -16,8 +16,8 @@ func IsTimestampError(err error) bool {
 // FormatError formats an error with helpful context
 func FormatError(err error, context string) string {
 	if IsTimestampError(err) {
-		return fmt.Sprintf("%s failed: CLOCK SYNC ERROR - System time is out of sync (>5min difference with backend). "+
-			"Fix: Run 'sudo timedatectl set-ntp true' and restart the agent. Original error: %v", context, err)
+		return fmt.Sprintf("%s failed: CLOCK SYNC ERROR - System time is out of sync with the backend (>5min difference). "+
+			"Ensure the system clock is synchronized and restart the agent. Original error: %v", context, err)
 	}
 	return fmt.Sprintf("%s failed: %v", context, err)
 }

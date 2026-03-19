@@ -128,8 +128,8 @@ func (s *Sender) replayWAL() error {
 	for i, data := range records {
 		if err := s.sendRecord(data, false, nil); err != nil {
 			if errors.IsTimestampError(err) {
-				log.Printf("Failed to send record %d/%d: CLOCK SYNC ERROR - System time is out of sync (>5min difference with backend). "+
-					"Fix: Run 'sudo timedatectl set-ntp true' and restart the agent (will retry later)", i+1, len(records))
+				log.Printf("Failed to send record %d/%d: CLOCK SYNC ERROR - System time is out of sync with the backend (>5min difference). "+
+					"Ensure the system clock is synchronized and restart the agent (will retry later)", i+1, len(records))
 			} else {
 				log.Printf("Failed to send record %d/%d: %v (will retry later)", i+1, len(records), err)
 			}
@@ -225,8 +225,8 @@ func (s *Sender) collectAndSend() {
 		isLastRecord := i == len(records)-1
 		if err := s.sendRecord(record, isLastRecord, containerMetrics); err != nil {
 			if errors.IsTimestampError(err) {
-				log.Printf("Send failed (record %d/%d): CLOCK SYNC ERROR - System time is out of sync (>5min difference with backend). "+
-					"Fix: Run 'sudo timedatectl set-ntp true' and restart the agent (will retry in %v)",
+				log.Printf("Send failed (record %d/%d): CLOCK SYNC ERROR - System time is out of sync with the backend (>5min difference). "+
+					"Ensure the system clock is synchronized and restart the agent (will retry in %v)",
 					i+1, len(records), s.metricsInterval)
 			} else {
 				log.Printf("Send failed (record %d/%d): %v (will retry in %v)",

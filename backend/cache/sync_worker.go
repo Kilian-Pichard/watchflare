@@ -181,6 +181,7 @@ func (c *StaleChecker) checkStaleAgents() {
 			ConfiguredIP:     configuredIP,
 			IgnoreIPMismatch: server.IgnoreIPMismatch,
 			LastSeen:         data.LastSeen.Format(time.RFC3339),
+			ClockDesync:      data.ClockDesync,
 		})
 
 		log.Printf("⚠ Agent %s marked as offline (no heartbeat for %v)", agentID, c.timeout)

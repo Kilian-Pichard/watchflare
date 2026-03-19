@@ -35,7 +35,7 @@
         />
 
         <main
-            class="min-h-screen pt-26 p-4 sm:p-8 sm:pt-28 {$sidebarCollapsed
+            class="min-h-svh pt-26 p-4 sm:p-8 sm:pt-28 {$sidebarCollapsed
                 ? 'lg:ml-20'
                 : 'lg:ml-64'} {$sidebarTransitioning
                 ? 'transition-[margin] duration-300 ease-in-out'
