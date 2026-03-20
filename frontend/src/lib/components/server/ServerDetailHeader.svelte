@@ -19,7 +19,7 @@
         Clock,
     } from "lucide-svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-    import type { Server, PackageStats, Metric } from "$lib/types";
+    import type { Server, GetPackageStatsResponse, Metric } from "$lib/types";
 
     const {
         server,
@@ -33,7 +33,7 @@
         onResume,
     }: {
         server: Server;
-        packageStats: PackageStats | null;
+        packageStats: GetPackageStatsResponse | null;
         metric?: Metric | null;
         onDelete: () => void;
         onRegenerateToken: () => void;
@@ -201,32 +201,42 @@
     </div>
 
     <!-- Packages -->
-    {#if packageStats}
-        <div class="mt-4 pt-4 border-t flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <div>
-                    <p class="text-xs text-muted-foreground">Packages</p>
-                    <p class="text-sm font-medium text-foreground">
-                        {packageStats.total_packages || 0} installed
-                    </p>
-                </div>
-                {#if packageStats.recent_changes}
-                    <div>
-                        <p class="text-xs text-muted-foreground">
-                            Recent Changes
-                        </p>
-                        <p class="text-sm font-medium text-foreground">
-                            {packageStats.recent_changes} in the last 30d
-                        </p>
-                    </div>
-                {/if}
-            </div>
-            <a
-                href="/servers/{server.id}/packages"
-                class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
+    {#if packageStats && packageStats.total_packages > 0}
+        <div class="mt-4 pt-4 border-t">
+            <div
+                class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
             >
-                View Packages →
-            </a>
+                <div class="flex flex-col gap-2 min-w-0">
+                    <!-- Counts + last scan -->
+                    <div
+                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
+                    >
+                        <span class="font-medium text-foreground">
+                            {packageStats.total_packages.toLocaleString()} packages
+                        </span>
+                        {#if packageStats.recent_changes}
+                            <span class="text-muted-foreground">·</span>
+                            <span class="text-muted-foreground">
+                                {packageStats.recent_changes} changes (30d)
+                            </span>
+                        {/if}
+                        {#if packageStats.last_collection?.timestamp}
+                            <span class="text-muted-foreground">·</span>
+                            <span class="text-xs text-muted-foreground">
+                                Last scan {formatRelativeTime(
+                                    packageStats.last_collection.timestamp,
+                                )}
+                            </span>
+                        {/if}
+                    </div>
+                </div>
+                <a
+                    href="/servers/{server.id}/packages"
+                    class="sm:shrink-0 self-start rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted whitespace-nowrap"
+                >
+                    View Packages →
+                </a>
+            </div>
         </div>
     {/if}
 </div>

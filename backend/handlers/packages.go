@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
@@ -76,7 +77,8 @@ func GetServerPackages(c *gin.Context) {
 	}
 
 	if packageManager != "" {
-		query = query.Where("package_manager = ?", packageManager)
+		managers := strings.Split(packageManager, ",")
+		query = query.Where("package_manager IN ?", managers)
 	}
 
 	// Get total count
@@ -127,6 +129,7 @@ func GetServerPackageHistory(c *gin.Context) {
 
 	// Query parameters
 	changeType := c.Query("change_type") // 'added', 'removed', 'updated', 'initial'
+	excludeInitial := c.Query("exclude_initial") == "true"
 	packageName := c.Query("package")
 	limitStr := c.DefaultQuery("limit", "100")
 	offsetStr := c.DefaultQuery("offset", "0")
@@ -141,6 +144,8 @@ func GetServerPackageHistory(c *gin.Context) {
 
 	if changeType != "" {
 		query = query.Where("change_type = ?", changeType)
+	} else if excludeInitial {
+		query = query.Where("change_type != ?", "initial")
 	}
 
 	if packageName != "" {

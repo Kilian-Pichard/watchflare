@@ -148,17 +148,19 @@ export interface DroppedMetric {
 
 // ===== Packages =====
 
-export type PackageStatus = 'installed' | 'removed' | 'updated';
-
 export interface Package {
 	id: number;
 	server_id: string;
 	name: string;
 	version: string;
+	architecture: string;
 	package_manager: string;
-	status: PackageStatus;
-	installed_at: string;
-	updated_at: string;
+	source: string;
+	installed_at: string | null;
+	package_size: number;
+	description: string;
+	first_seen: string;
+	last_seen: string;
 }
 
 export interface PackageManagerStat {
@@ -175,21 +177,27 @@ export interface PackageStats {
 export interface PackageCollection {
 	id: number;
 	server_id: string;
-	inventory_type: 'full' | 'delta';
+	timestamp: string;
+	collection_type: string;
 	package_count: number;
-	collected_at: string;
+	changes_count: number;
+	duration_ms: number;
+	status: string;
+	error_message: string;
 }
 
 export interface PackageHistory {
 	id: number;
 	server_id: string;
-	package_name: string;
+	timestamp: string;
+	name: string;
 	version: string;
+	architecture: string;
 	package_manager: string;
-	change_type: 'added' | 'removed' | 'updated';
-	old_version: string | null;
-	changed_at: string;
-	collection_id: number;
+	source: string;
+	package_size: number;
+	description: string;
+	change_type: 'added' | 'removed' | 'updated' | 'initial';
 }
 
 // ===== SSE Events =====
@@ -283,18 +291,27 @@ export interface GetContainerMetricsResponse {
 
 export interface GetPackagesResponse {
 	packages: Package[];
+	total_count: number;
+	limit: number;
+	offset: number;
 }
 
-export interface GetPackageStatsResponse {
-	stats: PackageStats;
+export interface GetPackageStatsResponse extends PackageStats {
+	last_collection: PackageCollection | null;
 }
 
 export interface GetPackageCollectionsResponse {
 	collections: PackageCollection[];
+	total_count: number;
+	limit: number;
+	offset: number;
 }
 
 export interface GetPackageHistoryResponse {
 	history: PackageHistory[];
+	total_count: number;
+	limit: number;
+	offset: number;
 }
 
 export interface CurrentUserResponse {
