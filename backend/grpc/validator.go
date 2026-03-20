@@ -70,7 +70,7 @@ func ValidateHMAC(ctx context.Context, agentID, agentKey string, message proto.M
 
 	// Compare HMACs using constant-time comparison
 	if !hmac.Equal([]byte(receivedHMAC), []byte(expectedHMAC)) {
-		return errors.New("HMAC validation failed")
+		return errors.New("hmac validation failed")
 	}
 
 	return nil
@@ -139,7 +139,7 @@ func extractAgentID(message interface{}) (string, error) {
 
 	// Check if it's a string
 	if agentIDField.Kind() != reflect.String {
-		return "", fmt.Errorf("AgentId field is not a string: %v", agentIDField.Kind())
+		return "", fmt.Errorf("agentId field is not a string: %v", agentIDField.Kind())
 	}
 
 	return agentIDField.String(), nil
@@ -167,7 +167,7 @@ func extractTimestamp(message interface{}) (int64, error) {
 
 	// Check if it's an int64
 	if timestampField.Kind() != reflect.Int64 {
-		return 0, fmt.Errorf("Timestamp field is not int64: %v", timestampField.Kind())
+		return 0, fmt.Errorf("timestamp field is not int64: %v", timestampField.Kind())
 	}
 
 	return timestampField.Int(), nil

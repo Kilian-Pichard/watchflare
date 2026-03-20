@@ -34,7 +34,7 @@ func Load() (string, error) {
 
 	uuid := strings.TrimSpace(string(data))
 	if uuid == "" {
-		return "", fmt.Errorf("UUID file is empty")
+		return "", fmt.Errorf("uuid file is empty")
 	}
 
 	return uuid, nil

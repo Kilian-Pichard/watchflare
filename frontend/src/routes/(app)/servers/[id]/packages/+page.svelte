@@ -80,10 +80,10 @@
 
 	function getManagerColor(manager: string): string {
 		const colors: Record<string, string> = {
-			brew: 'bg-[var(--chart-4)]/10 text-[var(--chart-4)] border-[var(--chart-4)]/20',
-			dpkg: 'bg-[var(--chart-2)]/10 text-[var(--chart-2)] border-[var(--chart-2)]/20',
-			rpm: 'bg-[var(--chart-1)]/10 text-[var(--chart-1)] border-[var(--chart-1)]/20',
-			pacman: 'bg-[var(--chart-5)]/10 text-[var(--chart-5)] border-[var(--chart-5)]/20'
+			brew: 'bg-(--chart-4)/10 text-(--chart-4) border-(--chart-4)/20',
+			dpkg: 'bg-(--chart-2)/10 text-(--chart-2) border-(--chart-2)/20',
+			rpm: 'bg-(--chart-1)/10 text-(--chart-1) border-(--chart-1)/20',
+			pacman: 'bg-(--chart-5)/10 text-(--chart-5) border-(--chart-5)/20'
 		};
 		return colors[manager] || 'bg-muted text-muted-foreground border-border';
 	}

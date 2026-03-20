@@ -88,7 +88,7 @@
                             <Command.Item
                                 value={server.id}
                                 onSelect={() => handleSelect(server.id)}
-                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer outline-none data-[highlighted]:bg-muted transition-colors"
+                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer outline-none data-highlighted:bg-muted transition-colors"
                             >
                                 <Server class="h-4 w-4 shrink-0 text-muted-foreground" />
                                 <div class="flex-1 min-w-0">
