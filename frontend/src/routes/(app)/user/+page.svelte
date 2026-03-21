@@ -153,6 +153,8 @@
     <title>User Settings - Watchflare</title>
 </svelte:head>
 
+<div class="max-w-2xl space-y-6">
+
 <!-- Header -->
 <div class="mb-6">
     <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
@@ -162,8 +164,6 @@
         Manage your account and preferences
     </p>
 </div>
-
-<div class="max-w-2xl space-y-6">
     <!-- Profile Card -->
     <div class="rounded-lg border bg-card p-4 sm:p-6">
         <h2 class="text-lg font-semibold text-foreground mb-6">Profile</h2>

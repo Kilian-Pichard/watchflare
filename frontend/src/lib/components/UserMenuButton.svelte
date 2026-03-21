@@ -1,6 +1,7 @@
 <script lang="ts">
     import { authActions } from "$lib/stores";
     import { userStore, themeStore } from "$lib/stores/user";
+
     import type { Theme } from "$lib/types";
     import { Settings, LogOut, Sun, Moon, Monitor, Check } from "lucide-svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -16,8 +17,9 @@
     } = $props();
 
     const email = $derived($userStore.user?.email || "");
+    const displayName = $derived($userStore.user?.username || email);
     const initials = $derived(
-        email ? email.substring(0, 2).toUpperCase() : "??",
+        displayName ? displayName.substring(0, 2).toUpperCase() : "??",
     );
     const currentTheme = $derived($themeStore);
 
@@ -44,8 +46,10 @@
         {#snippet child({ props })}
             <button
                 {...props}
-                class="flex w-full items-center rounded-lg py-3.25 px-3.25 text-sm font-medium text-surface-foreground transition-colors hover:bg-surface-accent"
-                title={email || "User menu"}
+                class="flex w-full items-center rounded-lg text-sm font-medium text-surface-foreground transition-[padding,background-color,color] duration-300 ease-in-out hover:bg-surface-accent {collapsed
+                    ? 'p-1.75'
+                    : 'p-3.25'}"
+                title={displayName || "User menu"}
             >
                 <span
                     class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
@@ -55,7 +59,7 @@
                 <span
                     class="whitespace-nowrap overflow-hidden text-left truncate ml-3 {textClass}"
                 >
-                    {email || "User"}
+                    {displayName || "User"}
                 </span>
             </button>
         {/snippet}
