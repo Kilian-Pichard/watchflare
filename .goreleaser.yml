@@ -54,6 +54,45 @@ archives:
 checksum:
   name_template: "watchflare_checksums.txt"
 
+brews:
+  - name: watchflare-agent
+    ids:
+      - agent
+    repository:
+      owner: Kilian-Pichard
+      name: watchflare
+    commit_author:
+      name: watchflare-bot
+      email: bot@watchflare.io
+    homepage: "https://watchflare.io"
+    description: "Watchflare server monitoring agent"
+    license: "MIT"
+    skip_upload: auto
+    extra_install: |
+      (bin/"watchflare-agent-launcher").write <<~EOS
+        #!/bin/bash
+        export WATCHFLARE_CONFIG_DIR="#{etc}/watchflare"
+        export WATCHFLARE_DATA_DIR="#{var}/watchflare"
+        exec #{bin}/watchflare-agent "$@"
+      EOS
+      (bin/"watchflare-agent-launcher").chmod 0755
+    service: |
+      run ["#{bin}/watchflare-agent-launcher"]
+      log_path "#{var}/log/watchflare-agent.log"
+      error_log_path "#{var}/log/watchflare-agent.log"
+      keep_alive true
+      restart_delay 5
+      process_type :background
+    caveats: |
+      Register your agent before starting the service:
+        watchflare-agent-launcher register --token=YOUR_TOKEN --host=YOUR_HOST
+
+      Then start the service:
+        brew services start watchflare-agent
+
+      To update:
+        brew upgrade watchflare-agent && brew services restart watchflare-agent
+
 changelog:
   use: github
   sort: asc

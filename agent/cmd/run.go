@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"watchflare-agent/errors"
 	"watchflare-agent/metrics"
 	"watchflare-agent/packages"
+	"watchflare-agent/update"
 	pb "watchflare/shared/proto"
 	"watchflare-agent/sysinfo"
 	"watchflare-agent/wal"
@@ -98,6 +100,9 @@ func Run() {
 
 	// Start package collector in background
 	go runPackageCollector(ctx, grpcClient, cfg)
+
+	// Start update checker in background (check-only, no root available)
+	go runUpdateChecker(ctx)
 
 	// Wait for signal
 	sig := <-sigCh
@@ -213,6 +218,50 @@ func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *co
 		case <-ctx.Done():
 			log.Println("Package collector stopped")
 			return
+		}
+	}
+}
+
+// runUpdateChecker periodically checks for available agent updates and logs a notice
+func runUpdateChecker(ctx context.Context) {
+	// Initial check after 5 minutes (let agent stabilize first)
+	select {
+	case <-time.After(5 * time.Minute):
+	case <-ctx.Done():
+		return
+	}
+
+	checkAndLogUpdate()
+
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			checkAndLogUpdate()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func checkAndLogUpdate() {
+	if AgentVersion == "dev" {
+		return
+	}
+	info, err := update.CheckForUpdate(AgentVersion)
+	if err != nil {
+		log.Printf("Update check failed: %v", err)
+		return
+	}
+	if info.UpdateAvailable {
+		if runtime.GOOS == "darwin" {
+			log.Printf("⬆ Update available: v%s → v%s (run: brew upgrade watchflare-agent && brew services restart watchflare-agent)",
+				info.CurrentVersion, info.LatestVersion)
+		} else {
+			log.Printf("⬆ Update available: v%s → v%s (run: sudo watchflare-agent update)",
+				info.CurrentVersion, info.LatestVersion)
 		}
 	}
 }

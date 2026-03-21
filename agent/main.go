@@ -26,7 +26,7 @@ func main() {
 
 		case "register":
 			cmd.AgentVersion = Version
-		_ = cmd.Register() // Ignore return value when called directly
+			_ = cmd.Register() // Ignore return value when called directly
 			return
 
 		case "status":
@@ -47,6 +47,11 @@ func main() {
 
 		case "logs":
 			cmd.Logs()
+			return
+
+		case "update":
+			cmd.AgentVersion = Version
+			cmd.Update()
 			return
 
 		case "help", "-h", "--help":
@@ -87,6 +92,10 @@ func printHelp() {
 	fmt.Println("    stop          Stop the agent service")
 	fmt.Println("    restart       Restart the agent service")
 	fmt.Println("    logs          Follow agent logs")
+	fmt.Println()
+	fmt.Println("  Updates:")
+	fmt.Println("    update        Update the agent to the latest version")
+	fmt.Println("    update --check  Check if an update is available without installing")
 	fmt.Println()
 	fmt.Println("  Other:")
 	fmt.Println("    (no command)  Run agent in foreground (for testing)")

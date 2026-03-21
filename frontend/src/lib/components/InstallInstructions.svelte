@@ -20,17 +20,12 @@
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 	// Instructions for each OS
-	let quickInstallCmd = $derived(`curl -sSL https://get.watchflare.io/ | sudo bash -s -- \\
+	let linuxCmd = $derived(`curl -sSL https://get.watchflare.io | sudo bash -s -- \\
   --token ${token} \\
   --host ${backendHost} \\
   --port 50051`);
 
-	let linuxCmd = $derived(`curl -sSL https://get.watchflare.io/linux | sudo bash -s -- \\
-  --token ${token} \\
-  --host ${backendHost} \\
-  --port 50051`);
-
-	let macosCmd = $derived(`curl -sSL https://get.watchflare.io/macos | sudo bash -s -- \\
+	let macosCmd = $derived(`curl -sSL https://get.watchflare.io/brew | bash -s -- \\
   --token ${token} \\
   --host ${backendHost} \\
   --port 50051`);
@@ -84,44 +79,9 @@
 	<div class="mt-8">
 		<h3 class="text-xl font-semibold text-foreground mb-6">📦 Installation Instructions</h3>
 
-		<!-- Quick Install (Recommended) -->
+		<!-- OS Tabs -->
 		<div class="bg-card border-2 rounded-lg p-6 mb-6">
-			<div class="flex items-center gap-3 mb-3">
-				<span class="px-3 py-1 rounded-full text-xs font-semibold uppercase bg-primary text-primary-foreground">Recommended</span>
-				<h4 class="text-base font-semibold text-foreground">Quick Install (Auto-detect OS)</h4>
-			</div>
-
-			<p class="text-sm text-muted-foreground leading-relaxed mb-4">
-				Run this command on your server. It will automatically detect your operating system and
-				install the Watchflare agent:
-			</p>
-
-			<div class="relative mb-4">
-				<pre class="bg-foreground text-background p-4 rounded-md font-mono text-sm leading-relaxed overflow-x-auto">{quickInstallCmd}</pre>
-				<button
-					class="absolute top-2 right-2 px-3 py-2 bg-muted-foreground/30 text-white rounded text-xs font-medium cursor-pointer transition-colors hover:bg-muted-foreground/50"
-					onclick={() => handleCopy(quickInstallCmd)}
-				>
-					{copied ? '✓ Copied!' : 'Copy'}
-				</button>
-			</div>
-
-			<div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2">
-				<span class="text-success text-sm font-medium">✓ Automatically detects your OS</span>
-				<span class="text-success text-sm font-medium">✓ Downloads and installs agent</span>
-				<span class="text-success text-sm font-medium">✓ Registers automatically</span>
-				<span class="text-success text-sm font-medium">✓ Starts monitoring service</span>
-			</div>
-		</div>
-
-		<!-- Platform-Specific (Advanced) -->
-		<details class="group bg-muted border rounded-lg p-6 mb-6">
-			<summary class="cursor-pointer font-semibold text-muted-foreground list-none select-none">
-				<span class="inline-block mr-2 transition-transform group-open:rotate-90">▶</span>
-				Platform-Specific Installation (Advanced)
-			</summary>
-
-			<div class="flex gap-2 mt-4 mb-4 border-b-2 border-border">
+			<div class="flex gap-2 mb-6 border-b-2 border-border">
 				<button
 					class="px-4 py-3 bg-transparent border-b-2 -mb-0.5 font-medium transition-colors {selectedOS === 'linux'
 						? 'text-primary border-primary'
@@ -203,7 +163,7 @@
 					</div>
 				{/if}
 			</div>
-		</details>
+		</div>
 
 		<!-- What Happens Next -->
 		<div class="bg-primary/5 border-l-4 border-primary p-6 rounded-md">
