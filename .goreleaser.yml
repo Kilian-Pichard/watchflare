@@ -60,7 +60,7 @@ brews:
       - agent
     repository:
       owner: Kilian-Pichard
-      name: watchflare
+      name: homebrew-watchflare
     commit_author:
       name: watchflare-bot
       email: bot@watchflare.io
