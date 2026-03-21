@@ -230,11 +230,15 @@
             >
         </h1>
         <p class="text-sm text-muted-foreground mt-1">
-            Global uptime at <span class="font-medium text-foreground"
-                >{formatPercent(
-                    (stats.onlineServers / stats.totalServers) * 100,
-                )}</span
-            > in the last 24h
+            {#if stats.totalServers === 0}
+                No servers monitored yet
+            {:else}
+                Global uptime at <span class="font-medium text-foreground"
+                    >{formatPercent(
+                        (stats.onlineServers / stats.totalServers) * 100,
+                    )}</span
+                > in the last 24h
+            {/if}
         </p>
     </div>
 
