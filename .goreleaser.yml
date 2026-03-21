@@ -61,6 +61,7 @@ brews:
     repository:
       owner: Kilian-Pichard
       name: homebrew-watchflare
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     commit_author:
       name: watchflare-bot
       email: bot@watchflare.io
