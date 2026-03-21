@@ -35,6 +35,9 @@ var containerMetricsSQL string
 //go:embed migrations/008_container_continuous_aggregates.sql
 var containerContinuousAggregatesSQL string
 
+//go:embed migrations/009_username.sql
+var usernameSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -176,6 +179,11 @@ func Connect() error {
 		log.Printf("Warning: Failed to run container continuous aggregates migration: %v", err)
 	}
 
+	// Run username migration
+	if err := RunUsernameMigration(); err != nil {
+		log.Printf("Warning: Failed to run username migration: %v", err)
+	}
+
 	return nil
 }
 
@@ -309,6 +317,20 @@ func RunContainerContinuousAggregatesMigration() error {
 		return err
 	}
 	log.Println("✓ Container continuous aggregates migration completed successfully")
+	return nil
+}
+
+// RunUsernameMigration runs the username migration
+func RunUsernameMigration() error {
+	log.Println("Running username migration...")
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
+	}
+	if err := execStatementsOutsideTx(sqlDB, usernameSQL); err != nil {
+		return err
+	}
+	log.Println("✓ Username migration completed successfully")
 	return nil
 }
 

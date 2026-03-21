@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"strings"
 	"time"
 	"watchflare/backend/config"
 	"watchflare/backend/database"
@@ -13,7 +14,7 @@ import (
 )
 
 // Register creates a new user (first admin only) and returns a JWT token
-func Register(email, password string) (*models.User, string, error) {
+func Register(email, password, username string) (*models.User, string, error) {
 	// Check if any user already exists
 	var count int64
 	database.DB.Model(&models.User{}).Count(&count)
@@ -27,10 +28,18 @@ func Register(email, password string) (*models.User, string, error) {
 		return nil, "", err
 	}
 
+	// Fallback: derive username from email prefix if not provided
+	if username == "" {
+		if idx := strings.Index(email, "@"); idx > 0 {
+			username = email[:idx]
+		}
+	}
+
 	// Create user
 	user := &models.User{
 		Email:    email,
 		Password: string(hashedPassword),
+		Username: username,
 	}
 
 	if err := database.DB.Create(user).Error; err != nil {

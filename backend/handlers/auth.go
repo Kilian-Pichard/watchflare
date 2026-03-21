@@ -30,6 +30,7 @@ func getUserID(c *gin.Context) (string, bool) {
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8"`
+	Username string `json:"username" binding:"max=50"`
 }
 
 // LoginRequest represents the login request body
@@ -49,6 +50,11 @@ type ChangeEmailRequest struct {
 	NewEmail string `json:"new_email" binding:"required,email"`
 }
 
+// ChangeUsernameRequest represents the change username request body
+type ChangeUsernameRequest struct {
+	Username string `json:"username" binding:"min=1,max=50"`
+}
+
 // UpdatePreferencesRequest represents the update preferences request body
 type UpdatePreferencesRequest struct {
 	DefaultTimeRange string `json:"default_time_range"`
@@ -63,7 +69,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	user, token, err := services.Register(req.Email, req.Password)
+	user, token, err := services.Register(req.Email, req.Password, req.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -189,6 +195,36 @@ func ChangeEmail(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Email updated successfully",
+	})
+}
+
+// ChangeUsername updates the authenticated user's username
+func ChangeUsername(c *gin.Context) {
+	var req ChangeUsernameRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Update("username", req.Username).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update username"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch updated user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Username updated successfully",
+		"user":    user,
 	})
 }
 

@@ -3,12 +3,13 @@
     import { goto } from "$app/navigation";
     import { registerSchema, validateForm } from "$lib/validation";
 
-    let email = "";
-    let password = "";
-    let confirmPassword = "";
-    let error = "";
-    let fieldErrors: Record<string, string> = {};
-    let loading = false;
+    let email = $state("");
+    let username = $state("");
+    let password = $state("");
+    let confirmPassword = $state("");
+    let error = $state("");
+    let fieldErrors: Record<string, string> = $state({});
+    let loading = $state(false);
 
     async function handleRegister() {
         error = "";
@@ -27,7 +28,7 @@
         loading = true;
 
         try {
-            await register(email, password);
+            await register(email, password, username);
             goto("/");
         } catch (err) {
             error = err.message;
@@ -93,6 +94,28 @@
                         >
                             {fieldErrors.email}
                         </p>{/if}
+                </div>
+
+                <!-- Username -->
+                <div class="mb-4">
+                    <label
+                        for="username"
+                        class="block text-sm font-medium text-foreground mb-2"
+                    >
+                        Username <span class="text-muted-foreground font-normal">(optional)</span>
+                    </label>
+                    <input
+                        id="username"
+                        type="text"
+                        bind:value={username}
+                        placeholder="johndoe"
+                        maxlength={50}
+                        disabled={loading}
+                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                    />
+                    <p class="mt-1 text-xs text-muted-foreground">
+                        Leave blank to use your email prefix
+                    </p>
                 </div>
 
                 <!-- Password -->

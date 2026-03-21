@@ -1,11 +1,38 @@
 <script lang="ts">
-    import { changePassword, changeEmail } from "$lib/api";
+    import { changePassword, changeEmail, changeUsername } from "$lib/api";
     import { changePasswordSchema, validateForm } from "$lib/validation";
     import { userStore, themeStore } from "$lib/stores/user";
     import { TIME_RANGES } from "$lib/utils";
     import { Sun, Moon, Monitor, Eye, EyeOff } from "lucide-svelte";
     import type { Theme, TimeRange } from "$lib/types";
     import * as Select from "$lib/components/ui/select";
+
+    // Username form state
+    let usernameOverride = $state<string | null>(null);
+    let usernameError = $state("");
+    let usernameSuccess = $state("");
+    let usernameLoading = $state(false);
+
+    const editUsername = $derived(usernameOverride ?? ($userStore.user?.username || ""));
+    const usernameDirty = $derived(
+        usernameOverride !== null && usernameOverride !== ($userStore.user?.username || ""),
+    );
+
+    async function handleChangeUsername() {
+        usernameError = "";
+        usernameSuccess = "";
+        usernameLoading = true;
+        try {
+            const result = await changeUsername(editUsername);
+            userStore.setUser(result.user);
+            usernameOverride = null;
+            usernameSuccess = "Username updated successfully!";
+        } catch (err: unknown) {
+            usernameError = err instanceof Error ? err.message : "Failed to update username";
+        } finally {
+            usernameLoading = false;
+        }
+    }
 
     // Email form state
     let emailOverride = $state<string | null>(null);
@@ -137,23 +164,54 @@
 </div>
 
 <div class="max-w-2xl space-y-6">
-    <!-- Email Card -->
+    <!-- Profile Card -->
     <div class="rounded-lg border bg-card p-4 sm:p-6">
-        <h2 class="text-lg font-semibold text-foreground mb-6">Email</h2>
+        <h2 class="text-lg font-semibold text-foreground mb-6">Profile</h2>
 
-        <form
-            onsubmit={(e) => {
-                e.preventDefault();
-                handleChangeEmail();
-            }}
-        >
-            <div class="mb-4">
-                <label
-                    for="email"
-                    class="block text-sm font-medium text-foreground mb-2"
+        <!-- Username row -->
+        <div class="mb-5">
+            <label for="username" class="block text-sm font-medium text-foreground mb-2">
+                Username
+            </label>
+            <form
+                onsubmit={(e) => { e.preventDefault(); handleChangeUsername(); }}
+                class="flex gap-2"
+            >
+                <input
+                    id="username"
+                    type="text"
+                    value={editUsername}
+                    oninput={(e) => { usernameOverride = (e.target as HTMLInputElement).value; }}
+                    placeholder="Enter a username"
+                    maxlength={50}
+                    disabled={usernameLoading}
+                    class="flex-1 rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                />
+                <button
+                    type="submit"
+                    disabled={usernameLoading || !usernameDirty}
+                    class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    Email address
-                </label>
+                    {usernameLoading ? "Saving..." : "Save"}
+                </button>
+            </form>
+            {#if usernameError}
+                <p class="mt-1.5 text-xs text-destructive">{usernameError}</p>
+            {/if}
+            {#if usernameSuccess}
+                <p class="mt-1.5 text-xs text-success">{usernameSuccess}</p>
+            {/if}
+        </div>
+
+        <!-- Email row -->
+        <div>
+            <label for="email" class="block text-sm font-medium text-foreground mb-2">
+                Email address
+            </label>
+            <form
+                onsubmit={(e) => { e.preventDefault(); handleChangeEmail(); }}
+                class="flex gap-2"
+            >
                 <input
                     id="email"
                     type="email"
@@ -161,34 +219,23 @@
                     oninput={(e) => { emailOverride = (e.target as HTMLInputElement).value; }}
                     placeholder="Enter email address"
                     disabled={emailLoading}
-                    class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                    class="flex-1 rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 />
-            </div>
-
+                <button
+                    type="submit"
+                    disabled={emailLoading || !emailDirty}
+                    class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {emailLoading ? "Saving..." : "Save"}
+                </button>
+            </form>
             {#if emailError}
-                <div
-                    class="mb-4 rounded-lg border border-destructive bg-destructive/10 p-3"
-                >
-                    <p class="text-sm text-destructive">{emailError}</p>
-                </div>
+                <p class="mt-1.5 text-xs text-destructive">{emailError}</p>
             {/if}
-
             {#if emailSuccess}
-                <div
-                    class="mb-4 rounded-lg border border-success bg-success/10 p-3"
-                >
-                    <p class="text-sm text-success">{emailSuccess}</p>
-                </div>
+                <p class="mt-1.5 text-xs text-success">{emailSuccess}</p>
             {/if}
-
-            <button
-                type="submit"
-                disabled={emailLoading || !emailDirty}
-                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {emailLoading ? "Saving..." : "Save"}
-            </button>
-        </form>
+        </div>
     </div>
 
     <!-- Password Card -->

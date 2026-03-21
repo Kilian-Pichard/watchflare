@@ -14,7 +14,8 @@ import type {
 	GetPackageCollectionsResponse,
 	GetPackageHistoryResponse,
 	CurrentUserResponse,
-	MetricsQueryParams
+	MetricsQueryParams,
+	User
 } from './types';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -153,10 +154,10 @@ async function apiRequest<T>(endpoint: string, options: ApiRequestOptions = {}, 
 }
 
 // Auth API calls
-export async function register(email: string, password: string): Promise<RegisterResponse> {
+export async function register(email: string, password: string, username?: string): Promise<RegisterResponse> {
 	return apiRequest<RegisterResponse>('/auth/register', {
 		method: 'POST',
-		body: JSON.stringify({ email, password })
+		body: JSON.stringify({ email, password, username: username || '' })
 	}, true);
 }
 
@@ -189,6 +190,13 @@ export async function changeEmail(newEmail: string): Promise<{ message: string }
 		body: JSON.stringify({
 			new_email: newEmail
 		})
+	});
+}
+
+export async function changeUsername(username: string): Promise<{ message: string; user: User }> {
+	return apiRequest<{ message: string; user: User }>('/auth/change-username', {
+		method: 'PUT',
+		body: JSON.stringify({ username })
 	});
 }
 

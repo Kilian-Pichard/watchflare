@@ -123,6 +123,11 @@ function createUserStore() {
 			}
 		},
 
+		// Update user in store directly (e.g. from API response)
+		setUser(user: User): void {
+			update(state => ({ ...state, user }));
+		},
+
 		// Clear user data (logout)
 		clear(): void {
 			set({ user: null, loading: false, error: null });

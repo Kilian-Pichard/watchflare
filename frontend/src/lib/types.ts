@@ -9,6 +9,7 @@ export type Theme = 'light' | 'dark' | 'system';
 export interface User {
 	id: number;
 	email: string;
+	username: string;
 	default_time_range: TimeRange;
 	theme: Theme;
 	created_at: string;

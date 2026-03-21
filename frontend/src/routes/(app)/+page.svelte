@@ -226,7 +226,7 @@
     <div class="mb-6">
         <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
             Welcome back, <span class="text-primary"
-                >{user?.email?.split("@")[0] || "User"}</span
+                >{user?.username || user?.email?.split("@")[0] || "User"}</span
             >
         </h1>
         <p class="text-sm text-muted-foreground mt-1">

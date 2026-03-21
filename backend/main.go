@@ -175,6 +175,7 @@ func setupRouter() *gin.Engine {
 		protectedGroup.PUT("/preferences", handlers.UpdatePreferences)
 		protectedGroup.PUT("/change-password", handlers.ChangePassword)
 		protectedGroup.PUT("/change-email", handlers.ChangeEmail)
+		protectedGroup.PUT("/change-username", handlers.ChangeUsername)
 	}
 
 	// Server routes (protected)
