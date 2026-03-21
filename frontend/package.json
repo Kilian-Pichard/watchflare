@@ -1,7 +1,7 @@
 {
   "name": "watchflare-frontend",
-  "version": "0.27.3",
-  "private": true,
+  "version": "0.27.5",
+  "private": false,
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
