@@ -379,10 +379,14 @@ export async function getPackageCollections(
 	return apiRequest<GetPackageCollectionsResponse>(`/servers/${serverId}/packages/collections${query}`);
 }
 
+interface HistoryQueryParams extends CollectionQueryParams {
+	exclude_initial?: boolean;
+}
+
 export async function getPackageHistory(
 	serverId: string,
-	params: CollectionQueryParams = {}
+	params: HistoryQueryParams = {}
 ): Promise<GetPackageHistoryResponse> {
-	const query = buildQueryString({ limit: params.limit, offset: params.offset });
+	const query = buildQueryString({ limit: params.limit, offset: params.offset, exclude_initial: params.exclude_initial });
 	return apiRequest<GetPackageHistoryResponse>(`/servers/${serverId}/packages/history${query}`);
 }

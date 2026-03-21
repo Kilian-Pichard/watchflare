@@ -13,8 +13,8 @@ import (
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 	"watchflare/backend/pki"
-	pb "watchflare/shared/proto"
 	"watchflare/backend/sse"
+	pb "watchflare/shared/proto"
 
 	"gorm.io/gorm"
 )

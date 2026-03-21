@@ -128,6 +128,65 @@ export function formatDateTime(dateString: string | null | undefined): string {
 	return new Date(dateString).toLocaleString('fr-FR');
 }
 
+// Package manager display helpers
+export const MANAGER_LABELS: Record<string, string> = {
+	brew: 'Homebrew',
+	dpkg: 'apt/dpkg',
+	rpm: 'yum/rpm',
+	pacman: 'Pacman',
+	apk: 'Alpine apk',
+	zypper: 'Zypper',
+	snap: 'Snap',
+	flatpak: 'Flatpak',
+	appimage: 'AppImage',
+	npm: 'npm',
+	yarn: 'Yarn',
+	pnpm: 'pnpm',
+	pip: 'pip',
+	poetry: 'Poetry',
+	pipx: 'pipx',
+	uv: 'uv',
+	conda: 'Conda',
+	mamba: 'Mamba',
+	gem: 'RubyGems',
+	cargo: 'Cargo',
+	composer: 'Composer',
+	nuget: 'NuGet',
+	maven: 'Maven',
+	macports: 'MacPorts',
+	pkgutil: 'macOS pkgutil',
+	macos_apps: 'macOS Apps',
+	nix: 'Nix',
+	cli_tools: 'CLI Tools',
+};
+
+export const MANAGER_COLORS: Record<string, string> = {
+	brew: 'bg-(--chart-4)/10 text-(--chart-4) border-(--chart-4)/20',
+	dpkg: 'bg-(--chart-2)/10 text-(--chart-2) border-(--chart-2)/20',
+	rpm: 'bg-(--chart-1)/10 text-(--chart-1) border-(--chart-1)/20',
+	pacman: 'bg-(--chart-5)/10 text-(--chart-5) border-(--chart-5)/20',
+	apk: 'bg-(--chart-3)/10 text-(--chart-3) border-(--chart-3)/20',
+	zypper: 'bg-(--chart-1)/10 text-(--chart-1) border-(--chart-1)/20',
+	snap: 'bg-(--chart-2)/10 text-(--chart-2) border-(--chart-2)/20',
+	flatpak: 'bg-(--chart-3)/10 text-(--chart-3) border-(--chart-3)/20',
+	npm: 'bg-(--chart-5)/10 text-(--chart-5) border-(--chart-5)/20',
+	yarn: 'bg-(--chart-4)/10 text-(--chart-4) border-(--chart-4)/20',
+	pnpm: 'bg-(--chart-2)/10 text-(--chart-2) border-(--chart-2)/20',
+	pip: 'bg-(--chart-3)/10 text-(--chart-3) border-(--chart-3)/20',
+	poetry: 'bg-(--chart-4)/10 text-(--chart-4) border-(--chart-4)/20',
+	cargo: 'bg-(--chart-1)/10 text-(--chart-1) border-(--chart-1)/20',
+	gem: 'bg-(--chart-5)/10 text-(--chart-5) border-(--chart-5)/20',
+	cli_tools: 'bg-(--chart-2)/10 text-(--chart-2) border-(--chart-2)/20',
+};
+
+export function getManagerLabel(manager: string): string {
+	return MANAGER_LABELS[manager] || manager;
+}
+
+export function getManagerColor(manager: string): string {
+	return MANAGER_COLORS[manager] || 'bg-muted text-muted-foreground border-border';
+}
+
 // Count active alerts from server list
 export interface ServerWithLatestMetric {
 	server: { status: string; [key: string]: unknown };

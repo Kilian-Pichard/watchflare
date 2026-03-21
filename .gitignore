@@ -54,3 +54,6 @@ docs/
 # Temporary files
 tmp/
 temp/
+
+# AI
+.claude/rules/

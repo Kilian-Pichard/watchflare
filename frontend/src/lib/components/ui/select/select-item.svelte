@@ -15,8 +15,8 @@
 	{label}
 	class={cn(
 		"flex w-full cursor-pointer select-none items-center rounded-md px-3 py-2 text-sm text-foreground outline-none",
-		"data-[highlighted]:bg-muted",
-		"data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+		"data-highlighted:bg-muted",
+		"data-disabled:pointer-events-none data-disabled:opacity-50",
 		className
 	)}
 	{...restProps}

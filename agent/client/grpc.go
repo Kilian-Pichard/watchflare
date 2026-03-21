@@ -48,6 +48,7 @@ func New(host, port, caCertFile, serverName string) (*Client, error) {
 		RootCAs:    certPool,
 		ServerName: serverName, // For SNI and certificate verification
 		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
 	}
 
 	// Create TLS credentials
@@ -82,6 +83,7 @@ func NewForRegistration(host, port string) (*Client, error) {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, // Only for initial registration
 		MinVersion:         tls.VersionTLS13,
+		MaxVersion:         tls.VersionTLS13,
 	}
 
 	creds := credentials.NewTLS(tlsConfig)

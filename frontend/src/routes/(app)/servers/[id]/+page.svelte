@@ -5,7 +5,7 @@
     import * as api from "$lib/api.js";
     import { sseStore } from "$lib/stores/sse";
     import { handleSSEReactivation, logger } from "$lib/utils";
-    import type { Server, Metric, ContainerMetric, PackageStats, SSEEvent, TimeRange } from "$lib/types";
+    import type { Server, Metric, ContainerMetric, GetPackageStatsResponse, SSEEvent, TimeRange } from "$lib/types";
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
     import Modal from "$lib/components/Modal.svelte";
     import ServerDetailHeader from "$lib/components/server/ServerDetailHeader.svelte";
@@ -40,7 +40,7 @@
     let backendHost = $state("");
     let copiedToken = $state(false);
     let clockDesync = $state(false);
-    let packageStats: PackageStats | null = $state(null);
+    let packageStats: GetPackageStatsResponse | null = $state(null);
     let metrics: Metric[] = $state([]);
     let containerMetrics: ContainerMetric[] = $state([]);
     let latestMetric: Metric | null = $state(null);
@@ -114,12 +114,10 @@
             server = response.server;
             clockDesync = response.clock_desync || false;
 
-            if (server.status === "online") {
-                try {
-                    packageStats = await api.getPackageStats(serverId);
-                } catch (err) {
-                    logger.error("Failed to load package stats:", err);
-                }
+            try {
+                packageStats = await api.getPackageStats(serverId);
+            } catch (err) {
+                logger.error("Failed to load package stats:", err);
             }
         } catch (err) {
             error = err.message || "Failed to load server";
