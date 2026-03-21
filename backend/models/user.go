@@ -25,7 +25,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 	}
 	// Set default preferences if not specified
 	if u.DefaultTimeRange == "" {
-		u.DefaultTimeRange = "24h"
+		u.DefaultTimeRange = "1h"
 	}
 	if u.Theme == "" {
 		u.Theme = "system"
