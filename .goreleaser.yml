@@ -1,0 +1,85 @@
+version: 2
+
+before:
+  hooks:
+    - npm ci --prefix frontend
+    - npm run build --prefix frontend
+    - mkdir -p backend/frontend/dist
+    - bash -c "cp -r frontend/build/* backend/frontend/dist/"
+
+builds:
+  - id: agent
+    dir: agent
+    main: .
+    binary: watchflare-agent
+    ldflags:
+      - -X main.Version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: app
+    dir: backend
+    main: .
+    binary: watchflare
+    tags:
+      - embed_frontend
+    ldflags:
+      - -s -w
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: agent
+    ids:
+      - agent
+    name_template: "watchflare-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: app
+    ids:
+      - app
+    name_template: "watchflare_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "watchflare_checksums.txt"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: "New Features"
+      regexp: "^feat"
+      order: 0
+    - title: "Bug Fixes"
+      regexp: "^fix"
+      order: 1
+    - title: "Other Changes"
+      order: 999
+  filters:
+    exclude:
+      - "^chore: release"
+      - "^chore: bump"
+      - "Merge "
+
+release:
+  mode: replace

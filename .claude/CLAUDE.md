@@ -9,20 +9,14 @@ Data flow: Agents → gRPC/TLS 1.3 → Backend → PostgreSQL/TimescaleDB → SS
 
 ## Versioning
 
-**Current version**: 0.27.3
+**Commit format — Conventional Commits:**
+- `feat: description` — new feature
+- `fix: description` — bug fix
+- `chore:`, `docs:`, `refactor:`, `test:`, `ci:`, `style:` — maintenance
 
-- `0.x.0` = major features, `0.x.x` = bug fixes/small features
-- Every commit MUST bump the version in `frontend/package.json` and version history below
-- Commit format: `Short summary (vX.Y.Z)` + optional 1-4 bullet lines prefixed with "-"
-- Detailed changelogs go in version history here, not in commit messages
+Scope is optional: `feat(agent): description`, `fix(backend): description`
 
-**Recent versions:**
-- `0.27.3` - Server detail header redesign: dropdown menu, inline details, uptime in header
-- `0.27.2` - Agent wall-clock aligned metrics, hidden chart markers, tighter gap thresholds
-- `0.27.1` - Full codebase audit bugfixes (WAL, Docker, gRPC, graceful shutdown, frontend guards)
-- `0.27.0` - CI/CD: GitHub Actions release workflow, agent install script, injectable version
-- `0.26.x` - Container metrics aggregates, chart clock fixes, wall-clock x-axis, gap detection
-*(older versions in docs/version-history.md)*
+**Release process:** see `docs/release-workflow.md`
 
 ## Build & Run
 
