@@ -49,7 +49,7 @@ func Load() {
 
 		// TLS Configuration
 		TLSMode:   getEnv("TLS_MODE", "auto"),
-		TLSPKIDir: getEnv("TLS_PKI_DIR", "./pki"),
+		TLSPKIDir: getEnv("TLS_PKI_DIR", "/var/lib/watchflare/pki"),
 
 		// Custom TLS
 		TLSCertFile: getEnv("TLS_CERT_FILE", ""),
