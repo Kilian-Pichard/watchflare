@@ -56,8 +56,8 @@ checksum:
 
 dockers:
   - image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY | tolower }}:{{ .Version }}"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY | tolower }}:latest"
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
