@@ -3,6 +3,7 @@ package cmd
 import (
 	"log"
 	"os"
+	"runtime"
 
 	"watchflare-agent/client"
 	"watchflare-agent/config"
@@ -158,7 +159,13 @@ func Register() bool {
 	log.Printf("Agent ID: %s", regResp.AgentID)
 	log.Printf("Config saved to: %s", config.GetConfigDir()+"/"+config.ConfigFile)
 	log.Printf("TLS enabled with server: %s", regResp.ServerName)
-	log.Println("\nYou can now start the agent with: ./watchflare-agent")
+	if isInstalledViaBrew() {
+		log.Println("\nYou can now start the agent with: brew services start watchflare-agent")
+	} else if runtime.GOOS == "linux" {
+		log.Println("\nYou can now start the agent with: sudo systemctl enable --now watchflare-agent")
+	} else {
+		log.Println("\nYou can now start the agent with: ./watchflare-agent")
+	}
 
 	return regResp.Reactivated
 }
