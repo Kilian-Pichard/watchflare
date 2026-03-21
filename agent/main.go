@@ -25,7 +25,8 @@ func main() {
 			return
 
 		case "register":
-			_ = cmd.Register() // Ignore return value when called directly
+			cmd.AgentVersion = Version
+		_ = cmd.Register() // Ignore return value when called directly
 			return
 
 		case "status":
@@ -64,6 +65,7 @@ func main() {
 	}
 
 	// No subcommand = run normal agent
+	cmd.AgentVersion = Version
 	cmd.Run()
 }
 

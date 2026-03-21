@@ -21,18 +21,20 @@ type Sender struct {
 	client          *client.Client
 	agentID         string
 	agentKey        string
+	agentVersion    string
 	metricsInterval time.Duration
 	maxWALSize      int64
 	metricsConfig   *sysinfo.MetricsConfig
 }
 
 // NewSender creates a new Sender
-func NewSender(wal *WAL, grpcClient *client.Client, agentID, agentKey string, metricsIntervalSec int, maxWALSizeMB int, metricsConfig *sysinfo.MetricsConfig) *Sender {
+func NewSender(wal *WAL, grpcClient *client.Client, agentID, agentKey, agentVersion string, metricsIntervalSec int, maxWALSizeMB int, metricsConfig *sysinfo.MetricsConfig) *Sender {
 	return &Sender{
 		wal:             wal,
 		client:          grpcClient,
 		agentID:         agentID,
 		agentKey:        agentKey,
+		agentVersion:    agentVersion,
 		metricsInterval: time.Duration(metricsIntervalSec) * time.Second,
 		maxWALSize:      int64(maxWALSizeMB) * 1024 * 1024,
 		metricsConfig:   metricsConfig,
@@ -173,7 +175,7 @@ func (s *Sender) collectAndSend() {
 	if s.wal == nil {
 		// Attach container metrics for direct send
 		m.ContainerMetrics = containerMetrics
-		if err := s.client.SendMetrics(s.agentID, s.agentKey, m); err != nil {
+		if err := s.client.SendMetrics(s.agentID, s.agentKey, s.agentVersion, m); err != nil {
 			log.Printf("Send failed: %v (metrics lost - WAL disabled)", err)
 		} else {
 			log.Printf("✓ Metrics sent (CPU: %.1f%%, Mem: %d/%d MB)",
@@ -290,7 +292,7 @@ func (s *Sender) sendRecord(data []byte, includeContainers bool, containerMetric
 	}
 
 	// Send via gRPC
-	return s.client.SendMetrics(s.agentID, s.agentKey, m)
+	return s.client.SendMetrics(s.agentID, s.agentKey, s.agentVersion, m)
 }
 
 // serializeMetrics converts SystemMetrics to protobuf bytes

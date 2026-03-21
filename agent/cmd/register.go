@@ -10,6 +10,9 @@ import (
 	"watchflare-agent/uuid"
 )
 
+// AgentVersion is set by main.go from the build-time Version variable
+var AgentVersion = "dev"
+
 // Register handles agent registration with the backend
 // Returns true if the agent was reactivated (UUID reused), false if new registration
 func Register() bool {
@@ -108,6 +111,7 @@ func Register() bool {
 		env.Hypervisor,
 		env.ContainerRuntime,
 		existingUUID,
+		AgentVersion,
 	)
 	if err != nil {
 		log.Fatalf("Registration failed: %v", err)

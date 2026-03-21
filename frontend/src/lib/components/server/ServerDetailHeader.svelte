@@ -17,6 +17,7 @@
         Cpu,
         Network,
         Clock,
+        Tag,
     } from "lucide-svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
     import type { Server, GetPackageStatsResponse, Metric } from "$lib/types";
@@ -60,6 +61,9 @@
                 : null,
             server.architecture
                 ? { icon: Cpu, text: server.architecture }
+                : null,
+            server.agent_version
+                ? { icon: Tag, text: `Agent v${server.agent_version}` }
                 : null,
             server.ip_address_v4 || server.configured_ip
                 ? {

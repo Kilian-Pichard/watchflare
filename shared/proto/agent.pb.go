@@ -41,6 +41,7 @@ type RegisterRequest struct {
 	// Existing agent UUID (for re-registration without creating new agent)
 	// If provided and exists in DB, the agent will be reactivated instead of creating a new one
 	ExistingAgentUuid string `protobuf:"bytes,14,opt,name=existing_agent_uuid,json=existingAgentUuid,proto3" json:"existing_agent_uuid,omitempty"` // UUID from /var/lib/watchflare/agent.uuid (empty if first registration)
+	AgentVersion      string `protobuf:"bytes,15,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                  // Agent binary version (e.g. "0.27.3"), set via ldflags
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -169,6 +170,13 @@ func (x *RegisterRequest) GetContainerRuntime() string {
 func (x *RegisterRequest) GetExistingAgentUuid() string {
 	if x != nil {
 		return x.ExistingAgentUuid
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
 	}
 	return ""
 }
@@ -673,6 +681,7 @@ type MetricsRequest struct {
 	Metrics          *Metrics               `protobuf:"bytes,3,opt,name=metrics,proto3" json:"metrics,omitempty"`                                           // System metrics
 	Timestamp        int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                                      // Unix timestamp in seconds (for anti-replay)
 	ContainerMetrics []*ContainerMetric     `protobuf:"bytes,5,rep,name=container_metrics,json=containerMetrics,proto3" json:"container_metrics,omitempty"` // Per-container metrics (empty if no containers)
+	AgentVersion     string                 `protobuf:"bytes,6,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`             // Agent binary version, sent to keep DB in sync after upgrades
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -740,6 +749,13 @@ func (x *MetricsRequest) GetContainerMetrics() []*ContainerMetric {
 		return x.ContainerMetrics
 	}
 	return nil
+}
+
+func (x *MetricsRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
 }
 
 // MetricsResponse acknowledges metric reception
@@ -1316,7 +1332,7 @@ var File_agent_proto protoreflect.FileDescriptor
 
 const file_agent_proto_rawDesc = "" +
 	"\n" +
-	"\vagent.proto\x12\x05agent\"\x96\x04\n" +
+	"\vagent.proto\x12\x05agent\"\xbb\x04\n" +
 	"\x0fRegisterRequest\x12-\n" +
 	"\x12registration_token\x18\x01 \x01(\tR\x11registrationToken\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\"\n" +
@@ -1334,7 +1350,8 @@ const file_agent_proto_rawDesc = "" +
 	"hypervisor\x18\f \x01(\tR\n" +
 	"hypervisor\x12+\n" +
 	"\x11container_runtime\x18\r \x01(\tR\x10containerRuntime\x12.\n" +
-	"\x13existing_agent_uuid\x18\x0e \x01(\tR\x11existingAgentUuid\"\xda\x01\n" +
+	"\x13existing_agent_uuid\x18\x0e \x01(\tR\x11existingAgentUuid\x12#\n" +
+	"\ragent_version\x18\x0f \x01(\tR\fagentVersion\"\xda\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -1380,13 +1397,14 @@ const file_agent_proto_rawDesc = "" +
 	"\x11memory_used_bytes\x18\x05 \x01(\x04R\x0fmemoryUsedBytes\x12,\n" +
 	"\x12memory_limit_bytes\x18\x06 \x01(\x04R\x10memoryLimitBytes\x126\n" +
 	"\x18network_rx_bytes_per_sec\x18\a \x01(\x04R\x14networkRxBytesPerSec\x126\n" +
-	"\x18network_tx_bytes_per_sec\x18\b \x01(\x04R\x14networkTxBytesPerSec\"\xd5\x01\n" +
+	"\x18network_tx_bytes_per_sec\x18\b \x01(\x04R\x14networkTxBytesPerSec\"\xfa\x01\n" +
 	"\x0eMetricsRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1b\n" +
 	"\tagent_key\x18\x02 \x01(\tR\bagentKey\x12(\n" +
 	"\ametrics\x18\x03 \x01(\v2\x0e.agent.MetricsR\ametrics\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12C\n" +
-	"\x11container_metrics\x18\x05 \x03(\v2\x16.agent.ContainerMetricR\x10containerMetrics\"E\n" +
+	"\x11container_metrics\x18\x05 \x03(\v2\x16.agent.ContainerMetricR\x10containerMetrics\x12#\n" +
+	"\ragent_version\x18\x06 \x01(\tR\fagentVersion\"E\n" +
 	"\x0fMetricsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\xb6\x01\n" +

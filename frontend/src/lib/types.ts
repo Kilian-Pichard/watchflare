@@ -55,6 +55,7 @@ export interface Server {
 	container_runtime: string | null;
 	hypervisor: string | null;
 	reactivated_at: string | null;
+	agent_version: string | null;
 	server_uuid: string;
 }
 

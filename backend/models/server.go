@@ -24,6 +24,7 @@ type Server struct {
 	ExpiresAt         *time.Time `json:"expires_at"` // NULL après enregistrement réussi
 
 	// Infos remontées par l'agent (NULL si pas encore installé)
+	AgentVersion    *string `json:"agent_version"`
 	Hostname        *string `json:"hostname"`
 	IPAddressV4     *string `json:"ip_address_v4"`
 	IPAddressV6     *string `json:"ip_address_v6"`

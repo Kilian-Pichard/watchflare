@@ -66,6 +66,9 @@
 					{@render sortIcon('ip')}
 				</span>
 			</th>
+			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider table-cell">
+				Agent
+			</th>
 			<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
 				Actions
 			</th>
@@ -142,7 +145,10 @@
 				<td class="px-4 py-3.5 text-sm text-foreground">
 					{server.ip_address_v4 || server.configured_ip || '-'}
 				</td>
-					<td class="px-4 py-3.5 text-right">
+					<td class="px-4 py-3.5 text-sm text-muted-foreground table-cell">
+				{server.agent_version ? `v${server.agent_version}` : '—'}
+			</td>
+			<td class="px-4 py-3.5 text-right">
 					<div class="flex items-center justify-end gap-3">
 						<button
 							onclick={(e) => {

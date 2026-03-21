@@ -122,7 +122,7 @@ type RegistrationResponse struct {
 
 // Register attempts to register the agent with the backend
 // Returns registration credentials and TLS information
-func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel, environmentType, hypervisor, containerRuntime, existingUUID string) (*RegistrationResponse, error) {
+func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel, environmentType, hypervisor, containerRuntime, existingUUID, agentVersion string) (*RegistrationResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -141,6 +141,7 @@ func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion
 		Hypervisor:          hypervisor,
 		ContainerRuntime:    containerRuntime,
 		ExistingAgentUuid:   existingUUID, // For re-registration
+		AgentVersion:        agentVersion,
 	}
 
 	// Note: Registration uses token-based auth, not HMAC
@@ -221,7 +222,7 @@ func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) error {
 }
 
 // SendMetrics sends system metrics to the backend
-func (c *Client) SendMetrics(agentID, agentKey string, m *metrics.SystemMetrics) error {
+func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.SystemMetrics) error {
 	timestamp := time.Now().Unix()
 
 	req := &pb.MetricsRequest{
@@ -246,7 +247,8 @@ func (c *Client) SendMetrics(agentID, agentKey string, m *metrics.SystemMetrics)
 			NetworkTxBytesPerSec: m.NetworkTxBytesPerSec,
 			CpuTemperatureCelsius: m.CPUTemperatureCelsius,
 		},
-		Timestamp: timestamp, // Request-level timestamp for anti-replay
+		Timestamp:    timestamp, // Request-level timestamp for anti-replay
+		AgentVersion: agentVersion,
 	}
 
 	// Map container metrics if present

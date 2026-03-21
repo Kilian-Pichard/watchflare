@@ -74,7 +74,7 @@ func Run() {
 	metrics.Initialize()
 
 	// Create sender with metrics config
-	sender := wal.NewSender(walInstance, grpcClient, cfg.AgentID, cfg.AgentKey, cfg.MetricsInterval, cfg.WALMaxSizeMB, metricsConfig)
+	sender := wal.NewSender(walInstance, grpcClient, cfg.AgentID, cfg.AgentKey, AgentVersion, cfg.MetricsInterval, cfg.WALMaxSizeMB, metricsConfig)
 
 	// Setup context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())

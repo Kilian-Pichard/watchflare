@@ -38,6 +38,9 @@ var containerContinuousAggregatesSQL string
 //go:embed migrations/009_username.sql
 var usernameSQL string
 
+//go:embed migrations/010_agent_version.sql
+var agentVersionSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -184,6 +187,11 @@ func Connect() error {
 		log.Printf("Warning: Failed to run username migration: %v", err)
 	}
 
+	// Run agent version migration
+	if err := RunAgentVersionMigration(); err != nil {
+		log.Printf("Warning: Failed to run agent version migration: %v", err)
+	}
+
 	return nil
 }
 
@@ -317,6 +325,20 @@ func RunContainerContinuousAggregatesMigration() error {
 		return err
 	}
 	log.Println("✓ Container continuous aggregates migration completed successfully")
+	return nil
+}
+
+// RunAgentVersionMigration runs the agent version migration
+func RunAgentVersionMigration() error {
+	log.Println("Running agent version migration...")
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
+	}
+	if err := execStatementsOutsideTx(sqlDB, agentVersionSQL); err != nil {
+		return err
+	}
+	log.Println("✓ Agent version migration completed successfully")
 	return nil
 }
 

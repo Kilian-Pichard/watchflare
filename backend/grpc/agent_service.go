@@ -122,6 +122,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		"environment_type":   req.EnvironmentType,
 		"hypervisor":         req.Hypervisor,
 		"container_runtime":  req.ContainerRuntime,
+		"agent_version":      req.AgentVersion,
 		"status":             "online",
 		"last_seen":          &now,
 		"registration_token": nil, // Always clear token after successful registration
@@ -244,6 +245,19 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 			}, nil
 		}
 		return nil, result.Error
+	}
+
+	// Update agent version if it changed (e.g. after an upgrade + restart)
+	if req.AgentVersion != "" {
+		currentVersion := ""
+		if server.AgentVersion != nil {
+			currentVersion = *server.AgentVersion
+		}
+		if req.AgentVersion != currentVersion {
+			if err := database.DB.Model(&server).Update("agent_version", req.AgentVersion).Error; err != nil {
+				log.Printf("Warning: failed to update agent version for %s: %v", server.ID, err)
+			}
+		}
 	}
 
 	// If server is paused, acknowledge but don't store metrics
