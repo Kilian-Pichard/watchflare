@@ -23,8 +23,8 @@
         usernameSuccess = "";
         usernameLoading = true;
         try {
-            const result = await changeUsername(editUsername);
-            userStore.setUser(result.user);
+            await changeUsername(editUsername);
+            await userStore.load();
             usernameOverride = null;
             usernameSuccess = "Username updated successfully!";
         } catch (err: unknown) {
