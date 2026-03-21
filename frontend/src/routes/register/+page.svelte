@@ -1,7 +1,10 @@
 <script lang="ts">
-    import { register } from "$lib/api";
+    import { register, updatePreferences } from "$lib/api";
     import { goto } from "$app/navigation";
     import { registerSchema, validateForm } from "$lib/validation";
+    import { authTheme } from "$lib/stores/auth-theme";
+    import AuthThemeToggle from "$lib/components/AuthThemeToggle.svelte";
+    import { get } from "svelte/store";
 
     let email = $state("");
     let username = $state("");
@@ -29,6 +32,10 @@
 
         try {
             await register(email, password, username);
+            const theme = get(authTheme);
+            if (theme !== "light") {
+                await updatePreferences("1h", theme);
+            }
             goto("/");
         } catch (err) {
             error = err.message;
@@ -41,6 +48,8 @@
 <svelte:head>
     <title>Setup - Watchflare</title>
 </svelte:head>
+
+<AuthThemeToggle />
 
 <div class="flex min-h-dvh items-center justify-center bg-background p-4">
     <div class="w-full max-w-md">
