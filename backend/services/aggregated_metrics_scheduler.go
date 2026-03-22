@@ -1,7 +1,7 @@
 package services
 
 import (
-	"log"
+	"log/slog"
 	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/sse"
@@ -28,7 +28,7 @@ func (s *AggregatedMetricsScheduler) Start() {
 	// This gives agents time to send (typically 50-500ms) while keeping latency minimal
 	const processingDelay = 2 * time.Second
 
-	log.Printf("Aggregated metrics scheduler starting with interval %v (processing delay: %v)", s.interval, processingDelay)
+	slog.Info("aggregated metrics scheduler starting", "interval", s.interval, "processing_delay", processingDelay)
 
 	// Run in a loop, recalculating alignment on each iteration
 	for {
@@ -38,15 +38,13 @@ func (s *AggregatedMetricsScheduler) Start() {
 		nextTick := nextBoundary.Add(processingDelay)
 		delay := nextTick.Sub(now)
 
-		log.Printf("Next aggregated metrics calculation at %s (in %v)", nextTick.Format("15:04:05"), delay)
-
 		// Wait until the next aligned boundary + processing delay
 		select {
 		case <-time.After(delay):
 			// Calculate and broadcast
 			s.calculateAndBroadcast()
 		case <-s.stopChan:
-			log.Println("Aggregated metrics scheduler stopped")
+			slog.Info("aggregated metrics scheduler stopped")
 			return
 		}
 	}
@@ -100,7 +98,7 @@ func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
 	)
 
 	if err != nil {
-		log.Printf("Error calculating aggregated metrics: %v", err)
+		slog.Error("failed to calculate aggregated metrics", "error", err)
 		return
 	}
 
@@ -123,13 +121,4 @@ func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
 	// Broadcast via SSE
 	broker := sse.GetBroker()
 	broker.BroadcastAggregatedMetricsUpdate(update)
-
-	log.Printf("Broadcasted aggregated metrics for bucket %s (CPU: %.2f%%, Memory: %d/%d, Disk: %d/%d)",
-		bucketTime.Format("15:04:05"),
-		cpuUsagePercent,
-		memoryUsedBytes,
-		memoryTotalBytes,
-		diskUsedBytes,
-		diskTotalBytes,
-	)
 }

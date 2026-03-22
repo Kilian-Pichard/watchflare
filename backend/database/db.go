@@ -4,14 +4,15 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"watchflare/backend/models"
 
+	applogger "watchflare/backend/logger"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 //go:embed migrations/001_continuous_aggregates.sql
@@ -59,19 +60,19 @@ func Connect() error {
 		host, port, user, password, dbname, sslmode)
 
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: applogger.NewGORMLogger(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	log.Println("Database connected successfully")
+	slog.Info("database connected")
 
 	// Enable TimescaleDB extension
 	if err := DB.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE").Error; err != nil {
-		log.Printf("Warning: Failed to enable TimescaleDB extension: %v", err)
+		slog.Warn("failed to enable TimescaleDB extension", "error", err)
 	} else {
-		log.Println("TimescaleDB extension enabled")
+		slog.Info("TimescaleDB extension enabled")
 	}
 
 	// Auto-migrate models (excluding Metric - managed by TimescaleDB migrations)
@@ -83,7 +84,7 @@ func Connect() error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	log.Println("Database migrations completed")
+	slog.Info("database migrations completed")
 
 	// Create metrics table manually (since it's excluded from AutoMigrate due to TimescaleDB compression)
 	err = DB.Exec(`
@@ -112,9 +113,9 @@ func Connect() error {
 		);
 	`).Error
 	if err != nil {
-		log.Printf("Warning: Failed to create metrics table (may already exist): %v", err)
+		slog.Warn("failed to create metrics table (may already exist)", "error", err)
 	} else {
-		log.Println("Metrics table created/verified")
+		slog.Info("metrics table created/verified")
 	}
 
 	// Convert metrics table to TimescaleDB hypertable
@@ -128,9 +129,9 @@ func Connect() error {
 		);
 	`).Error
 	if err != nil {
-		log.Printf("Warning: Failed to create hypertable (may already exist): %v", err)
+		slog.Warn("failed to create hypertable (may already exist)", "error", err)
 	} else {
-		log.Println("TimescaleDB hypertable 'metrics' created/verified")
+		slog.Info("TimescaleDB hypertable created/verified", "table", "metrics")
 	}
 
 	// Add retention policy: keep metrics for 30 days
@@ -142,55 +143,23 @@ func Connect() error {
 		);
 	`).Error
 	if err != nil {
-		log.Printf("Warning: Failed to add retention policy: %v", err)
+		slog.Warn("failed to add retention policy", "error", err)
 	} else {
-		log.Println("TimescaleDB retention policy added (30 days)")
+		slog.Info("TimescaleDB retention policy set", "interval", "30d")
 	}
 
-	// Run continuous aggregates migration
-	if err := RunContinuousAggregatesMigration(); err != nil {
-		log.Printf("Warning: Failed to run continuous aggregates migration: %v", err)
-	}
-
-	// Run dropped metrics migration
-	if err := RunDroppedMetricsMigration(); err != nil {
-		log.Printf("Warning: Failed to run dropped metrics migration: %v", err)
-	}
-
-	// Run packages migration
-	if err := RunPackagesMigration(); err != nil {
-		log.Printf("Warning: Failed to run packages migration: %v", err)
-	}
-
-	// Run environment detection migration
-	if err := RunEnvironmentDetectionMigration(); err != nil {
-		log.Printf("Warning: Failed to run environment detection migration: %v", err)
-	}
-
-	// Run new metrics migration (disk I/O, network, temperature)
-	if err := RunNewMetricsMigration(); err != nil {
-		log.Printf("Warning: Failed to run new metrics migration: %v", err)
-	}
-
-	// Run container metrics migration
-	if err := RunContainerMetricsMigration(); err != nil {
-		log.Printf("Warning: Failed to run container metrics migration: %v", err)
-	}
-
-	// Run container continuous aggregates migration
-	if err := RunContainerContinuousAggregatesMigration(); err != nil {
-		log.Printf("Warning: Failed to run container continuous aggregates migration: %v", err)
-	}
-
-	// Run username migration
-	if err := RunUsernameMigration(); err != nil {
-		log.Printf("Warning: Failed to run username migration: %v", err)
-	}
-
-	// Run agent version migration
-	if err := RunAgentVersionMigration(); err != nil {
-		log.Printf("Warning: Failed to run agent version migration: %v", err)
-	}
+	// Run SQL migrations (idempotent — warnings for already-existing objects are expected)
+	slog.Info("running SQL migrations")
+	RunContinuousAggregatesMigration()
+	RunDroppedMetricsMigration()
+	RunPackagesMigration()
+	RunEnvironmentDetectionMigration()
+	RunNewMetricsMigration()
+	RunContainerMetricsMigration()
+	RunContainerContinuousAggregatesMigration()
+	RunUsernameMigration()
+	RunAgentVersionMigration()
+	slog.Info("SQL migrations complete")
 
 	return nil
 }
@@ -199,19 +168,11 @@ func Connect() error {
 // Statements are executed individually outside transactions because
 // refresh_continuous_aggregate() cannot run inside a transaction block.
 func RunContinuousAggregatesMigration() error {
-	log.Println("Running continuous aggregates migration...")
-
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-
-	if err := execStatementsOutsideTx(sqlDB, continuousAggregatesSQL); err != nil {
-		return err
-	}
-
-	log.Println("✓ Continuous aggregates migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, continuousAggregatesSQL)
 }
 
 // execStatementsOutsideTx splits SQL into individual statements and executes
@@ -238,7 +199,7 @@ func execStatementsOutsideTx(db *sql.DB, sqlContent string) error {
 		}
 
 		if _, err := db.Exec(stmt); err != nil {
-			log.Printf("Warning: migration statement failed (may be idempotent): %v", err)
+			slog.Warn("migration statement failed (may be idempotent)", "error", err)
 		}
 	}
 	return nil
@@ -246,114 +207,74 @@ func execStatementsOutsideTx(db *sql.DB, sqlContent string) error {
 
 // RunDroppedMetricsMigration runs the dropped metrics migration
 func RunDroppedMetricsMigration() error {
-	log.Println("Running dropped metrics migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, droppedMetricsSQL); err != nil {
-		return err
-	}
-	log.Println("✓ Dropped metrics migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, droppedMetricsSQL)
 }
 
 // RunPackagesMigration runs the packages migration
 func RunPackagesMigration() error {
-	log.Println("Running packages migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, packagesSQL); err != nil {
-		return err
-	}
-	log.Println("✓ Packages migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, packagesSQL)
 }
 
 // RunEnvironmentDetectionMigration runs the environment detection migration
 func RunEnvironmentDetectionMigration() error {
-	log.Println("Running environment detection migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, environmentDetectionSQL); err != nil {
-		return err
-	}
-	log.Println("✓ Environment detection migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, environmentDetectionSQL)
 }
 
 // RunNewMetricsMigration runs the new metrics migration (disk I/O, network, temperature)
 func RunNewMetricsMigration() error {
-	log.Println("Running new metrics migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, newMetricsSQL); err != nil {
-		return err
-	}
-	log.Println("✓ New metrics migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, newMetricsSQL)
 }
 
 // RunContainerMetricsMigration runs the container metrics migration
 func RunContainerMetricsMigration() error {
-	log.Println("Running container metrics migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, containerMetricsSQL); err != nil {
-		return err
-	}
-	log.Println("✓ Container metrics migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, containerMetricsSQL)
 }
 
 // RunContainerContinuousAggregatesMigration runs the container continuous aggregates migration
 func RunContainerContinuousAggregatesMigration() error {
-	log.Println("Running container continuous aggregates migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, containerContinuousAggregatesSQL); err != nil {
-		return err
-	}
-	log.Println("✓ Container continuous aggregates migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, containerContinuousAggregatesSQL)
 }
 
 // RunAgentVersionMigration runs the agent version migration
 func RunAgentVersionMigration() error {
-	log.Println("Running agent version migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, agentVersionSQL); err != nil {
-		return err
-	}
-	log.Println("✓ Agent version migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, agentVersionSQL)
 }
 
 // RunUsernameMigration runs the username migration
 func RunUsernameMigration() error {
-	log.Println("Running username migration...")
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
-	if err := execStatementsOutsideTx(sqlDB, usernameSQL); err != nil {
-		return err
-	}
-	log.Println("✓ Username migration completed successfully")
-	return nil
+	return execStatementsOutsideTx(sqlDB, usernameSQL)
 }
 
 // getEnv retrieves environment variable or returns default value

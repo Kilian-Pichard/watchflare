@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"watchflare/backend/cache"
@@ -91,7 +91,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 		result := database.DB.Where("agent_id = ?", req.ExistingAgentUuid).First(&existingAgent)
 		if result.Error == nil {
 			// Found existing agent - reactivate it instead of using pending
-			log.Printf("Re-registration: Reactivating existing agent %s (hostname: %s)", existingAgent.AgentID, req.Hostname)
+			slog.Warn("re-registration: reactivating existing agent", "agent_id", existingAgent.AgentID, "hostname", req.Hostname)
 			agentToUse = &existingAgent
 			deletePending = true // We'll delete the unused pending agent
 		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -103,7 +103,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 
 	// Step 6: If no existing agent found, use the pending agent
 	if agentToUse == nil {
-		log.Printf("New registration: Using pending agent %s (hostname: %s)", pendingAgent.AgentID, req.Hostname)
+		slog.Info("new registration", "agent_id", pendingAgent.AgentID, "hostname", req.Hostname)
 		agentToUse = &pendingAgent
 		deletePending = false
 	}
@@ -141,10 +141,10 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 	// Step 8: Delete the pending agent if we reactivated an existing one
 	if deletePending {
 		if err := database.DB.Delete(&pendingAgent).Error; err != nil {
-			log.Printf("Warning: Failed to delete pending agent %s: %v", pendingAgent.AgentID, err)
+			slog.Warn("failed to delete pending agent", "agent_id", pendingAgent.AgentID, "error", err)
 			// Not fatal - continue with registration
 		} else {
-			log.Printf("Deleted unused pending agent %s", pendingAgent.AgentID)
+			slog.Info("deleted unused pending agent", "agent_id", pendingAgent.AgentID)
 		}
 	}
 
@@ -255,14 +255,14 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		}
 		if req.AgentVersion != currentVersion {
 			if err := database.DB.Model(&server).Update("agent_version", req.AgentVersion).Error; err != nil {
-				log.Printf("Warning: failed to update agent version for %s: %v", server.ID, err)
+				slog.Warn("failed to update agent version", "server_id", server.ID, "error", err)
 			}
 		}
 	}
 
 	// If server is paused, acknowledge but don't store metrics
 	if server.Status == "paused" {
-		log.Printf("⏸ Metrics discarded for paused server %s (%s)", server.Name, server.ID)
+		slog.Info("metrics discarded for paused server", "name", server.Name, "server_id", server.ID)
 		return &pb.SendMetricsResponse{
 			Success: true,
 			Message: "Server is paused, metrics discarded",
@@ -349,7 +349,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 
 		// Persist container metrics to DB (after SSE for lower latency)
 		if err := database.DB.Create(&containerModels).Error; err != nil {
-			log.Printf("Warning: Failed to save container metrics: %v", err)
+			slog.Warn("failed to save container metrics", "server_id", server.ID, "error", err)
 		}
 	}
 
@@ -393,19 +393,19 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDr
 	).Error
 
 	if err != nil {
-		log.Printf("Error: Failed to insert dropped metrics report: %v", err)
+		slog.Error("failed to insert dropped metrics report", "server_id", server.ID, "error", err)
 		return nil, fmt.Errorf("failed to save dropped metrics report: %w", err)
 	}
 
 	// Calculate downtime duration for logging
 	downtimeDuration := time.Unix(req.LastDroppedAt, 0).Sub(time.Unix(req.FirstDroppedAt, 0))
 
-	log.Printf("⚠️  Agent %s (%s) reported %d dropped metrics (downtime: %v, reason: %s)",
-		server.Name,
-		req.AgentId,
-		req.Count,
-		downtimeDuration.Round(time.Second),
-		req.Reason,
+	slog.Warn("agent reported dropped metrics",
+		"name", server.Name,
+		"agent_id", req.AgentId,
+		"count", req.Count,
+		"downtime", downtimeDuration.Round(time.Second),
+		"reason", req.Reason,
 	)
 
 	return &pb.ReportDroppedMetricsResponse{
@@ -432,21 +432,20 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPack
 	// Process package inventory
 	packagesProcessed, changesDetected, err := processPackageInventory(server.ID, req)
 	if err != nil {
-		log.Printf("Error: Failed to process package inventory for server %s: %v", server.ID, err)
+		slog.Error("failed to process package inventory", "server_id", server.ID, "error", err)
 		return &pb.SendPackageInventoryResponse{
 			Success: false,
 			Message: fmt.Sprintf("Failed to process package inventory: %v", err),
 		}, nil
 	}
 
-	// Log successful processing
-	log.Printf("✓ Package inventory processed for %s (%s): %d packages, %d changes (%s, %dms)",
-		server.Name,
-		server.ID,
-		packagesProcessed,
-		changesDetected,
-		req.InventoryType,
-		req.CollectionDurationMs,
+	slog.Info("package inventory processed",
+		"name", server.Name,
+		"server_id", server.ID,
+		"packages", packagesProcessed,
+		"changes", changesDetected,
+		"type", req.InventoryType,
+		"duration_ms", req.CollectionDurationMs,
 	)
 
 	return &pb.SendPackageInventoryResponse{

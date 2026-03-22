@@ -2,7 +2,7 @@ package grpc
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"watchflare/backend/cache"
 	"watchflare/backend/database"
@@ -35,7 +35,7 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 
 		// HMAC is mandatory
 		if !hasHMAC {
-			log.Printf("HMAC authentication required but not present in request to %s", info.FullMethod)
+			slog.Warn("HMAC authentication missing", "method", info.FullMethod)
 			return nil, status.Error(codes.Unauthenticated, "HMAC authentication required")
 		}
 
@@ -43,32 +43,32 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 		// 1. Extract agent_id from message
 		agentID, err := extractAgentID(req)
 		if err != nil {
-			log.Printf("Failed to extract agent_id from request: %v", err)
+			slog.Warn("failed to extract agent_id from request", "error", err)
 			return nil, status.Error(codes.InvalidArgument, "Invalid request format")
 		}
 
 		// 2. Lookup agent_key from database
 		var server models.Server
 		if err := database.DB.Where("agent_id = ?", agentID).First(&server).Error; err != nil {
-			log.Printf("Agent not found: %s", agentID)
+			slog.Warn("agent not found", "agent_id", agentID)
 			return nil, status.Error(codes.Unauthenticated, "Invalid agent credentials")
 		}
 
 		// 3. Extract and validate timestamp
 		message, ok := req.(proto.Message)
 		if !ok {
-			log.Printf("Request is not a proto.Message")
+			slog.Error("request is not a proto.Message", "method", info.FullMethod)
 			return nil, status.Error(codes.Internal, "Internal error")
 		}
 
 		timestamp, err := extractTimestamp(message)
 		if err != nil {
-			log.Printf("Failed to extract timestamp: %v", err)
+			slog.Warn("failed to extract timestamp", "error", err)
 			return nil, status.Error(codes.InvalidArgument, "Invalid request format: missing timestamp")
 		}
 
 		if err := ValidateTimestamp(timestamp, timestampWindow); err != nil {
-			log.Printf("Timestamp validation failed for agent %s: %v", agentID, err)
+			slog.Warn("timestamp validation failed", "agent_id", agentID, "error", err)
 			// Track clock desync for heartbeat RPCs so frontend can show a banner
 			if info.FullMethod == "/agent.v1.AgentService/Heartbeat" || info.FullMethod == "/agent.v1.AgentService/SendMetrics" {
 				cache.GetCache().SetClockDesync(agentID)
@@ -78,7 +78,7 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 
 		// 4. Validate HMAC
 		if err := ValidateHMAC(ctx, agentID, server.AgentKey, message); err != nil {
-			log.Printf("HMAC validation failed for agent %s: %v", agentID, err)
+			slog.Warn("HMAC validation failed", "agent_id", agentID, "error", err)
 			return nil, status.Error(codes.Unauthenticated, "HMAC validation failed")
 		}
 

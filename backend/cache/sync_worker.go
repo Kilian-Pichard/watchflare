@@ -2,7 +2,7 @@ package cache
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"watchflare/backend/database"
@@ -33,7 +33,7 @@ func NewSyncWorker(interval time.Duration) *SyncWorker {
 
 // Start begins the sync worker
 func (w *SyncWorker) Start() {
-	log.Printf("Heartbeat sync worker started (interval: %v)", w.interval)
+	slog.Info("heartbeat sync worker started", "interval", w.interval)
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
@@ -43,7 +43,7 @@ func (w *SyncWorker) Start() {
 			w.syncToDatabase()
 
 		case <-w.ctx.Done():
-			log.Println("Heartbeat sync worker stopped")
+			slog.Info("heartbeat sync worker stopped")
 			return
 		}
 	}
@@ -69,9 +69,9 @@ func (w *SyncWorker) syncToDatabase() {
 		result := database.DB.Where("agent_id = ?", data.AgentID).First(&server)
 		if result.Error != nil {
 			if result.Error == gorm.ErrRecordNotFound {
-				log.Printf("Warning: Agent %s not found in database, skipping sync", data.AgentID)
+				slog.Warn("agent not found in database, skipping sync", "agent_id", data.AgentID)
 			} else {
-				log.Printf("Error: Failed to query agent %s: %v", data.AgentID, result.Error)
+				slog.Error("failed to query agent", "agent_id", data.AgentID, "error", result.Error)
 			}
 			continue
 		}
@@ -85,7 +85,7 @@ func (w *SyncWorker) syncToDatabase() {
 		}
 
 		if err := database.DB.Model(&server).Updates(updates).Error; err != nil {
-			log.Printf("Error: Failed to sync heartbeat for agent %s: %v", data.AgentID, err)
+			slog.Error("failed to sync heartbeat", "agent_id", data.AgentID, "error", err)
 			continue
 		}
 
@@ -95,7 +95,7 @@ func (w *SyncWorker) syncToDatabase() {
 	}
 
 	if syncCount > 0 {
-		log.Printf("✓ Synced %d heartbeat(s) to database", syncCount)
+		slog.Info("synced heartbeats to database", "count", syncCount)
 	}
 }
 
@@ -122,7 +122,7 @@ func NewStaleChecker(interval, timeout time.Duration) *StaleChecker {
 
 // Start begins the stale checker
 func (c *StaleChecker) Start() {
-	log.Printf("Heartbeat stale checker started (interval: %v, timeout: %v)", c.interval, c.timeout)
+	slog.Info("heartbeat stale checker started", "interval", c.interval, "timeout", c.timeout)
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
 
@@ -132,7 +132,7 @@ func (c *StaleChecker) Start() {
 			c.checkStaleAgents()
 
 		case <-c.ctx.Done():
-			log.Println("Heartbeat stale checker stopped")
+			slog.Info("heartbeat stale checker stopped")
 			return
 		}
 	}
@@ -157,7 +157,7 @@ func (c *StaleChecker) checkStaleAgents() {
 		var server models.Server
 		result := database.DB.Where("agent_id = ?", agentID).First(&server)
 		if result.Error != nil {
-			log.Printf("Warning: Stale agent %s not found in database", agentID)
+			slog.Warn("stale agent not found in database", "agent_id", agentID)
 			continue
 		}
 
@@ -184,6 +184,6 @@ func (c *StaleChecker) checkStaleAgents() {
 			ClockDesync:      data.ClockDesync,
 		})
 
-		log.Printf("⚠ Agent %s marked as offline (no heartbeat for %v)", agentID, c.timeout)
+		slog.Warn("agent marked as offline", "agent_id", agentID, "stale_after", c.timeout)
 	}
 }

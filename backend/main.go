@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +15,7 @@ import (
 	"watchflare/backend/database"
 	grpcservice "watchflare/backend/grpc"
 	"watchflare/backend/handlers"
+	"watchflare/backend/logger"
 	"watchflare/backend/middleware"
 	"watchflare/backend/pki"
 	"watchflare/backend/services"
@@ -27,12 +28,15 @@ import (
 )
 
 func main() {
+	// Initialize logger first so all subsequent output uses the clean format
+	logger.Init()
+
 	// Load configuration
 	config.Load()
 
 	// Connect to database
 	if err := database.Connect(); err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Fatal("failed to connect to database", "error", err)
 	}
 
 	// Initialize PKI (auto-generate or validate custom certs)
@@ -48,11 +52,11 @@ func main() {
 
 	pkiInstance, err := pki.New(pkiConfig)
 	if err != nil {
-		log.Fatalf("Failed to initialize PKI: %v", err)
+		logger.Fatal("failed to create PKI instance", "error", err)
 	}
 
 	if err := pkiInstance.Initialize(); err != nil {
-		log.Fatalf("Failed to initialize PKI: %v", err)
+		logger.Fatal("failed to initialize PKI", "error", err)
 	}
 
 	// Store PKI instance in context for gRPC server and handlers
@@ -80,37 +84,37 @@ func main() {
 
 	// Start HTTP server
 	go func() {
-		log.Printf("Starting HTTP server on port %s", config.AppConfig.Port)
+		slog.Info("HTTP server starting", "port", config.AppConfig.Port)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start HTTP server: %v", err)
+			logger.Fatal("HTTP server failed", "error", err)
 		}
 	}()
 
 	// Start gRPC server
 	grpcServer, err := createGRPCServer(config.AppConfig, pkiInstance)
 	if err != nil {
-		log.Fatalf("Failed to create gRPC server: %v", err)
+		logger.Fatal("failed to create gRPC server", "error", err)
 	}
 
 	grpcListener, err := net.Listen("tcp", ":"+config.AppConfig.GRPCPort)
 	if err != nil {
-		log.Fatalf("Failed to listen on gRPC port: %v", err)
+		logger.Fatal("failed to listen on gRPC port", "error", err)
 	}
 
 	go func() {
-		log.Printf("Starting gRPC server on port %s", config.AppConfig.GRPCPort)
+		slog.Info("gRPC server starting", "port", config.AppConfig.GRPCPort)
 		if err := grpcServer.Serve(grpcListener); err != nil {
-			log.Fatalf("Failed to start gRPC server: %v", err)
+			logger.Fatal("gRPC server failed", "error", err)
 		}
 	}()
 
-	log.Println("Watchflare backend started successfully")
+	slog.Info("Watchflare backend started")
 
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	sig := <-sigCh
-	log.Printf("Received signal %v, shutting down gracefully...", sig)
+	slog.Info("shutting down gracefully", "signal", sig)
 
 	// Graceful shutdown with 10s timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -124,10 +128,10 @@ func main() {
 	// Stop servers
 	grpcServer.GracefulStop()
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
+		slog.Error("HTTP server shutdown error", "error", err)
 	}
 
-	log.Println("Shutdown complete")
+	slog.Info("shutdown complete")
 }
 
 func setupRouter() *gin.Engine {
@@ -210,7 +214,7 @@ func setupRouter() *gin.Engine {
 	// Serve embedded frontend (SPA with fallback to index.html)
 	frontendFiles, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
-		log.Printf("Warning: Frontend files not found (dev mode?): %v", err)
+		slog.Warn("frontend files not found (dev mode?)", "error", err)
 	} else {
 		fileServer := http.FileServer(http.FS(frontendFiles))
 		router.NoRoute(func(c *gin.Context) {
@@ -226,7 +230,7 @@ func setupRouter() *gin.Engine {
 			c.Request.URL.Path = "/"
 			fileServer.ServeHTTP(c.Writer, c.Request)
 		})
-		log.Println("Frontend embedded and served from /")
+		slog.Info("frontend embedded and served from /")
 	}
 
 	return router
@@ -244,14 +248,14 @@ func createGRPCServer(cfg *config.Config, pkiInstance *pki.PKI) (*grpc.Server, e
 
 	creds := credentials.NewTLS(tlsConfig)
 	opts = append(opts, grpc.Creds(creds))
-	log.Printf("gRPC TLS enabled (TLS 1.3, mode: %s)", cfg.TLSMode)
+	slog.Info("gRPC TLS enabled", "version", "TLS 1.3", "mode", cfg.TLSMode)
 
 	// Authentication interceptor (HMAC mandatory)
 	opts = append(opts, grpc.UnaryInterceptor(
 		grpcservice.AuthInterceptor(cfg.GRPCTimestampWindow),
 	))
 
-	log.Printf("gRPC HMAC validation enabled (timestamp window: %ds)", cfg.GRPCTimestampWindow)
+	slog.Info("gRPC HMAC validation enabled", "timestamp_window_s", cfg.GRPCTimestampWindow)
 
 	grpcServer := grpc.NewServer(opts...)
 	agentService := grpcservice.NewAgentServer()

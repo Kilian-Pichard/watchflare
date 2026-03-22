@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"watchflare/backend/database"
@@ -10,15 +10,15 @@ import (
 )
 
 const (
-	CheckInterval     = 15 * time.Second // Check every 15 seconds
-	OfflineThreshold  = 60 * time.Second // Mark offline if no heartbeat for 60 seconds
+	CheckInterval    = 15 * time.Second // Check every 15 seconds
+	OfflineThreshold = 60 * time.Second // Mark offline if no heartbeat for 60 seconds
 )
 
 // StartOfflineChecker starts the background task to check for offline servers
 func StartOfflineChecker() {
 	ticker := time.NewTicker(CheckInterval)
 
-	log.Printf("Starting offline checker (interval: %v, threshold: %v)", CheckInterval, OfflineThreshold)
+	slog.Info("offline checker started", "interval", CheckInterval, "threshold", OfflineThreshold)
 
 	go func() {
 		for range ticker.C {
@@ -33,7 +33,7 @@ func checkOfflineServers() {
 
 	// Find all servers that are currently "online"
 	if err := database.DB.Where("status = ?", "online").Find(&servers).Error; err != nil {
-		log.Printf("Error fetching online servers: %v", err)
+		slog.Error("failed to fetch online servers", "error", err)
 		return
 	}
 
@@ -49,12 +49,15 @@ func checkOfflineServers() {
 			if timeSinceLastSeen > OfflineThreshold {
 				// Mark server as offline
 				if err := database.DB.Model(&server).Update("status", "offline").Error; err != nil {
-					log.Printf("Error updating server %s to offline: %v", server.ID, err)
+					slog.Error("failed to mark server offline", "server_id", server.ID, "error", err)
 					continue
 				}
 
-				log.Printf("Server %s (%s) marked as offline (last seen: %v ago)",
-					server.ID, server.Name, timeSinceLastSeen.Round(time.Second))
+				slog.Warn("server marked as offline",
+					"server_id", server.ID,
+					"name", server.Name,
+					"last_seen_ago", timeSinceLastSeen.Round(time.Second),
+				)
 
 				// Broadcast SSE event
 				var ipv4, ipv6 string
@@ -79,6 +82,6 @@ func checkOfflineServers() {
 	}
 
 	if offlineCount > 0 {
-		log.Printf("Marked %d server(s) as offline", offlineCount)
+		slog.Info("servers marked as offline", "count", offlineCount)
 	}
 }

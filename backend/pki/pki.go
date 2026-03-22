@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -39,7 +39,7 @@ func (p *PKI) Initialize() error {
 
 // initializeAuto handles auto-generated PKI
 func (p *PKI) initializeAuto() error {
-	log.Printf("Initializing PKI in auto mode (dir: %s)", p.config.PKIDir)
+	slog.Info("initializing PKI", "mode", "auto", "dir", p.config.PKIDir)
 
 	// Create PKI directory if it doesn't exist
 	if err := os.MkdirAll(p.config.PKIDir, 0755); err != nil {
@@ -53,15 +53,15 @@ func (p *PKI) initializeAuto() error {
 
 	// Check if PKI already exists
 	if fileExists(caPath) && fileExists(serverCertPath) {
-		log.Println("✓ PKI already exists, reusing existing certificates")
+		slog.Info("PKI already exists, reusing existing certificates")
 		return nil
 	}
 
 	// Generate new PKI
-	log.Println("Generating new PKI (CA + server certificate)...")
+	slog.Info("generating new PKI (CA + server certificate)")
 
 	// Generate CA
-	log.Println("  - Generating CA certificate (valid for 10 years)...")
+	slog.Info("generating CA certificate", "validity", "10y")
 	caCert, caKey, err := generateCA()
 	if err != nil {
 		return fmt.Errorf("failed to generate CA: %w", err)
@@ -75,11 +75,11 @@ func (p *PKI) initializeAuto() error {
 		return err
 	}
 
-	log.Printf("  ✓ CA certificate saved: %s", caPath)
-	log.Printf("  ✓ CA private key saved: %s (permissions: 0600)", caKeyPath)
+	slog.Info("CA certificate saved", "path", caPath)
+	slog.Info("CA private key saved", "path", caKeyPath, "permissions", "0600")
 
 	// Generate server certificate
-	log.Println("  - Generating server certificate (valid for 5 years)...")
+	slog.Info("generating server certificate", "validity", "5y")
 	serverCert, serverKey, err := generateServerCert(caCert, caKey)
 	if err != nil {
 		return fmt.Errorf("failed to generate server certificate: %w", err)
@@ -93,21 +93,20 @@ func (p *PKI) initializeAuto() error {
 		return err
 	}
 
-	log.Printf("  ✓ Server certificate saved: %s", serverCertPath)
-	log.Printf("  ✓ Server private key saved: %s (permissions: 0600)", serverKeyPath)
-
-	log.Println("✓ PKI initialization complete")
+	slog.Info("server certificate saved", "path", serverCertPath)
+	slog.Info("server private key saved", "path", serverKeyPath, "permissions", "0600")
+	slog.Info("PKI initialization complete")
 	return nil
 }
 
 // initializeCustom validates custom certificates
 func (p *PKI) initializeCustom() error {
-	log.Println("Initializing PKI in custom mode")
-
-	// Validate that all files exist (already done in config.Validate)
-	log.Printf("  - Certificate: %s", p.config.CertFile)
-	log.Printf("  - Private key: %s", p.config.KeyFile)
-	log.Printf("  - CA certificate: %s", p.config.CAFile)
+	slog.Info("initializing PKI", "mode", "custom")
+	slog.Info("using custom certificates",
+		"cert", p.config.CertFile,
+		"key", p.config.KeyFile,
+		"ca", p.config.CAFile,
+	)
 
 	// Load and validate certificate/key pair
 	_, err := tls.LoadX509KeyPair(p.config.CertFile, p.config.KeyFile)
@@ -115,7 +114,7 @@ func (p *PKI) initializeCustom() error {
 		return fmt.Errorf("failed to load certificate/key pair: %w", err)
 	}
 
-	log.Println("✓ Custom certificates validated successfully")
+	slog.Info("custom certificates validated")
 	return nil
 }
 

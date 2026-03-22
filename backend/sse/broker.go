@@ -3,7 +3,7 @@ package sse
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -138,7 +138,7 @@ func (b *Broker) AddClient(clientID string) *Client {
 	}
 
 	b.clients[clientID] = client
-	log.Printf("SSE client connected: %s (total: %d)", clientID, len(b.clients))
+	slog.Info("SSE client connected", "client_id", clientID, "total", len(b.clients))
 
 	return client
 }
@@ -151,7 +151,7 @@ func (b *Broker) RemoveClient(clientID string) {
 	if client, exists := b.clients[clientID]; exists {
 		close(client.Channel)
 		delete(b.clients, clientID)
-		log.Printf("SSE client disconnected: %s (total: %d)", clientID, len(b.clients))
+		slog.Info("SSE client disconnected", "client_id", clientID, "total", len(b.clients))
 	}
 }
 
@@ -166,11 +166,9 @@ func (b *Broker) Broadcast(event Event) {
 			// Event sent successfully
 		default:
 			// Channel is full, skip this client
-			log.Printf("Warning: Client %s channel is full, skipping event", client.ID)
+			slog.Warn("SSE client channel full, skipping event", "client_id", client.ID, "event_type", event.Type)
 		}
 	}
-
-	log.Printf("Broadcast event: %s to %d clients", event.Type, len(b.clients))
 }
 
 // BroadcastServerUpdate sends a server update event to all clients
@@ -245,7 +243,7 @@ func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
 func FormatSSE(event Event) string {
 	data, err := json.Marshal(event.Data)
 	if err != nil {
-		log.Printf("Error marshaling SSE event: %v", err)
+		slog.Error("failed to marshal SSE event", "event_type", event.Type, "error", err)
 		return ""
 	}
 	return fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, string(data))

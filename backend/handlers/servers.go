@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -504,7 +504,7 @@ func GetAggregatedMetrics(c *gin.Context) {
 
 	rows, err := database.DB.Raw(query, queryArgs...).Rows()
 	if err != nil {
-		log.Printf("Error querying aggregated metrics: %v", err)
+		slog.Error("failed to query aggregated metrics", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query metrics"})
 		return
 	}
@@ -531,7 +531,7 @@ func GetAggregatedMetrics(c *gin.Context) {
 			&point.DiskTotalBytes,
 			&point.DiskUsedBytes,
 		); err != nil {
-			log.Printf("Error scanning aggregated metrics: %v", err)
+			slog.Error("failed to scan aggregated metrics", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan metrics"})
 			return
 		}

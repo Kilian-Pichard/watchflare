@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -62,13 +62,18 @@ func Load() {
 
 	// Validate required fields
 	if AppConfig.JWTSecret == "" {
-		log.Fatal("JWT_SECRET is required in environment variables")
+		slog.Error("JWT_SECRET is required in environment variables")
+		os.Exit(1)
 	}
 
 	// Validate JWT secret strength (minimum 32 characters for 256-bit security)
 	if len(AppConfig.JWTSecret) < 32 {
-		log.Fatalf("JWT_SECRET must be at least 32 characters (current: %d chars)\n"+
-			"Generate a secure secret: openssl rand -base64 32", len(AppConfig.JWTSecret))
+		slog.Error("JWT_SECRET too short",
+			"current_length", len(AppConfig.JWTSecret),
+			"required", 32,
+			"hint", "Generate a secure secret: openssl rand -base64 32",
+		)
+		os.Exit(1)
 	}
 
 	// Warn if JWT secret looks weak (common patterns)
@@ -76,13 +81,16 @@ func Load() {
 	secretLower := strings.ToLower(AppConfig.JWTSecret)
 	for _, weak := range weakSecrets {
 		if strings.Contains(secretLower, weak) {
-			log.Printf("⚠️  WARNING: JWT_SECRET contains common word '%s' - use cryptographically random string", weak)
+			slog.Warn("JWT_SECRET contains common word — use a cryptographically random string", "word", weak)
 			break
 		}
 	}
 
-	log.Printf("Configuration loaded: Port=%s, GRPCPort=%s, DB=%s, Environment=%s",
-		AppConfig.Port, AppConfig.GRPCPort, AppConfig.DBPath, AppConfig.Environment)
+	slog.Info("configuration loaded",
+		"port", AppConfig.Port,
+		"grpc_port", AppConfig.GRPCPort,
+		"environment", AppConfig.Environment,
+	)
 }
 
 func getEnv(key, defaultValue string) string {
@@ -107,7 +115,7 @@ func getBoolEnv(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		boolVal, err := strconv.ParseBool(value)
 		if err != nil {
-			log.Printf("Warning: Invalid boolean value for %s, using default: %v", key, defaultValue)
+			slog.Warn("invalid boolean env var, using default", "key", key, "default", defaultValue)
 			return defaultValue
 		}
 		return boolVal
@@ -119,7 +127,7 @@ func getIntEnv(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		intVal, err := strconv.Atoi(value)
 		if err != nil {
-			log.Printf("Warning: Invalid integer value for %s, using default: %d", key, defaultValue)
+			slog.Warn("invalid integer env var, using default", "key", key, "default", defaultValue)
 			return defaultValue
 		}
 		return intVal
