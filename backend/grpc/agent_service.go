@@ -123,7 +123,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		"hypervisor":         req.Hypervisor,
 		"container_runtime":  req.ContainerRuntime,
 		"agent_version":      req.AgentVersion,
-		"status":             "online",
+		"status":             "offline",
 		"last_seen":          &now,
 		"registration_token": nil, // Always clear token after successful registration
 		"expires_at":         nil, // Clear expiration
@@ -156,7 +156,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 	}
 	broker.BroadcastServerUpdate(sse.ServerUpdate{
 		ID:               agentToUse.ID,
-		Status:           "online",
+		Status:           "offline",
 		IPv4Address:      req.IpAddressV4,
 		IPv6Address:      req.IpAddressV6,
 		ConfiguredIP:     configuredIP,
