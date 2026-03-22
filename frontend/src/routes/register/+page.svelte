@@ -32,10 +32,7 @@
 
         try {
             await register(email, password, username);
-            const theme = get(authTheme);
-            if (theme !== "light") {
-                await updatePreferences("1h", theme);
-            }
+            await updatePreferences("1h", get(authTheme));
             goto("/");
         } catch (err) {
             error = err.message;
