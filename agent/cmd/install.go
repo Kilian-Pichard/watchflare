@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"runtime"
 	"strings"
@@ -13,15 +12,13 @@ import (
 
 // Install handles agent installation
 func Install() {
-	log.SetFlags(0) // Remove timestamp for cleaner output
-
 	fmt.Println("=== Watchflare Agent Installation ===")
 	fmt.Println()
 
-	// Step 0: Check if running as root
 	fmt.Println("[1/7] Checking permissions...")
 	if err := install.CheckRoot(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 	fmt.Println("  → Running as root")
 
@@ -48,74 +45,69 @@ func Install() {
 		}
 	}
 
-	// Get service manager
 	svcMgr, err := install.GetServiceManager()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Check for existing installation
 	if svcMgr.IsInstalled() {
 		fmt.Println("  → Found existing installation")
 		if svcMgr.IsRunning() {
 			fmt.Println("  → Stopping existing service...")
 			if err := svcMgr.Stop(); err != nil {
-				log.Printf("Warning: failed to stop service: %v", err)
+				fmt.Printf("Warning: failed to stop service: %v\n", err)
 			}
 			time.Sleep(1 * time.Second)
 		}
 	}
 
-	// Step 1: Create system user
 	fmt.Println("\n[2/7] Creating system user...")
 	if err := install.CreateUser(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Step 2: Create directories
 	fmt.Println("\n[3/7] Creating directories...")
 	if err := install.CreateDirectories(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Step 3: Install binary
 	fmt.Println("\n[4/7] Installing binary...")
 
-	// Get path to current executable (should be in /tmp from bootstrap script)
 	binaryPath, err := install.GetBinaryPath()
 	if err != nil {
-		log.Fatalf("Error: failed to get binary path: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: failed to get binary path: %v\n", err)
+		os.Exit(1)
 	}
 
 	if err := install.InstallBinary(binaryPath); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Create log file
 	if err := install.CreateLogFile(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Step 4: Install service
 	fmt.Println("\n[5/7] Installing service...")
 	if err := svcMgr.Install(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Step 5: Registration
 	fmt.Println("\n[6/7] Agent registration...")
 	needsRegistration := true
 
-	// Check if config already exists
 	configPath := install.ConfigDir + "/agent.conf"
 	if _, err := os.Stat(configPath); err == nil {
 		fmt.Println("  → Configuration file already exists")
 		needsRegistration = false
 	} else if token != "" {
-		// Registration parameters provided
 		fmt.Println("  → Registering agent with backend...")
 
-		// Set defaults
 		if host == "" {
 			host = "localhost"
 		}
@@ -123,10 +115,7 @@ func Install() {
 			port = "50051"
 		}
 
-		// Save current args
 		oldArgs := os.Args
-
-		// Set args for register command
 		os.Args = []string{
 			os.Args[0],
 			"register",
@@ -135,15 +124,10 @@ func Install() {
 			"--port=" + port,
 		}
 
-		// Call register
 		wasReactivated := Register()
-
-		// Restore args
 		os.Args = oldArgs
-
 		needsRegistration = false
 
-		// Show appropriate message
 		if wasReactivated {
 			fmt.Println("  → Registration successful (existing agent reactivated)")
 			fmt.Println("  ⚠️  NOTICE: Agent UUID was found on disk - merged with existing agent")
@@ -156,30 +140,26 @@ func Install() {
 		fmt.Printf("     sudo %s/watchflare-agent register --token=YOUR_TOKEN --host=YOUR_HOST\n", install.InstallDir)
 	}
 
-	// Step 6: Enable and start service
 	fmt.Println("\n[7/7] Starting service...")
 	if !needsRegistration {
-		// Enable service
 		if err := svcMgr.Enable(); err != nil {
-			log.Printf("Warning: %v", err)
+			fmt.Printf("Warning: %v\n", err)
 		}
 
-		// Start service
 		if err := svcMgr.Start(); err != nil {
-			log.Fatalf("Error: %v", err)
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 
 		time.Sleep(2 * time.Second)
 
-		// Check if running
 		if svcMgr.IsRunning() {
 			fmt.Println("  → Service started successfully")
 
-			// Wait for a few heartbeats then check for clock sync errors
 			fmt.Print("  → Checking agent health...")
 			time.Sleep(8 * time.Second)
 			logContent, err := os.ReadFile("/var/log/watchflare-agent.log")
-			if err == nil && strings.Contains(string(logContent), "CLOCK SYNC ERROR") {
+			if err == nil && strings.Contains(string(logContent), "clock out of sync with backend") {
 				fmt.Println(" ⚠")
 				fmt.Println()
 				fmt.Println("  ⚠ WARNING: Clock synchronization error detected!")
@@ -196,7 +176,6 @@ func Install() {
 		fmt.Println("  → Skipped (needs registration first)")
 	}
 
-	// Summary
 	fmt.Println("\n=== Installation Complete ===")
 	fmt.Println()
 	fmt.Println("Installation paths:")

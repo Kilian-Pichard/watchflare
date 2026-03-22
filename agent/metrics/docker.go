@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -105,7 +105,7 @@ func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
 
 		stats, err := getContainerStats(httpClient, c.ID)
 		if err != nil {
-			log.Printf("Warning: Failed to get stats for container %s: %v", truncateID(c.ID), err)
+			slog.Warn("failed to get stats for container", "container_id", truncateID(c.ID), "error", err)
 			continue
 		}
 

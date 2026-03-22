@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -19,9 +18,6 @@ import (
 //	                               a temp copy of itself for Phase 2.
 //	Phase 2 (from /tmp):           stop service, replace binary, start service.
 func Update() {
-	log.SetFlags(0)
-
-	// Detect Phase 2 — internal flags set by Phase 1 via syscall.Exec
 	var applyPath, updaterPath, applyVersion string
 	checkOnly := false
 
@@ -41,7 +37,8 @@ func Update() {
 	// Phase 2: apply the already-downloaded and verified binary
 	if applyPath != "" {
 		if err := update.ApplyExtracted(applyPath, updaterPath); err != nil {
-			log.Fatalf("Update failed: %v", err)
+			fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
+			os.Exit(1)
 		}
 		if applyVersion != "" {
 			fmt.Printf("✓ Updated to v%s\n", applyVersion)
@@ -61,7 +58,8 @@ func Update() {
 	fmt.Println("Checking for updates...")
 	info, err := update.CheckForUpdate(AgentVersion)
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	if !info.UpdateAvailable {
@@ -93,12 +91,14 @@ func Update() {
 	}
 
 	if err := install.CheckRoot(); err != nil {
-		log.Fatalf("Error: %v\nHint: run with sudo to apply the update", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\nHint: run with sudo to apply the update\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("\nDownloading v%s...\n", info.LatestVersion)
 	if err := update.ApplyUpdate(info); err != nil {
-		log.Fatalf("Update failed: %v", err)
+		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -111,7 +111,6 @@ func isInstalledViaBrew() bool {
 	if strings.Contains(self, "/homebrew/") || strings.Contains(self, "/Cellar/") {
 		return true
 	}
-	// Check if brew knows about the package
 	cmd := exec.Command("brew", "list", "--formula", "watchflare-agent")
 	return cmd.Run() == nil
 }

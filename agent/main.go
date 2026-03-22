@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"watchflare-agent/cmd"
+	"watchflare-agent/logger"
 )
 
 func main() {
-	log.SetFlags(log.Ldate | log.Ltime)
+	logger.Init()
 
 	// Check for subcommands
 	if len(os.Args) > 1 {

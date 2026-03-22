@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"log"
+	"log/slog"
 	"time"
 	"watchflare-agent/sysinfo"
 
@@ -18,7 +18,7 @@ func Initialize() {
 	// This prevents getting 0% on first real measurement
 	_, err := cpu.Percent(time.Second, false)
 	if err != nil {
-		log.Printf("Warning: Failed to initialize CPU metrics: %v", err)
+		slog.Warn("failed to initialize CPU metrics", "error", err)
 	}
 }
 
@@ -67,7 +67,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// CPU usage (averaged over 1 second)
 	if config.CollectCPU {
 		cpuPercent, err := cpu.Percent(time.Second, false)
-		if err == nil && len(cpuPercent) > 0 {
+		if err != nil {
+			slog.Debug("failed to collect CPU metrics", "error", err)
+		} else if len(cpuPercent) > 0 {
 			metrics.CPUUsagePercent = cpuPercent[0]
 		}
 	}
@@ -75,7 +77,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// Memory stats
 	if config.CollectMemory {
 		memStats, err := mem.VirtualMemory()
-		if err == nil {
+		if err != nil {
+			slog.Debug("failed to collect memory metrics", "error", err)
+		} else {
 			metrics.MemoryTotalBytes = memStats.Total
 			metrics.MemoryUsedBytes = memStats.Total - memStats.Available
 			metrics.MemoryAvailableBytes = memStats.Available
@@ -85,7 +89,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// Load average
 	if config.CollectLoadAvg {
 		loadStats, err := load.Avg()
-		if err == nil {
+		if err != nil {
+			slog.Debug("failed to collect load average", "error", err)
+		} else {
 			metrics.LoadAvg1Min = loadStats.Load1
 			metrics.LoadAvg5Min = loadStats.Load5
 			metrics.LoadAvg15Min = loadStats.Load15
@@ -97,7 +103,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// On Linux: uses gopsutil disk.Usage("/")
 	if config.CollectDisk {
 		total, used, diskErr := getDiskUsage()
-		if diskErr == nil {
+		if diskErr != nil {
+			slog.Debug("failed to collect disk usage", "error", diskErr)
+		} else {
 			metrics.DiskTotalBytes = total
 			metrics.DiskUsedBytes = used
 		}
@@ -106,7 +114,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// Disk I/O
 	if config.CollectDiskIO {
 		readBytes, writeBytes, ioErr := getDiskIOCounters()
-		if ioErr == nil {
+		if ioErr != nil {
+			slog.Debug("failed to collect disk I/O", "error", ioErr)
+		} else {
 			now := time.Now()
 			metrics.DiskReadBytesPerSec, metrics.DiskWriteBytesPerSec = deltaTracker.ComputeDiskIORate(readBytes, writeBytes, now)
 		}
@@ -115,7 +125,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// Network bandwidth
 	if config.CollectNetwork {
 		rxBytes, txBytes, netErr := getNetworkCounters()
-		if netErr == nil {
+		if netErr != nil {
+			slog.Debug("failed to collect network counters", "error", netErr)
+		} else {
 			now := time.Now()
 			metrics.NetworkRxBytesPerSec, metrics.NetworkTxBytesPerSec = deltaTracker.ComputeNetworkRate(rxBytes, txBytes, now)
 		}
@@ -124,7 +136,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// Temperature (physical servers only)
 	if config.CollectTemperature {
 		temp, tempErr := getCPUTemperature()
-		if tempErr == nil {
+		if tempErr != nil {
+			slog.Debug("failed to collect CPU temperature", "error", tempErr)
+		} else {
 			metrics.CPUTemperatureCelsius = temp
 		}
 	}
@@ -134,12 +148,12 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		containerMetrics, containerErr := CollectContainerMetrics(deltaTracker)
 		if containerErr != nil {
 			if !dockerErrorLogged {
-				log.Printf("Warning: Failed to collect container metrics: %v", containerErr)
+				slog.Warn("failed to collect container metrics", "error", containerErr)
 				dockerErrorLogged = true
 			}
 		} else if containerMetrics != nil {
 			if dockerErrorLogged {
-				log.Printf("Docker container metrics collection recovered")
+				slog.Info("container metrics collection recovered after previous error")
 				dockerErrorLogged = false
 			}
 			metrics.ContainerMetrics = containerMetrics

@@ -1,7 +1,7 @@
 package packages
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -40,14 +40,14 @@ func CollectAll() ([]*Package, error) {
 	var allPackages []*Package
 
 	for _, collector := range collectors {
-		log.Printf("Collecting packages from %s...", collector.Name())
+		slog.Debug("collecting packages", "manager", collector.Name())
 		packages, err := collector.Collect()
 		if err != nil {
-			log.Printf("Warning: %s collector failed: %v", collector.Name(), err)
+			slog.Warn("package collector failed", "manager", collector.Name(), "error", err)
 			continue
 		}
 
-		log.Printf("✓ Collected %d packages from %s", len(packages), collector.Name())
+		slog.Debug("packages collected", "manager", collector.Name(), "count", len(packages))
 		allPackages = append(allPackages, packages...)
 	}
 

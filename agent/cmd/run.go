@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,6 +14,7 @@ import (
 	"watchflare-agent/client"
 	"watchflare-agent/config"
 	"watchflare-agent/errors"
+	"watchflare-agent/logger"
 	"watchflare-agent/metrics"
 	"watchflare-agent/packages"
 	"watchflare-agent/update"
@@ -24,29 +25,29 @@ import (
 
 // Run starts the agent in normal operation mode
 func Run() {
-	log.Println("Watchflare Agent V1 starting...")
+	slog.Info("Watchflare Agent starting", "version", AgentVersion)
 
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
-		log.Fatalf("Configuration error: %v", err)
+		logger.Fatal("configuration error", "error", err)
 	}
 
 	// Ensure directories exist
 	if err := config.EnsureDirectories(); err != nil {
-		log.Fatalf("Failed to create directories: %v", err)
+		logger.Fatal("failed to create directories", "error", err)
 	}
 
 	// Create gRPC client
 	grpcClient, err := client.New(cfg.ServerHost, cfg.ServerPort, cfg.CACertFile, cfg.ServerName)
 	if err != nil {
-		log.Fatalf("Failed to create gRPC client: %v", err)
+		logger.Fatal("failed to create gRPC client", "error", err)
 	}
 	defer grpcClient.Close()
 
-	log.Printf("Connected to backend: %s:%s", cfg.ServerHost, cfg.ServerPort)
+	slog.Info("connected to backend", "host", cfg.ServerHost, "port", cfg.ServerPort)
 	if cfg.CACertFile != "" {
-		log.Printf("TLS enabled with CA cert: %s", cfg.CACertFile)
+		slog.Info("TLS enabled", "ca_cert", cfg.CACertFile)
 	}
 
 	// Initialize WAL
@@ -54,25 +55,25 @@ func Run() {
 	if cfg.WALEnabled != nil && *cfg.WALEnabled {
 		walInstance, err = wal.New(cfg.WALPath, cfg.WALMaxSizeMB)
 		if err != nil {
-			log.Fatalf("Failed to initialize WAL: %v", err)
+			logger.Fatal("failed to initialize WAL", "error", err)
 		}
 		defer walInstance.Close()
 
-		log.Printf("WAL enabled: %s (max: %d MB)", cfg.WALPath, cfg.WALMaxSizeMB)
+		slog.Info("WAL enabled", "path", cfg.WALPath, "max_size_mb", cfg.WALMaxSizeMB)
 	} else {
-		log.Println("WAL disabled (metrics will be lost if send fails)")
+		slog.Warn("WAL disabled, metrics will be lost if send fails")
 	}
 
 	// Detect environment and create metrics config
 	env := sysinfo.DetectEnvironment()
 	metricsConfig := sysinfo.GetMetricsConfig(env, *cfg.DockerMetrics)
-	log.Printf("Environment: %s", env.String())
+	slog.Info("environment detected", "type", env.String())
 	if *cfg.DockerMetrics {
-		log.Println("Docker container metrics: enabled")
+		slog.Info("Docker container metrics enabled")
 	}
 
 	// Initialize metrics collector (important for macOS CPU metrics)
-	log.Println("Initializing metrics collector...")
+	slog.Debug("initializing metrics collector")
 	metrics.Initialize()
 
 	// Create sender with metrics config
@@ -94,7 +95,7 @@ func Run() {
 	go func() {
 		defer close(senderDone)
 		if err := sender.Run(ctx); err != nil {
-			log.Printf("Sender error: %v", err)
+			slog.Error("sender error", "error", err)
 		}
 	}()
 
@@ -106,7 +107,7 @@ func Run() {
 
 	// Wait for signal
 	sig := <-sigCh
-	log.Printf("Received signal %v, shutting down gracefully...", sig)
+	slog.Info("shutting down", "signal", sig.String())
 
 	// Cancel context (triggers shutdown in sender and heartbeat)
 	cancel()
@@ -114,12 +115,12 @@ func Run() {
 	// Wait for sender to finish flushing (up to 6s: sender has internal 5s timeout)
 	select {
 	case <-senderDone:
-		log.Println("Sender stopped cleanly")
+		slog.Info("sender stopped cleanly")
 	case <-time.After(6 * time.Second):
-		log.Println("Sender shutdown timed out")
+		slog.Warn("sender shutdown timed out")
 	}
 
-	log.Println("Shutdown complete")
+	slog.Info("shutdown complete")
 }
 
 // loadConfig loads and validates configuration
@@ -155,19 +156,19 @@ func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Co
 	ticker := time.NewTicker(time.Duration(cfg.HeartbeatInterval) * time.Second)
 	defer ticker.Stop()
 
-	log.Printf("Heartbeat started (interval: %ds)", cfg.HeartbeatInterval)
+	slog.Info("heartbeat started", "interval_sec", cfg.HeartbeatInterval)
 
 	for {
 		select {
 		case <-ticker.C:
 			if err := grpcClient.Heartbeat(cfg.AgentID, cfg.AgentKey); err != nil {
-				log.Println(errors.FormatError(err, "Heartbeat"))
+				slog.Warn("heartbeat failed", "error", errors.FormatError(err, "Heartbeat"))
 			} else {
-				log.Println("✓ Heartbeat sent")
+				slog.Debug("heartbeat sent")
 			}
 
 		case <-ctx.Done():
-			log.Println("Heartbeat stopped")
+			slog.Info("heartbeat stopped")
 			return
 		}
 	}
@@ -177,46 +178,41 @@ func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Co
 func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *config.Config) {
 	statePath := filepath.Join(config.GetDataDir(), "packages.state.json")
 
-	log.Println("Package collector started")
+	slog.Info("package collector started")
 
 	// Wait 60 seconds before initial collection (let system stabilize)
-	log.Println("Waiting 60s before initial package collection...")
+	slog.Info("waiting before initial package collection", "delay_sec", 60)
 	select {
 	case <-time.After(60 * time.Second):
-		// Initial collection
 		collectAndSendPackages(ctx, grpcClient, cfg, statePath)
 	case <-ctx.Done():
-		log.Println("Package collector stopped before initial collection")
+		slog.Info("package collector stopped before initial collection")
 		return
 	}
 
-	// Setup daily ticker for 3 AM
-	// Calculate time until next 3 AM
+	// Schedule daily collection at 3 AM
 	now := time.Now()
 	next3AM := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, now.Location())
 	if now.Hour() >= 3 {
-		// If it's after 3 AM today, schedule for tomorrow
 		next3AM = next3AM.Add(24 * time.Hour)
 	}
 
 	timeUntil3AM := time.Until(next3AM)
-	log.Printf("Next package collection scheduled for: %s (in %v)", next3AM.Format("2006-01-02 15:04:05"), timeUntil3AM)
+	slog.Info("next package collection scheduled",
+		"at", next3AM.Format("2006-01-02 15:04:05"),
+		"in", timeUntil3AM.Round(time.Minute).String())
 
-	// Create ticker for daily collection
 	timer := time.NewTimer(timeUntil3AM)
 	defer timer.Stop()
 
 	for {
 		select {
 		case <-timer.C:
-			// Daily collection at 3 AM
 			collectAndSendPackages(ctx, grpcClient, cfg, statePath)
-
-			// Reset timer for next day at 3 AM
 			timer.Reset(24 * time.Hour)
 
 		case <-ctx.Done():
-			log.Println("Package collector stopped")
+			slog.Info("package collector stopped")
 			return
 		}
 	}
@@ -224,7 +220,6 @@ func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *co
 
 // runUpdateChecker periodically checks for available agent updates and logs a notice
 func runUpdateChecker(ctx context.Context) {
-	// Initial check after 5 minutes (let agent stabilize first)
 	select {
 	case <-time.After(5 * time.Minute):
 	case <-ctx.Done():
@@ -252,16 +247,20 @@ func checkAndLogUpdate() {
 	}
 	info, err := update.CheckForUpdate(AgentVersion)
 	if err != nil {
-		log.Printf("Update check failed: %v", err)
+		slog.Warn("update check failed", "error", err)
 		return
 	}
 	if info.UpdateAvailable {
 		if runtime.GOOS == "darwin" {
-			log.Printf("⬆ Update available: v%s → v%s (run: brew upgrade watchflare-agent && brew services restart watchflare-agent)",
-				info.CurrentVersion, info.LatestVersion)
+			slog.Info("update available",
+				"current", info.CurrentVersion,
+				"latest", info.LatestVersion,
+				"hint", "brew upgrade watchflare-agent && brew services restart watchflare-agent")
 		} else {
-			log.Printf("⬆ Update available: v%s → v%s (run: sudo watchflare-agent update)",
-				info.CurrentVersion, info.LatestVersion)
+			slog.Info("update available",
+				"current", info.CurrentVersion,
+				"latest", info.LatestVersion,
+				"hint", "sudo watchflare-agent update")
 		}
 	}
 }
@@ -269,50 +268,45 @@ func checkAndLogUpdate() {
 // collectAndSendPackages performs package collection, delta calculation, and sending
 func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg *config.Config, statePath string) {
 	startTime := time.Now()
-	log.Println("Starting package collection...")
+	slog.Info("starting package collection")
 
-	// Collect all packages
 	allPackages, err := packages.CollectAll()
 	if err != nil {
-		log.Printf("Package collection failed: %v", err)
+		slog.Error("package collection failed", "error", err)
 		return
 	}
 
-	collectionDuration := time.Since(startTime).Milliseconds()
-	log.Printf("Collected %d packages in %dms", len(allPackages), collectionDuration)
+	collectionDurationMs := time.Since(startTime).Milliseconds()
+	slog.Info("packages collected", "count", len(allPackages), "duration_ms", collectionDurationMs)
 
 	// Load previous state
 	state, err := packages.LoadState(statePath)
 	if err != nil {
-		log.Printf("Warning: Failed to load package state: %v", err)
+		slog.Warn("failed to load package state", "error", err)
 		state = &packages.PackageState{Packages: make([]*packages.Package, 0)}
 	}
 
 	// Compute delta
 	added, removed, updated := state.ComputeDelta(allPackages)
 
-	// Check if we should send
 	isFirstRun := len(state.Packages) == 0
 	hasChanges := packages.HasChanges(added, removed, updated)
 
 	if !isFirstRun && !hasChanges {
-		log.Println("No package changes detected, skipping send")
+		slog.Info("no package changes detected, skipping send")
 		return
 	}
 
-	// Determine inventory type
 	var inventoryType string
 	if isFirstRun {
 		inventoryType = "full"
-		log.Printf("First run detected, sending full inventory (%d packages)", len(allPackages))
+		slog.Info("first run: sending full inventory", "count", len(allPackages))
 	} else {
 		inventoryType = "delta"
-		log.Printf("Changes detected: +%d added, -%d removed, ~%d updated", len(added), len(removed), len(updated))
+		slog.Info("package changes detected", "added", len(added), "removed", len(removed), "updated", len(updated))
 	}
 
-	// Convert packages to protobuf format
 	var addedProto, removedProto, updatedProto, allProto []*pb.Package
-
 	if inventoryType == "full" {
 		allProto = convertPackagesToProto(allPackages)
 	} else {
@@ -321,34 +315,33 @@ func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg 
 		updatedProto = convertPackagesToProto(updated)
 	}
 
-	// Send to backend
 	inventoryData := &client.PackageInventoryData{
 		InventoryType:        inventoryType,
 		AddedPackages:        addedProto,
 		RemovedPackages:      removedProto,
 		UpdatedPackages:      updatedProto,
 		AllPackages:          allProto,
-		CollectionDurationMs: collectionDuration,
+		CollectionDurationMs: collectionDurationMs,
 		TotalPackageCount:    int32(len(allPackages)),
 	}
 
 	if err := grpcClient.SendPackageInventory(cfg.AgentID, cfg.AgentKey, inventoryData); err != nil {
-		log.Printf("Failed to send package inventory: %v", err)
+		slog.Error("failed to send package inventory", "error", err)
 		return
 	}
 
-	log.Printf("✓ Package inventory sent successfully (%s: +%d, -%d, ~%d)",
-		inventoryType, len(added), len(removed), len(updated))
+	slog.Info("package inventory sent",
+		"type", inventoryType,
+		"added", len(added),
+		"removed", len(removed),
+		"updated", len(updated))
 
-	// Update local state
 	state.Packages = allPackages
 	state.LastScan = time.Now()
 	state.PackageCount = len(allPackages)
 
 	if err := state.Save(statePath); err != nil {
-		log.Printf("Warning: Failed to save package state: %v", err)
-	} else {
-		log.Printf("✓ Package state saved to %s", statePath)
+		slog.Warn("failed to save package state", "error", err)
 	}
 }
 

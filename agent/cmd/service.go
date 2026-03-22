@@ -2,23 +2,22 @@ package cmd
 
 import (
 	"fmt"
-	"log"
+	"os"
+
 	"watchflare-agent/install"
 )
 
 // Status displays the current status of the agent service
 func Status() {
-	log.SetFlags(0) // Remove timestamp for cleaner output
-
 	svcMgr, err := install.GetServiceManager()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Println("=== Watchflare Agent Status ===")
 	fmt.Println()
 
-	// Check if installed
 	if !svcMgr.IsInstalled() {
 		fmt.Println("Status: Not installed")
 		fmt.Println()
@@ -29,7 +28,6 @@ func Status() {
 
 	fmt.Println("Installation: ✓ Installed")
 
-	// Check if running
 	if svcMgr.IsRunning() {
 		fmt.Println("Status:       ✓ Running")
 	} else {
@@ -46,20 +44,20 @@ func Status() {
 
 // StartService starts the agent service
 func StartService() {
-	log.SetFlags(0)
-
-	// Check root
 	if err := install.CheckRoot(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	svcMgr, err := install.GetServiceManager()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	if !svcMgr.IsInstalled() {
-		log.Fatal("Error: Agent is not installed. Run 'sudo watchflare-agent install' first.")
+		fmt.Fprintln(os.Stderr, "Error: agent is not installed. Run 'sudo watchflare-agent install' first.")
+		os.Exit(1)
 	}
 
 	if svcMgr.IsRunning() {
@@ -68,7 +66,8 @@ func StartService() {
 	}
 
 	if err := svcMgr.Start(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Println("Agent started successfully")
@@ -76,20 +75,20 @@ func StartService() {
 
 // StopService stops the agent service
 func StopService() {
-	log.SetFlags(0)
-
-	// Check root
 	if err := install.CheckRoot(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	svcMgr, err := install.GetServiceManager()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	if !svcMgr.IsInstalled() {
-		log.Fatal("Error: Agent is not installed")
+		fmt.Fprintln(os.Stderr, "Error: agent is not installed")
+		os.Exit(1)
 	}
 
 	if !svcMgr.IsRunning() {
@@ -98,7 +97,8 @@ func StopService() {
 	}
 
 	if err := svcMgr.Stop(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Println("Agent stopped successfully")
@@ -106,24 +106,25 @@ func StopService() {
 
 // RestartService restarts the agent service
 func RestartService() {
-	log.SetFlags(0)
-
-	// Check root
 	if err := install.CheckRoot(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	svcMgr, err := install.GetServiceManager()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	if !svcMgr.IsInstalled() {
-		log.Fatal("Error: Agent is not installed")
+		fmt.Fprintln(os.Stderr, "Error: agent is not installed")
+		os.Exit(1)
 	}
 
 	if err := svcMgr.Restart(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Println("Agent restarted successfully")
@@ -131,18 +132,19 @@ func RestartService() {
 
 // Logs displays and follows the agent logs
 func Logs() {
-	log.SetFlags(0)
-
 	svcMgr, err := install.GetServiceManager()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	if !svcMgr.IsInstalled() {
-		log.Fatal("Error: Agent is not installed")
+		fmt.Fprintln(os.Stderr, "Error: agent is not installed")
+		os.Exit(1)
 	}
 
 	if err := svcMgr.ShowLogs(); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }
