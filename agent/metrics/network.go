@@ -3,7 +3,7 @@ package metrics
 import (
 	"fmt"
 
-	"github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v4/net"
 )
 
 // getNetworkCounters returns cumulative network RX/TX bytes (aggregated across all interfaces)

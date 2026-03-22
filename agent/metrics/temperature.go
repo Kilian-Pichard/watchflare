@@ -3,12 +3,12 @@ package metrics
 import (
 	"strings"
 
-	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v4/sensors"
 )
 
 // getCPUTemperature returns the CPU temperature in Celsius, or 0 if unavailable
 func getCPUTemperature() (float64, error) {
-	temps, err := host.SensorsTemperatures()
+	temps, err := sensors.SensorsTemperatures()
 	if err != nil {
 		return 0, err
 	}
