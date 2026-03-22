@@ -1,4 +1,4 @@
-import type { SSEEvent, Metric, ContainerMetric } from '../types';
+import type { SSEEvent, Metric, ContainerMetric, SensorReading } from '../types';
 import { API_BASE_URL } from '../api';
 import { logger } from '../utils';
 
@@ -6,6 +6,14 @@ import { logger } from '../utils';
  * Connection states for SSE
  */
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+
+/**
+ * Minified sensor reading format from backend SSE
+ */
+interface MinifiedSensorReading {
+	k: string;  // sensor key
+	v: number;  // temperature_celsius
+}
 
 /**
  * Minified metrics format from backend SSE
@@ -28,6 +36,7 @@ interface MinifiedMetrics {
 	nt: number;      // network_tx_bytes_per_sec
 	tmp: number;     // cpu_temperature_celsius
 	u: number;       // uptime_seconds
+	sr?: MinifiedSensorReading[]; // all sensor readings
 }
 
 /**
@@ -76,6 +85,11 @@ function decodeMinifiedContainerMetrics(minified: MinifiedContainerMetricsUpdate
  * Decode minified SSE metrics format to full format
  */
 function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
+	const sensorReadings: SensorReading[] | undefined = minified.sr?.map(sr => ({
+		key: sr.k,
+		temperature_celsius: sr.v
+	}));
+
 	return {
 		id: 0,
 		server_id: minified.s,
@@ -94,7 +108,8 @@ function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
 		network_rx_bytes_per_sec: minified.nr ?? 0,
 		network_tx_bytes_per_sec: minified.nt ?? 0,
 		cpu_temperature_celsius: minified.tmp ?? 0,
-		uptime_seconds: minified.u
+		uptime_seconds: minified.u,
+		sensor_readings: sensorReadings
 	};
 }
 

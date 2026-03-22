@@ -11,7 +11,7 @@ import (
 
 	"watchflare-agent/metrics"
 	"watchflare-agent/security"
-	pb "watchflare/shared/proto"
+	pb "watchflare/shared/proto/agent/v1"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -225,6 +225,14 @@ func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) error {
 func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.SystemMetrics) error {
 	timestamp := time.Now().Unix()
 
+	var pbSensorReadings []*pb.SensorReading
+	for _, sr := range m.SensorReadings {
+		pbSensorReadings = append(pbSensorReadings, &pb.SensorReading{
+			Key:                sr.Key,
+			TemperatureCelsius: sr.TemperatureCelsius,
+		})
+	}
+
 	req := &pb.SendMetricsRequest{
 		AgentId:  agentID,
 		AgentKey: agentKey,
@@ -241,11 +249,12 @@ func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.
 			UptimeSeconds:        m.UptimeSeconds,
 			Timestamp:            m.Timestamp,
 
-			DiskReadBytesPerSec:  m.DiskReadBytesPerSec,
-			DiskWriteBytesPerSec: m.DiskWriteBytesPerSec,
-			NetworkRxBytesPerSec: m.NetworkRxBytesPerSec,
-			NetworkTxBytesPerSec: m.NetworkTxBytesPerSec,
+			DiskReadBytesPerSec:   m.DiskReadBytesPerSec,
+			DiskWriteBytesPerSec:  m.DiskWriteBytesPerSec,
+			NetworkRxBytesPerSec:  m.NetworkRxBytesPerSec,
+			NetworkTxBytesPerSec:  m.NetworkTxBytesPerSec,
 			CpuTemperatureCelsius: m.CPUTemperatureCelsius,
+			SensorReadings:        pbSensorReadings,
 		},
 		Timestamp:    timestamp, // Request-level timestamp for anti-replay
 		AgentVersion: agentVersion,

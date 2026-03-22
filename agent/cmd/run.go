@@ -17,10 +17,11 @@ import (
 	"watchflare-agent/logger"
 	"watchflare-agent/metrics"
 	"watchflare-agent/packages"
-	"watchflare-agent/update"
-	pb "watchflare/shared/proto"
 	"watchflare-agent/sysinfo"
+	"watchflare-agent/update"
 	"watchflare-agent/wal"
+
+	pb "watchflare/shared/proto/agent/v1"
 )
 
 // Run starts the agent in normal operation mode

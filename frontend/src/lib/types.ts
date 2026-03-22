@@ -78,6 +78,11 @@ export interface UpdateConfiguredIPRequest {
 
 export type TimeRange = '1h' | '12h' | '24h' | '7d' | '30d';
 
+export interface SensorReading {
+	key: string;
+	temperature_celsius: number;
+}
+
 export interface Metric {
 	id: number;
 	server_id: string;
@@ -97,6 +102,7 @@ export interface Metric {
 	network_rx_bytes_per_sec: number;
 	network_tx_bytes_per_sec: number;
 	cpu_temperature_celsius: number;
+	sensor_readings?: SensorReading[];
 }
 
 export interface AggregatedMetric {

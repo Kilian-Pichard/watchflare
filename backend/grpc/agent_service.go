@@ -14,7 +14,7 @@ import (
 	"watchflare/backend/models"
 	"watchflare/backend/pki"
 	"watchflare/backend/sse"
-	pb "watchflare/shared/proto"
+	pb "watchflare/shared/proto/agent/v1"
 
 	"gorm.io/gorm"
 )
@@ -269,6 +269,20 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		}, nil
 	}
 
+	// Convert proto sensor readings to model type and SSE minified format in one pass
+	var sensorReadings models.SensorReadings
+	var sseSensorReadings []sse.SensorReadingMinified
+	for _, sr := range req.Metrics.SensorReadings {
+		sensorReadings = append(sensorReadings, models.SensorReading{
+			Key:                sr.Key,
+			TemperatureCelsius: sr.TemperatureCelsius,
+		})
+		sseSensorReadings = append(sseSensorReadings, sse.SensorReadingMinified{
+			K: sr.Key,
+			V: sr.TemperatureCelsius,
+		})
+	}
+
 	// Create metric record
 	metric := &models.Metric{
 		ServerID:             server.ID,
@@ -287,6 +301,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		NetworkRxBytesPerSec:  req.Metrics.NetworkRxBytesPerSec,
 		NetworkTxBytesPerSec:  req.Metrics.NetworkTxBytesPerSec,
 		CPUTemperatureCelsius: req.Metrics.CpuTemperatureCelsius,
+		SensorReadings:        sensorReadings,
 		UptimeSeconds:         req.Metrics.UptimeSeconds,
 	}
 
@@ -309,6 +324,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		NetworkRxBytesPerSec:  metric.NetworkRxBytesPerSec,
 		NetworkTxBytesPerSec:  metric.NetworkTxBytesPerSec,
 		CPUTemperatureCelsius: metric.CPUTemperatureCelsius,
+		SensorReadings:        sseSensorReadings,
 		UptimeSeconds:         metric.UptimeSeconds,
 	})
 

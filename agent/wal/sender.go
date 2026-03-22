@@ -10,7 +10,7 @@ import (
 	"watchflare-agent/errors"
 	"watchflare-agent/metrics"
 	"watchflare-agent/sysinfo"
-	pb "watchflare/shared/proto"
+	pb "watchflare/shared/proto/agent/v1"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -261,6 +261,14 @@ func (s *Sender) sendRecord(data []byte, includeContainers bool, containerMetric
 		return fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
+	var sensorReadings []metrics.SensorReading
+	for _, sr := range pbMetrics.SensorReadings {
+		sensorReadings = append(sensorReadings, metrics.SensorReading{
+			Key:                sr.Key,
+			TemperatureCelsius: sr.TemperatureCelsius,
+		})
+	}
+
 	m := &metrics.SystemMetrics{
 		CPUUsagePercent:       pbMetrics.CpuUsagePercent,
 		MemoryTotalBytes:      pbMetrics.MemoryTotalBytes,
@@ -276,6 +284,7 @@ func (s *Sender) sendRecord(data []byte, includeContainers bool, containerMetric
 		NetworkRxBytesPerSec:  pbMetrics.NetworkRxBytesPerSec,
 		NetworkTxBytesPerSec:  pbMetrics.NetworkTxBytesPerSec,
 		CPUTemperatureCelsius: pbMetrics.CpuTemperatureCelsius,
+		SensorReadings:        sensorReadings,
 		UptimeSeconds:         pbMetrics.UptimeSeconds,
 		Timestamp:             pbMetrics.Timestamp,
 	}
@@ -289,6 +298,14 @@ func (s *Sender) sendRecord(data []byte, includeContainers bool, containerMetric
 
 // serializeMetrics converts SystemMetrics to protobuf bytes
 func (s *Sender) serializeMetrics(m *metrics.SystemMetrics) ([]byte, error) {
+	var pbSensorReadings []*pb.SensorReading
+	for _, sr := range m.SensorReadings {
+		pbSensorReadings = append(pbSensorReadings, &pb.SensorReading{
+			Key:                sr.Key,
+			TemperatureCelsius: sr.TemperatureCelsius,
+		})
+	}
+
 	pbMetrics := &pb.Metrics{
 		CpuUsagePercent:       m.CPUUsagePercent,
 		MemoryTotalBytes:      m.MemoryTotalBytes,
@@ -304,6 +321,7 @@ func (s *Sender) serializeMetrics(m *metrics.SystemMetrics) ([]byte, error) {
 		NetworkRxBytesPerSec:  m.NetworkRxBytesPerSec,
 		NetworkTxBytesPerSec:  m.NetworkTxBytesPerSec,
 		CpuTemperatureCelsius: m.CPUTemperatureCelsius,
+		SensorReadings:        pbSensorReadings,
 		UptimeSeconds:         m.UptimeSeconds,
 		Timestamp:             m.Timestamp,
 	}

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package agent.v1;
 
-option go_package = "watchflare/shared/proto";
+option go_package = "watchflare/shared/proto/agent/v1;proto";
 
 // AgentService handles agent registration and heartbeats
 service AgentService {
@@ -96,6 +96,15 @@ message Metrics {
 
   // Temperature (physical servers only, 0 if unavailable)
   double cpu_temperature_celsius = 16;
+
+  // All temperature sensor readings (one entry per sensor key)
+  repeated SensorReading sensor_readings = 17;
+}
+
+// SensorReading represents a single temperature sensor reading
+message SensorReading {
+  string key = 1;                  // Sensor key (e.g., "PMU tdie1", "NAND CH0 temp")
+  double temperature_celsius = 2;  // Temperature in Celsius
 }
 
 // ContainerMetric contains per-container performance data

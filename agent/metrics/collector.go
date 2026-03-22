@@ -47,6 +47,9 @@ type SystemMetrics struct {
 	// Temperature (physical servers only)
 	CPUTemperatureCelsius float64
 
+	// All sensor readings (temperature sensors, battery, storage, etc.)
+	SensorReadings []SensorReading
+
 	// Docker container metrics (only for hosts with containers)
 	ContainerMetrics []ContainerMetric
 }
@@ -133,13 +136,14 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		}
 	}
 
-	// Temperature (physical servers only)
+	// Temperature (physical servers only) — single syscall for CPU temp + all readings
 	if config.CollectTemperature {
-		temp, tempErr := getCPUTemperature()
+		cpuTemp, readings, tempErr := collectTemperatures()
 		if tempErr != nil {
-			slog.Debug("failed to collect CPU temperature", "error", tempErr)
+			slog.Debug("failed to collect temperature sensors", "error", tempErr)
 		} else {
-			metrics.CPUTemperatureCelsius = temp
+			metrics.CPUTemperatureCelsius = cpuTemp
+			metrics.SensorReadings = readings
 		}
 	}
 

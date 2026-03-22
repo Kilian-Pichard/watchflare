@@ -1,11 +1,47 @@
 package models
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// SensorReading represents a single temperature sensor reading
+type SensorReading struct {
+	Key                string  `json:"key"`
+	TemperatureCelsius float64 `json:"temperature_celsius"`
+}
+
+// SensorReadings is a slice of SensorReading with JSONB support for GORM
+type SensorReadings []SensorReading
+
+func (s SensorReadings) Value() (driver.Value, error) {
+	if len(s) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(s)
+}
+
+func (s *SensorReadings) Scan(value interface{}) error {
+	if value == nil {
+		*s = nil
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return fmt.Errorf("cannot scan type %T into SensorReadings", value)
+	}
+	return json.Unmarshal(bytes, s)
+}
 
 // Metric stores time-series system metrics for a server
 type Metric struct {
@@ -40,6 +76,9 @@ type Metric struct {
 
 	// Temperature (physical servers only, 0 if unavailable)
 	CPUTemperatureCelsius float64 `json:"cpu_temperature_celsius"`
+
+	// All sensor readings (temperature sensors, battery, storage, etc.)
+	SensorReadings SensorReadings `gorm:"type:jsonb" json:"sensor_readings,omitempty"`
 
 	// System uptime
 	UptimeSeconds uint64 `json:"uptime_seconds"`

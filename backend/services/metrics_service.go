@@ -20,22 +20,23 @@ type MetricsQueryParams struct {
 
 // MetricDataPoint represents an aggregated metric data point
 type MetricDataPoint struct {
-	Timestamp            time.Time `json:"timestamp"`
-	CPUUsagePercent      float64   `json:"cpu_usage_percent"`
-	MemoryTotalBytes     uint64    `json:"memory_total_bytes"`
-	MemoryUsedBytes      uint64    `json:"memory_used_bytes"`
-	MemoryAvailableBytes uint64    `json:"memory_available_bytes"`
-	LoadAvg1Min          float64   `json:"load_avg_1min"`
-	LoadAvg5Min          float64   `json:"load_avg_5min"`
-	LoadAvg15Min         float64   `json:"load_avg_15min"`
-	DiskTotalBytes        uint64    `json:"disk_total_bytes"`
-	DiskUsedBytes         uint64    `json:"disk_used_bytes"`
-	DiskReadBytesPerSec   uint64    `json:"disk_read_bytes_per_sec"`
-	DiskWriteBytesPerSec  uint64    `json:"disk_write_bytes_per_sec"`
-	NetworkRxBytesPerSec  uint64    `json:"network_rx_bytes_per_sec"`
-	NetworkTxBytesPerSec  uint64    `json:"network_tx_bytes_per_sec"`
-	CPUTemperatureCelsius float64   `json:"cpu_temperature_celsius"`
-	UptimeSeconds         uint64    `json:"uptime_seconds"`
+	Timestamp            time.Time             `json:"timestamp"`
+	CPUUsagePercent      float64               `json:"cpu_usage_percent"`
+	MemoryTotalBytes     uint64                `json:"memory_total_bytes"`
+	MemoryUsedBytes      uint64                `json:"memory_used_bytes"`
+	MemoryAvailableBytes uint64                `json:"memory_available_bytes"`
+	LoadAvg1Min          float64               `json:"load_avg_1min"`
+	LoadAvg5Min          float64               `json:"load_avg_5min"`
+	LoadAvg15Min         float64               `json:"load_avg_15min"`
+	DiskTotalBytes        uint64                `json:"disk_total_bytes"`
+	DiskUsedBytes         uint64                `json:"disk_used_bytes"`
+	DiskReadBytesPerSec   uint64                `json:"disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec  uint64                `json:"disk_write_bytes_per_sec"`
+	NetworkRxBytesPerSec  uint64                `json:"network_rx_bytes_per_sec"`
+	NetworkTxBytesPerSec  uint64                `json:"network_tx_bytes_per_sec"`
+	CPUTemperatureCelsius float64               `json:"cpu_temperature_celsius"`
+	UptimeSeconds         uint64                `json:"uptime_seconds"`
+	SensorReadings        models.SensorReadings `json:"sensor_readings,omitempty"`
 }
 
 // GetMetrics retrieves metrics for a server with optional time range and aggregation
@@ -81,6 +82,7 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 				NetworkTxBytesPerSec:  m.NetworkTxBytesPerSec,
 				CPUTemperatureCelsius: m.CPUTemperatureCelsius,
 				UptimeSeconds:         m.UptimeSeconds,
+				SensorReadings:        m.SensorReadings,
 			})
 		}
 

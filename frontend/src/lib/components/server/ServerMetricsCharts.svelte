@@ -143,7 +143,7 @@
 			</div>
 			<NetworkChart data={metrics} {timeRange} />
 		</div>
-		{#if latestMetric && latestMetric.cpu_temperature_celsius > 0}
+		{#if latestMetric && (latestMetric.cpu_temperature_celsius > 0 || (latestMetric.sensor_readings && latestMetric.sensor_readings.length > 0))}
 			<div class="rounded-lg border bg-card p-4">
 				<div class="mb-3 flex items-center justify-between">
 					<h3 class="text-sm font-medium">CPU Temperature</h3>

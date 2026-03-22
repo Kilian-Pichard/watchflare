@@ -30,45 +30,53 @@ type ServerUpdate struct {
 
 // MetricsUpdate represents a real-time metrics update
 type MetricsUpdate struct {
-	ServerID             string  `json:"server_id"`
-	Timestamp            string  `json:"timestamp"`
-	CPUUsagePercent      float64 `json:"cpu_usage_percent"`
-	MemoryTotalBytes     uint64  `json:"memory_total_bytes"`
-	MemoryUsedBytes      uint64  `json:"memory_used_bytes"`
-	MemoryAvailableBytes uint64  `json:"memory_available_bytes"`
-	LoadAvg1Min          float64 `json:"load_avg_1min"`
-	LoadAvg5Min          float64 `json:"load_avg_5min"`
-	LoadAvg15Min         float64 `json:"load_avg_15min"`
-	DiskTotalBytes        uint64  `json:"disk_total_bytes"`
-	DiskUsedBytes         uint64  `json:"disk_used_bytes"`
-	DiskReadBytesPerSec   uint64  `json:"disk_read_bytes_per_sec"`
-	DiskWriteBytesPerSec  uint64  `json:"disk_write_bytes_per_sec"`
-	NetworkRxBytesPerSec  uint64  `json:"network_rx_bytes_per_sec"`
-	NetworkTxBytesPerSec  uint64  `json:"network_tx_bytes_per_sec"`
-	CPUTemperatureCelsius float64 `json:"cpu_temperature_celsius"`
-	UptimeSeconds         uint64  `json:"uptime_seconds"`
+	ServerID             string                  `json:"server_id"`
+	Timestamp            string                  `json:"timestamp"`
+	CPUUsagePercent      float64                 `json:"cpu_usage_percent"`
+	MemoryTotalBytes     uint64                  `json:"memory_total_bytes"`
+	MemoryUsedBytes      uint64                  `json:"memory_used_bytes"`
+	MemoryAvailableBytes uint64                  `json:"memory_available_bytes"`
+	LoadAvg1Min          float64                 `json:"load_avg_1min"`
+	LoadAvg5Min          float64                 `json:"load_avg_5min"`
+	LoadAvg15Min         float64                 `json:"load_avg_15min"`
+	DiskTotalBytes        uint64                  `json:"disk_total_bytes"`
+	DiskUsedBytes         uint64                  `json:"disk_used_bytes"`
+	DiskReadBytesPerSec   uint64                  `json:"disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec  uint64                  `json:"disk_write_bytes_per_sec"`
+	NetworkRxBytesPerSec  uint64                  `json:"network_rx_bytes_per_sec"`
+	NetworkTxBytesPerSec  uint64                  `json:"network_tx_bytes_per_sec"`
+	CPUTemperatureCelsius float64                 `json:"cpu_temperature_celsius"`
+	UptimeSeconds         uint64                  `json:"uptime_seconds"`
+	SensorReadings        []SensorReadingMinified `json:"sensor_readings,omitempty"`
+}
+
+// SensorReadingMinified represents a minified sensor reading for SSE
+type SensorReadingMinified struct {
+	K string  `json:"k"` // sensor key
+	V float64 `json:"v"` // temperature_celsius
 }
 
 // MetricsUpdateMinified represents a minified metrics update for SSE (reduces bandwidth)
 // Format: {"s":"srv1","t":1702741200,"c":22.5,"mu":4294967296,"mt":8589934592,...}
 type MetricsUpdateMinified struct {
-	ServerID         string  `json:"s"`  // server_id
-	Timestamp        int64   `json:"t"`  // Unix timestamp
-	CPU              float64 `json:"c"`  // cpu_usage_percent
-	MemoryUsed       uint64  `json:"mu"` // memory_used_bytes
-	MemoryTotal      uint64  `json:"mt"` // memory_total_bytes
-	MemoryAvailable  uint64  `json:"ma"` // memory_available_bytes
-	DiskUsed         uint64  `json:"du"` // disk_used_bytes
-	DiskTotal        uint64  `json:"dt"` // disk_total_bytes
-	LoadAvg1         float64 `json:"l1"`  // load_avg_1min
-	LoadAvg5         float64 `json:"l5"`  // load_avg_5min
-	LoadAvg15        float64 `json:"l15"` // load_avg_15min
-	DiskReadRate     uint64  `json:"dr"`  // disk_read_bytes_per_sec
-	DiskWriteRate    uint64  `json:"dw"`  // disk_write_bytes_per_sec
-	NetRxRate        uint64  `json:"nr"`  // network_rx_bytes_per_sec
-	NetTxRate        uint64  `json:"nt"`  // network_tx_bytes_per_sec
-	CPUTemp          float64 `json:"tmp"` // cpu_temperature_celsius
-	Uptime           uint64  `json:"u"`   // uptime_seconds
+	ServerID         string                  `json:"s"`         // server_id
+	Timestamp        int64                   `json:"t"`         // Unix timestamp
+	CPU              float64                 `json:"c"`         // cpu_usage_percent
+	MemoryUsed       uint64                  `json:"mu"`        // memory_used_bytes
+	MemoryTotal      uint64                  `json:"mt"`        // memory_total_bytes
+	MemoryAvailable  uint64                  `json:"ma"`        // memory_available_bytes
+	DiskUsed         uint64                  `json:"du"`        // disk_used_bytes
+	DiskTotal        uint64                  `json:"dt"`        // disk_total_bytes
+	LoadAvg1         float64                 `json:"l1"`        // load_avg_1min
+	LoadAvg5         float64                 `json:"l5"`        // load_avg_5min
+	LoadAvg15        float64                 `json:"l15"`       // load_avg_15min
+	DiskReadRate     uint64                  `json:"dr"`        // disk_read_bytes_per_sec
+	DiskWriteRate    uint64                  `json:"dw"`        // disk_write_bytes_per_sec
+	NetRxRate        uint64                  `json:"nr"`        // network_rx_bytes_per_sec
+	NetTxRate        uint64                  `json:"nt"`        // network_tx_bytes_per_sec
+	CPUTemp          float64                 `json:"tmp"`       // cpu_temperature_celsius
+	Uptime           uint64                  `json:"u"`         // uptime_seconds
+	SensorReadings   []SensorReadingMinified `json:"sr,omitempty"` // all sensor readings
 }
 
 // AggregatedMetricsUpdate represents aggregated metrics from all online servers
@@ -236,6 +244,7 @@ func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
 		NetTxRate:       update.NetworkTxBytesPerSec,
 		CPUTemp:         update.CPUTemperatureCelsius,
 		Uptime:          update.UptimeSeconds,
+		SensorReadings:  update.SensorReadings,
 	}
 }
 

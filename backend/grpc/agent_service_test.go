@@ -11,7 +11,7 @@ import (
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 	"watchflare/backend/pki"
-	pb "watchflare/shared/proto"
+	pb "watchflare/shared/proto/agent/v1"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

@@ -19,7 +19,7 @@ import (
 	"watchflare/backend/middleware"
 	"watchflare/backend/pki"
 	"watchflare/backend/services"
-	pb "watchflare/shared/proto"
+	pb "watchflare/shared/proto/agent/v1"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
