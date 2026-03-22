@@ -217,7 +217,7 @@ fi
 
 echo -e "${YELLOW}[1/6]${NC} Checking for existing installation..."
 HAS_SYSTEMD=false
-if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
     HAS_SYSTEMD=true
     echo "  → Systemd detected"
     if systemctl is-active --quiet ${SERVICE_NAME}; then
