@@ -15,21 +15,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// setupTestDB initializes an in-memory SQLite database for testing
 func setupTestDB(t *testing.T) {
+	t.Helper()
 	config.AppConfig = &config.Config{
-		DBPath:    ":memory:",
 		JWTSecret: "test-secret-key",
 	}
-
-	if err := database.Connect(config.AppConfig.DBPath); err != nil {
-		t.Fatalf("Failed to connect to test database: %v", err)
+	if err := database.Connect(); err != nil {
+		t.Skipf("skipping test: database unavailable: %v", err)
 	}
 }
 
 // teardownTestDB cleans up the test database
 func teardownTestDB() {
-	// Clean up users table
+	database.DB.Exec("DELETE FROM servers")
 	database.DB.Exec("DELETE FROM users")
 }
 

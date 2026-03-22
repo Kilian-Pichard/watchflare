@@ -12,13 +12,12 @@ import (
 )
 
 func setupTestDB(t *testing.T) {
+	t.Helper()
 	config.AppConfig = &config.Config{
-		DBPath:    ":memory:",
 		JWTSecret: "test-secret-key",
 	}
-
-	if err := database.Connect(config.AppConfig.DBPath); err != nil {
-		t.Fatalf("Failed to connect to test database: %v", err)
+	if err := database.Connect(); err != nil {
+		t.Skipf("skipping test: database unavailable: %v", err)
 	}
 }
 
@@ -78,7 +77,7 @@ func TestListServers(t *testing.T) {
 	CreateAgent("server02", "192.168.1.101", true)
 	CreateAgent("server03", "192.168.1.102", false)
 
-	servers, err := ListServers()
+	servers, _, err := ListServers(ServerListParams{})
 
 	assert.NoError(t, err)
 	assert.Len(t, servers, 3)
@@ -94,7 +93,7 @@ func TestListServers_Empty(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
-	servers, err := ListServers()
+	servers, _, err := ListServers(ServerListParams{})
 
 	assert.NoError(t, err)
 	assert.Empty(t, servers)

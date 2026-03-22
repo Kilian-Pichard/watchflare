@@ -159,15 +159,19 @@ func TestListServers(t *testing.T) {
 	servers := response["servers"].([]interface{})
 	assert.Len(t, servers, 2)
 
-	// Verify server data
-	firstServer := servers[0].(map[string]interface{})
-	assert.Equal(t, server1.ID, firstServer["id"])
-	assert.Equal(t, "server01", firstServer["name"])
-	assert.Equal(t, "pending", firstServer["status"])
-
-	secondServer := servers[1].(map[string]interface{})
-	assert.Equal(t, server2.ID, secondServer["id"])
-	assert.Equal(t, "server02", secondServer["name"])
+	// Collect IDs and names — order is not guaranteed (sorted by created_at)
+	ids := []string{}
+	names := []string{}
+	for _, s := range servers {
+		srv := s.(map[string]interface{})
+		ids = append(ids, srv["id"].(string))
+		names = append(names, srv["name"].(string))
+		assert.Equal(t, "pending", srv["status"])
+	}
+	assert.Contains(t, ids, server1.ID)
+	assert.Contains(t, ids, server2.ID)
+	assert.Contains(t, names, "server01")
+	assert.Contains(t, names, "server02")
 }
 
 func TestGetServer(t *testing.T) {
@@ -296,7 +300,7 @@ func TestDeleteServer(t *testing.T) {
 			setupServer: func() string {
 				return "00000000-0000-0000-0000-000000000000"
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
 				assert.Contains(t, resp["error"], "not found")
 			},
