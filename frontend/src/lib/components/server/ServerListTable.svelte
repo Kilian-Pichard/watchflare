@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getStatusClass } from '$lib/utils';
+	import { getStatusClass, isAgentOutdated } from '$lib/utils';
 	import type { Server } from '$lib/types';
 
 	const {
 		servers,
 		sortColumn,
 		sortOrder,
+		latestAgentVersion = null,
 		onSort,
 		onDelete,
 		onDismissReactivation,
@@ -14,6 +15,7 @@
 		servers: Server[];
 		sortColumn: string;
 		sortOrder: 'asc' | 'desc';
+		latestAgentVersion?: string | null;
 		onSort: (column: string) => void;
 		onDelete: (server: Server, e: Event) => void;
 		onDismissReactivation: (serverId: string) => void;
@@ -146,7 +148,14 @@
 					{server.ip_address_v4 || server.configured_ip || '-'}
 				</td>
 					<td class="px-4 py-3.5 text-sm text-muted-foreground table-cell">
-				{server.agent_version ? `v${server.agent_version}` : '—'}
+				<span class="inline-flex items-center gap-1.5">
+					{server.agent_version ? `v${server.agent_version}` : '—'}
+					{#if isAgentOutdated(server.agent_version, latestAgentVersion)}
+						<span class="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" title="v{latestAgentVersion} available">
+							↑
+						</span>
+					{/if}
+				</span>
 			</td>
 			<td class="px-4 py-3.5 text-right">
 					<div class="flex items-center justify-end gap-3">

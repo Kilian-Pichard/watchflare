@@ -46,6 +46,7 @@
     let latestMetric: Metric | null = $state(null);
     let timeRange: TimeRange = $state("1h");
     let sseUnsubscribe: (() => void) | null = null;
+    let latestAgentVersion: string | null = $state(null);
 
     const serverId = $derived($page.params.id);
 
@@ -110,7 +111,12 @@
 
     async function loadServer() {
         try {
-            const response = await api.getServer(serverId);
+            const [response] = await Promise.all([
+                api.getServer(serverId),
+                latestAgentVersion === null
+                    ? api.getLatestAgentVersion().then(r => { latestAgentVersion = r.latest_version || null; }).catch(() => {})
+                    : Promise.resolve(),
+            ]);
             server = response.server;
             clockDesync = response.clock_desync || false;
 
@@ -313,6 +319,7 @@
         {server}
         {packageStats}
         metric={latestMetric}
+        {latestAgentVersion}
         onDelete={() => (showDeleteConfirm = true)}
         onRegenerateToken={() => (showRegenerateConfirm = true)}
         onChangeIP={() => (showChangeIP = true)}

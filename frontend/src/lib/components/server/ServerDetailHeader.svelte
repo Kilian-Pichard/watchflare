@@ -3,6 +3,7 @@
         getStatusClass,
         formatRelativeTime,
         formatUptime,
+        isAgentOutdated,
     } from "$lib/utils";
     import {
         Pause,
@@ -18,6 +19,7 @@
         Network,
         Clock,
         Tag,
+        ArrowUpCircle,
     } from "lucide-svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
     import type { Server, GetPackageStatsResponse, Metric } from "$lib/types";
@@ -26,6 +28,7 @@
         server,
         packageStats,
         metric = null,
+        latestAgentVersion = null,
         onDelete,
         onRegenerateToken,
         onChangeIP,
@@ -36,6 +39,7 @@
         server: Server;
         packageStats: GetPackageStatsResponse | null;
         metric?: Metric | null;
+        latestAgentVersion?: string | null;
         onDelete: () => void;
         onRegenerateToken: () => void;
         onChangeIP: () => void;
@@ -43,6 +47,8 @@
         onPause: () => void;
         onResume: () => void;
     } = $props();
+
+    const agentOutdated = $derived(isAgentOutdated(server.agent_version, latestAgentVersion));
 
     let open = $state(false);
 
@@ -199,7 +205,7 @@
                 <span>·</span>
             {/if}
             <span class="inline-flex items-center gap-1">
-                <detail.icon class="h-3.5 w-3.5" />{detail.text}
+                <detail.icon class="h-3.5 w-3.5" />{detail.text}{#if agentOutdated && detail.text.startsWith('Agent v')}&nbsp;<span class="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"><ArrowUpCircle class="h-3 w-3" />v{latestAgentVersion}</span>{/if}
             </span>
         {/each}
     </div>

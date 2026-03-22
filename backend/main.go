@@ -75,6 +75,11 @@ func main() {
 	aggregatedMetricsScheduler := services.NewAggregatedMetricsScheduler(30 * time.Second)
 	go aggregatedMetricsScheduler.Start()
 
+	// Start version checker (fetches latest agent version from GitHub every 6h)
+	versionCtx, versionCancel := context.WithCancel(context.Background())
+	defer versionCancel()
+	services.StartVersionChecker(versionCtx)
+
 	// Setup HTTP server
 	router := setupRouter()
 	httpServer := &http.Server{
@@ -180,6 +185,13 @@ func setupRouter() *gin.Engine {
 		protectedGroup.PUT("/change-password", handlers.ChangePassword)
 		protectedGroup.PUT("/change-email", handlers.ChangeEmail)
 		protectedGroup.PUT("/change-username", handlers.ChangeUsername)
+	}
+
+	// Agent info routes (protected)
+	agentGroup := api.Group("/agent")
+	agentGroup.Use(middleware.AuthMiddleware())
+	{
+		agentGroup.GET("/latest-version", handlers.GetLatestAgentVersion)
 	}
 
 	// Server routes (protected)

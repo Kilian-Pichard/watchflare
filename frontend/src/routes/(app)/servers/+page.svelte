@@ -18,6 +18,7 @@
     let page = $state(1);
     let initialLoading = $state(true);
     let loading = $state(false);
+    let latestAgentVersion: string | null = $state(null);
     let error = $state("");
     let showDeleteConfirm = $state(false);
     let serverToDelete: Server | null = $state(null);
@@ -38,17 +39,21 @@
         loading = true;
         error = "";
         try {
-            const response = await api.listServers({
-                page: p,
-                perPage: PER_PAGE,
-                sort: sortColumn,
-                order: sortOrder,
-                status: statusFilter || undefined,
-                search: searchQuery || undefined,
-            });
+            const [response, versionResponse] = await Promise.all([
+                api.listServers({
+                    page: p,
+                    perPage: PER_PAGE,
+                    sort: sortColumn,
+                    order: sortOrder,
+                    status: statusFilter || undefined,
+                    search: searchQuery || undefined,
+                }),
+                latestAgentVersion === null ? api.getLatestAgentVersion().catch(() => ({ latest_version: '' })) : Promise.resolve({ latest_version: latestAgentVersion }),
+            ]);
             servers = response.servers || [];
             total = response.total || 0;
             page = p;
+            if (latestAgentVersion === null) latestAgentVersion = versionResponse.latest_version || null;
         } catch (err: unknown) {
             error =
                 err instanceof Error ? err.message : "Failed to load servers";
@@ -225,6 +230,7 @@
             {servers}
             {sortColumn}
             {sortOrder}
+            {latestAgentVersion}
             onSort={handleSort}
             onDelete={openDeleteModal}
             onDismissReactivation={handleDismissReactivation}

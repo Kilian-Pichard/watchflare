@@ -262,3 +262,18 @@ export const logger = {
 	warn: (...args: unknown[]) => { if (import.meta.env.DEV) console.warn(...args); },
 	log: (...args: unknown[]) => { if (import.meta.env.DEV) console.log(...args); },
 };
+
+// isAgentOutdated returns true if current < latest using semver comparison.
+// Returns false if either version is missing or unparseable.
+export function isAgentOutdated(current: string | null | undefined, latest: string | null | undefined): boolean {
+	if (!current || !latest || current === 'dev') return false;
+	const parse = (v: string): [number, number, number] => {
+		const parts = v.replace(/^v/, '').split('.').map(p => parseInt(p.split('-')[0], 10));
+		return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
+	};
+	const [cMaj, cMin, cPat] = parse(current);
+	const [lMaj, lMin, lPat] = parse(latest);
+	if (lMaj !== cMaj) return lMaj > cMaj;
+	if (lMin !== cMin) return lMin > cMin;
+	return lPat > cPat;
+}

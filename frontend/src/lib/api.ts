@@ -398,3 +398,7 @@ export async function getPackageHistory(
 	const query = buildQueryString({ limit: params.limit, offset: params.offset, exclude_initial: params.exclude_initial });
 	return apiRequest<GetPackageHistoryResponse>(`/servers/${serverId}/packages/history${query}`);
 }
+
+export async function getLatestAgentVersion(): Promise<{ latest_version: string }> {
+	return apiRequest<{ latest_version: string }>('/agent/latest-version');
+}
