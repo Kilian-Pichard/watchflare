@@ -165,25 +165,42 @@
 			</div>
 		</div>
 
-		<!-- What Happens Next -->
-		<div class="bg-primary/5 border-l-4 border-primary p-6 rounded-md">
-			<h4 class="text-base font-semibold text-foreground mb-4">📖 What happens next?</h4>
-			<ol class="list-decimal pl-6 text-muted-foreground mb-4">
-				<li class="mb-2 text-sm leading-relaxed">The agent will register with this server</li>
-				<li class="mb-2 text-sm leading-relaxed">
-					Status will change from <span class="text-warning font-semibold">"pending"</span> to
-					<span class="text-success font-semibold">"online"</span>
-				</li>
-				<li class="mb-2 text-sm leading-relaxed">You'll start receiving metrics and heartbeats</li>
-				<li class="mb-2 text-sm leading-relaxed">This page will update automatically when connected</li>
-			</ol>
-
-			{#if serverStatus === 'pending'}
+		{#if serverStatus === 'offline'}
+			<!-- Agent registered, service not started yet -->
+			<div class="bg-warning/10 border-l-4 border-warning p-6 rounded-md">
+				<h4 class="text-base font-semibold text-foreground mb-2">✅ Agent registered — start the service</h4>
+				<p class="text-sm text-muted-foreground mb-4">The agent is installed and configured. Start the service to go online:</p>
+				{#if selectedOS === 'linux'}
+					<pre class="bg-foreground text-background p-3 rounded-md font-mono text-sm">sudo systemctl enable --now watchflare-agent</pre>
+				{:else if selectedOS === 'macos'}
+					<pre class="bg-foreground text-background p-3 rounded-md font-mono text-sm">brew services start watchflare-agent</pre>
+				{/if}
 				<div class="flex items-center gap-3 p-4 bg-card rounded-md mt-4">
-					<div class="h-5 w-5 border-2 border-border border-t-primary rounded-full animate-spin"></div>
-					<span class="text-sm font-medium text-muted-foreground">Waiting for agent to connect...</span>
+					<div class="h-5 w-5 border-2 border-border border-t-warning rounded-full animate-spin"></div>
+					<span class="text-sm font-medium text-muted-foreground">Waiting for service to start...</span>
 				</div>
-			{/if}
-		</div>
+			</div>
+		{:else}
+			<!-- What Happens Next -->
+			<div class="bg-primary/5 border-l-4 border-primary p-6 rounded-md">
+				<h4 class="text-base font-semibold text-foreground mb-4">📖 What happens next?</h4>
+				<ol class="list-decimal pl-6 text-muted-foreground mb-4">
+					<li class="mb-2 text-sm leading-relaxed">Run the installation command above</li>
+					<li class="mb-2 text-sm leading-relaxed">
+						Status will change from <span class="text-warning font-semibold">"pending"</span> to
+						<span class="text-success font-semibold">"online"</span>
+					</li>
+					<li class="mb-2 text-sm leading-relaxed">You'll start receiving metrics and heartbeats</li>
+					<li class="mb-2 text-sm leading-relaxed">This page will update automatically when connected</li>
+				</ol>
+
+				{#if serverStatus === 'pending'}
+					<div class="flex items-center gap-3 p-4 bg-card rounded-md mt-4">
+						<div class="h-5 w-5 border-2 border-border border-t-primary rounded-full animate-spin"></div>
+						<span class="text-sm font-medium text-muted-foreground">Waiting for agent to connect...</span>
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 {/if}
