@@ -266,7 +266,10 @@ echo "  → Installed to ${INSTALL_DIR}/${BINARY_NAME}"
 
 echo -e "${YELLOW}[5/6]${NC} Installing systemd service..."
 if [ "$HAS_SYSTEMD" = true ]; then
-    "${INSTALL_DIR}/${BINARY_NAME}" install 2>/dev/null || true
+    if ! "${INSTALL_DIR}/${BINARY_NAME}" install; then
+        echo -e "  ${RED}→ Failed to install systemd service file${NC}"
+        exit 1
+    fi
     systemctl daemon-reload
     echo "  → Service installed"
 else

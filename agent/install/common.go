@@ -287,6 +287,13 @@ func CreateDirectories() error {
 func InstallBinary(sourcePath string) error {
 	destPath := InstallDir + "/" + BinaryName
 
+	// Skip if source and destination are the same path (binary already in place).
+	// Opening a running executable for writing returns ETXTBSY on Linux.
+	if sourcePath == destPath {
+		fmt.Printf("  → Already installed at %s\n", destPath)
+		return nil
+	}
+
 	// Open source file
 	src, err := os.Open(sourcePath)
 	if err != nil {
