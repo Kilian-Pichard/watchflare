@@ -24,5 +24,6 @@ LABEL org.opencontainers.image.description="Watchflare Server Monitoring"
 COPY --from=backend-builder --chown=65532:65532 /app/backend/watchflare-backend /usr/local/bin/watchflare-backend
 COPY --from=backend-builder --chown=65532:65532 /app/data /var/lib/watchflare
 USER 65532
+VOLUME ["/var/lib/watchflare"]
 EXPOSE 8080 50051
 CMD ["watchflare-backend"]

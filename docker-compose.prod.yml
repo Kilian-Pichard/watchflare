@@ -3,7 +3,7 @@ services:
     image: ghcr.io/kilian-pichard/watchflare:latest
     container_name: watchflare
     ports:
-      - "${PORT:-8080}:8080"
+      - "${HUB_PORT:-8080}:8080"
       - "${GRPC_PORT:-50051}:50051"
     environment:
       - POSTGRES_HOST=postgres
@@ -12,7 +12,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${POSTGRES_DB:-watchflare}
       - POSTGRES_SSLMODE=disable
-      - PORT=8080
       - GRPC_PORT=50051
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - TLS_MODE=${TLS_MODE:-auto}

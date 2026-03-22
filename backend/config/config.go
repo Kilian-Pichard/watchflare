@@ -39,7 +39,7 @@ func Load() {
 	_ = godotenv.Load()
 
 	AppConfig = &Config{
-		Port:         getEnv("PORT", "8080"),
+		Port:         "8080",
 		GRPCPort:     getEnv("GRPC_PORT", "50051"),
 		DBPath:       getEnv("DB_PATH", "./watchflare.db"),
 		JWTSecret:    getEnv("JWT_SECRET", ""),
