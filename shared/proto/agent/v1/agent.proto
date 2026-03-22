@@ -1,29 +1,29 @@
 syntax = "proto3";
 
-package agent;
+package agent.v1;
 
 option go_package = "watchflare/shared/proto";
 
 // AgentService handles agent registration and heartbeats
 service AgentService {
   // RegisterServer is called when an agent first connects
-  rpc RegisterServer(RegisterRequest) returns (RegisterResponse);
+  rpc RegisterServer(RegisterServerRequest) returns (RegisterServerResponse);
 
   // Heartbeat is called every 5 seconds by the agent
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 
   // SendMetrics sends system metrics to the backend
-  rpc SendMetrics(MetricsRequest) returns (MetricsResponse);
+  rpc SendMetrics(SendMetricsRequest) returns (SendMetricsResponse);
 
   // ReportDroppedMetrics reports metrics that were dropped after max retries
-  rpc ReportDroppedMetrics(DroppedMetricsReport) returns (DroppedMetricsResponse);
+  rpc ReportDroppedMetrics(ReportDroppedMetricsRequest) returns (ReportDroppedMetricsResponse);
 
   // SendPackageInventory sends package inventory to the backend
-  rpc SendPackageInventory(PackageInventoryRequest) returns (PackageInventoryResponse);
+  rpc SendPackageInventory(SendPackageInventoryRequest) returns (SendPackageInventoryResponse);
 }
 
-// RegisterRequest contains information sent during initial registration
-message RegisterRequest {
+// RegisterServerRequest contains information sent during initial registration
+message RegisterServerRequest {
   string registration_token = 1;   // The registration token from CreateAgent
   string hostname = 2;
   string ip_address_v4 = 3;
@@ -46,8 +46,8 @@ message RegisterRequest {
   string agent_version = 15;        // Agent binary version (e.g. "0.27.3"), set via ldflags
 }
 
-// RegisterResponse is sent back after successful registration
-message RegisterResponse {
+// RegisterServerResponse is sent back after successful registration
+message RegisterServerResponse {
   bool success = 1;
   string message = 2;
   string agent_id = 3;      // UUID of the server
@@ -110,8 +110,8 @@ message ContainerMetric {
   uint64 network_tx_bytes_per_sec = 8;
 }
 
-// MetricsRequest contains authentication and metrics data
-message MetricsRequest {
+// SendMetricsRequest contains authentication and metrics data
+message SendMetricsRequest {
   string agent_id = 1;   // UUID of the server
   string agent_key = 2;  // Authentication key
   Metrics metrics = 3;   // System metrics
@@ -120,8 +120,8 @@ message MetricsRequest {
   string agent_version = 6;         // Agent binary version, sent to keep DB in sync after upgrades
 }
 
-// MetricsResponse acknowledges metric reception
-message MetricsResponse {
+// SendMetricsResponse acknowledges metric reception
+message SendMetricsResponse {
   bool success = 1;
   string message = 2;
 }
@@ -136,8 +136,8 @@ message BufferedMetric {
   uint32 retry_count = 5;   // Number of retry attempts (0 = first attempt)
 }
 
-// DroppedMetricsReport contains information about metrics that were dropped
-message DroppedMetricsReport {
+// ReportDroppedMetricsRequest contains information about metrics that were dropped
+message ReportDroppedMetricsRequest {
   string agent_id = 1;       // UUID of the agent
   string agent_key = 2;      // Authentication key
   int64 timestamp = 3;       // Unix timestamp when report was sent
@@ -147,8 +147,8 @@ message DroppedMetricsReport {
   string reason = 7;          // Reason for dropping (e.g., "max_retries_exceeded")
 }
 
-// DroppedMetricsResponse acknowledges the dropped metrics report
-message DroppedMetricsResponse {
+// ReportDroppedMetricsResponse acknowledges the dropped metrics report
+message ReportDroppedMetricsResponse {
   bool success = 1;
   string message = 2;
 }
@@ -169,8 +169,8 @@ message Package {
   string description = 8;            // Short description (max 100 chars)
 }
 
-// PackageInventoryRequest sends package inventory (delta or full) to backend
-message PackageInventoryRequest {
+// SendPackageInventoryRequest sends package inventory (delta or full) to backend
+message SendPackageInventoryRequest {
   string agent_id = 1;               // UUID of the server
   string agent_key = 2;              // Authentication key
   int64 timestamp = 3;               // Request timestamp (for anti-replay)
@@ -193,8 +193,8 @@ message PackageInventoryRequest {
   int32 total_package_count = 10;    // Total number of packages on system
 }
 
-// PackageInventoryResponse acknowledges inventory reception
-message PackageInventoryResponse {
+// SendPackageInventoryResponse acknowledges inventory reception
+message SendPackageInventoryResponse {
   bool success = 1;
   string message = 2;
   int32 packages_processed = 3;      // Number of packages processed

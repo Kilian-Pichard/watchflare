@@ -19,11 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_RegisterServer_FullMethodName       = "/agent.AgentService/RegisterServer"
-	AgentService_Heartbeat_FullMethodName            = "/agent.AgentService/Heartbeat"
-	AgentService_SendMetrics_FullMethodName          = "/agent.AgentService/SendMetrics"
-	AgentService_ReportDroppedMetrics_FullMethodName = "/agent.AgentService/ReportDroppedMetrics"
-	AgentService_SendPackageInventory_FullMethodName = "/agent.AgentService/SendPackageInventory"
+	AgentService_RegisterServer_FullMethodName       = "/agent.v1.AgentService/RegisterServer"
+	AgentService_Heartbeat_FullMethodName            = "/agent.v1.AgentService/Heartbeat"
+	AgentService_SendMetrics_FullMethodName          = "/agent.v1.AgentService/SendMetrics"
+	AgentService_ReportDroppedMetrics_FullMethodName = "/agent.v1.AgentService/ReportDroppedMetrics"
+	AgentService_SendPackageInventory_FullMethodName = "/agent.v1.AgentService/SendPackageInventory"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -33,15 +33,15 @@ const (
 // AgentService handles agent registration and heartbeats
 type AgentServiceClient interface {
 	// RegisterServer is called when an agent first connects
-	RegisterServer(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
+	RegisterServer(ctx context.Context, in *RegisterServerRequest, opts ...grpc.CallOption) (*RegisterServerResponse, error)
 	// Heartbeat is called every 5 seconds by the agent
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// SendMetrics sends system metrics to the backend
-	SendMetrics(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error)
+	SendMetrics(ctx context.Context, in *SendMetricsRequest, opts ...grpc.CallOption) (*SendMetricsResponse, error)
 	// ReportDroppedMetrics reports metrics that were dropped after max retries
-	ReportDroppedMetrics(ctx context.Context, in *DroppedMetricsReport, opts ...grpc.CallOption) (*DroppedMetricsResponse, error)
+	ReportDroppedMetrics(ctx context.Context, in *ReportDroppedMetricsRequest, opts ...grpc.CallOption) (*ReportDroppedMetricsResponse, error)
 	// SendPackageInventory sends package inventory to the backend
-	SendPackageInventory(ctx context.Context, in *PackageInventoryRequest, opts ...grpc.CallOption) (*PackageInventoryResponse, error)
+	SendPackageInventory(ctx context.Context, in *SendPackageInventoryRequest, opts ...grpc.CallOption) (*SendPackageInventoryResponse, error)
 }
 
 type agentServiceClient struct {
@@ -52,9 +52,9 @@ func NewAgentServiceClient(cc grpc.ClientConnInterface) AgentServiceClient {
 	return &agentServiceClient{cc}
 }
 
-func (c *agentServiceClient) RegisterServer(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
+func (c *agentServiceClient) RegisterServer(ctx context.Context, in *RegisterServerRequest, opts ...grpc.CallOption) (*RegisterServerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterResponse)
+	out := new(RegisterServerResponse)
 	err := c.cc.Invoke(ctx, AgentService_RegisterServer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -72,9 +72,9 @@ func (c *agentServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest
 	return out, nil
 }
 
-func (c *agentServiceClient) SendMetrics(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error) {
+func (c *agentServiceClient) SendMetrics(ctx context.Context, in *SendMetricsRequest, opts ...grpc.CallOption) (*SendMetricsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MetricsResponse)
+	out := new(SendMetricsResponse)
 	err := c.cc.Invoke(ctx, AgentService_SendMetrics_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -82,9 +82,9 @@ func (c *agentServiceClient) SendMetrics(ctx context.Context, in *MetricsRequest
 	return out, nil
 }
 
-func (c *agentServiceClient) ReportDroppedMetrics(ctx context.Context, in *DroppedMetricsReport, opts ...grpc.CallOption) (*DroppedMetricsResponse, error) {
+func (c *agentServiceClient) ReportDroppedMetrics(ctx context.Context, in *ReportDroppedMetricsRequest, opts ...grpc.CallOption) (*ReportDroppedMetricsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DroppedMetricsResponse)
+	out := new(ReportDroppedMetricsResponse)
 	err := c.cc.Invoke(ctx, AgentService_ReportDroppedMetrics_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -92,9 +92,9 @@ func (c *agentServiceClient) ReportDroppedMetrics(ctx context.Context, in *Dropp
 	return out, nil
 }
 
-func (c *agentServiceClient) SendPackageInventory(ctx context.Context, in *PackageInventoryRequest, opts ...grpc.CallOption) (*PackageInventoryResponse, error) {
+func (c *agentServiceClient) SendPackageInventory(ctx context.Context, in *SendPackageInventoryRequest, opts ...grpc.CallOption) (*SendPackageInventoryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PackageInventoryResponse)
+	out := new(SendPackageInventoryResponse)
 	err := c.cc.Invoke(ctx, AgentService_SendPackageInventory_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -109,15 +109,15 @@ func (c *agentServiceClient) SendPackageInventory(ctx context.Context, in *Packa
 // AgentService handles agent registration and heartbeats
 type AgentServiceServer interface {
 	// RegisterServer is called when an agent first connects
-	RegisterServer(context.Context, *RegisterRequest) (*RegisterResponse, error)
+	RegisterServer(context.Context, *RegisterServerRequest) (*RegisterServerResponse, error)
 	// Heartbeat is called every 5 seconds by the agent
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// SendMetrics sends system metrics to the backend
-	SendMetrics(context.Context, *MetricsRequest) (*MetricsResponse, error)
+	SendMetrics(context.Context, *SendMetricsRequest) (*SendMetricsResponse, error)
 	// ReportDroppedMetrics reports metrics that were dropped after max retries
-	ReportDroppedMetrics(context.Context, *DroppedMetricsReport) (*DroppedMetricsResponse, error)
+	ReportDroppedMetrics(context.Context, *ReportDroppedMetricsRequest) (*ReportDroppedMetricsResponse, error)
 	// SendPackageInventory sends package inventory to the backend
-	SendPackageInventory(context.Context, *PackageInventoryRequest) (*PackageInventoryResponse, error)
+	SendPackageInventory(context.Context, *SendPackageInventoryRequest) (*SendPackageInventoryResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -128,19 +128,19 @@ type AgentServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAgentServiceServer struct{}
 
-func (UnimplementedAgentServiceServer) RegisterServer(context.Context, *RegisterRequest) (*RegisterResponse, error) {
+func (UnimplementedAgentServiceServer) RegisterServer(context.Context, *RegisterServerRequest) (*RegisterServerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterServer not implemented")
 }
 func (UnimplementedAgentServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
 }
-func (UnimplementedAgentServiceServer) SendMetrics(context.Context, *MetricsRequest) (*MetricsResponse, error) {
+func (UnimplementedAgentServiceServer) SendMetrics(context.Context, *SendMetricsRequest) (*SendMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendMetrics not implemented")
 }
-func (UnimplementedAgentServiceServer) ReportDroppedMetrics(context.Context, *DroppedMetricsReport) (*DroppedMetricsResponse, error) {
+func (UnimplementedAgentServiceServer) ReportDroppedMetrics(context.Context, *ReportDroppedMetricsRequest) (*ReportDroppedMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportDroppedMetrics not implemented")
 }
-func (UnimplementedAgentServiceServer) SendPackageInventory(context.Context, *PackageInventoryRequest) (*PackageInventoryResponse, error) {
+func (UnimplementedAgentServiceServer) SendPackageInventory(context.Context, *SendPackageInventoryRequest) (*SendPackageInventoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendPackageInventory not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
@@ -165,7 +165,7 @@ func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer)
 }
 
 func _AgentService_RegisterServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterRequest)
+	in := new(RegisterServerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func _AgentService_RegisterServer_Handler(srv interface{}, ctx context.Context, 
 		FullMethod: AgentService_RegisterServer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).RegisterServer(ctx, req.(*RegisterRequest))
+		return srv.(AgentServiceServer).RegisterServer(ctx, req.(*RegisterServerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -201,7 +201,7 @@ func _AgentService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec f
 }
 
 func _AgentService_SendMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MetricsRequest)
+	in := new(SendMetricsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -213,13 +213,13 @@ func _AgentService_SendMetrics_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: AgentService_SendMetrics_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).SendMetrics(ctx, req.(*MetricsRequest))
+		return srv.(AgentServiceServer).SendMetrics(ctx, req.(*SendMetricsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _AgentService_ReportDroppedMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DroppedMetricsReport)
+	in := new(ReportDroppedMetricsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -231,13 +231,13 @@ func _AgentService_ReportDroppedMetrics_Handler(srv interface{}, ctx context.Con
 		FullMethod: AgentService_ReportDroppedMetrics_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).ReportDroppedMetrics(ctx, req.(*DroppedMetricsReport))
+		return srv.(AgentServiceServer).ReportDroppedMetrics(ctx, req.(*ReportDroppedMetricsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _AgentService_SendPackageInventory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PackageInventoryRequest)
+	in := new(SendPackageInventoryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -249,7 +249,7 @@ func _AgentService_SendPackageInventory_Handler(srv interface{}, ctx context.Con
 		FullMethod: AgentService_SendPackageInventory_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).SendPackageInventory(ctx, req.(*PackageInventoryRequest))
+		return srv.(AgentServiceServer).SendPackageInventory(ctx, req.(*SendPackageInventoryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -258,7 +258,7 @@ func _AgentService_SendPackageInventory_Handler(srv interface{}, ctx context.Con
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AgentService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "agent.AgentService",
+	ServiceName: "agent.v1.AgentService",
 	HandlerType: (*AgentServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

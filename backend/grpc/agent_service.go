@@ -38,14 +38,14 @@ func NewAgentServer() *AgentServer {
 }
 
 // RegisterServer handles initial agent registration
-func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
+func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServerRequest) (*pb.RegisterServerResponse, error) {
 	// Step 1: Validate token and find the pending agent
 	hashedToken := hashToken(req.RegistrationToken)
 	var pendingAgent models.Server
 	result := database.DB.Where("registration_token = ?", hashedToken).First(&pendingAgent)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return &pb.RegisterResponse{
+			return &pb.RegisterServerResponse{
 				Success: false,
 				Message: "Invalid registration token",
 			}, nil
@@ -55,7 +55,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 
 	// Step 2: Validate token hasn't expired
 	if pendingAgent.ExpiresAt != nil && time.Now().After(*pendingAgent.ExpiresAt) {
-		return &pb.RegisterResponse{
+		return &pb.RegisterServerResponse{
 			Success: false,
 			Message: "Registration token has expired",
 		}, nil
@@ -63,7 +63,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 
 	// Step 3: Validate token is for a pending agent
 	if pendingAgent.Status != "pending" && pendingAgent.Status != "expired" {
-		return &pb.RegisterResponse{
+		return &pb.RegisterServerResponse{
 			Success: false,
 			Message: "Server is already registered",
 		}, nil
@@ -73,7 +73,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 	if !pendingAgent.AllowAnyIPRegistration {
 		if pendingAgent.ConfiguredIP != nil && *pendingAgent.ConfiguredIP != "" {
 			if req.IpAddressV4 != *pendingAgent.ConfiguredIP {
-				return &pb.RegisterResponse{
+				return &pb.RegisterServerResponse{
 					Success: false,
 					Message: "IP address mismatch. Expected: " + *pendingAgent.ConfiguredIP + ", Got: " + req.IpAddressV4,
 				}, nil
@@ -172,7 +172,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterReques
 		return nil, fmt.Errorf("failed to get CA certificate: %w", err)
 	}
 
-	return &pb.RegisterResponse{
+	return &pb.RegisterServerResponse{
 		Success:     true,
 		Message:     "Server registered successfully",
 		AgentId:     agentToUse.AgentID,
@@ -233,13 +233,13 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 }
 
 // SendMetrics handles incoming system metrics from agents
-func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (*pb.MetricsResponse, error) {
+func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsRequest) (*pb.SendMetricsResponse, error) {
 	// Find server by agent ID and verify agent key
 	var server models.Server
 	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return &pb.MetricsResponse{
+			return &pb.SendMetricsResponse{
 				Success: false,
 				Message: "Invalid agent credentials",
 			}, nil
@@ -263,7 +263,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 	// If server is paused, acknowledge but don't store metrics
 	if server.Status == "paused" {
 		log.Printf("⏸ Metrics discarded for paused server %s (%s)", server.Name, server.ID)
-		return &pb.MetricsResponse{
+		return &pb.SendMetricsResponse{
 			Success: true,
 			Message: "Server is paused, metrics discarded",
 		}, nil
@@ -358,20 +358,20 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (
 		return nil, fmt.Errorf("failed to save metrics: %w", err)
 	}
 
-	return &pb.MetricsResponse{
+	return &pb.SendMetricsResponse{
 		Success: true,
 		Message: "Metrics received successfully",
 	}, nil
 }
 
 // ReportDroppedMetrics handles reports of metrics that were dropped by agents
-func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.DroppedMetricsReport) (*pb.DroppedMetricsResponse, error) {
+func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDroppedMetricsRequest) (*pb.ReportDroppedMetricsResponse, error) {
 	// Verify agent credentials
 	var server models.Server
 	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return &pb.DroppedMetricsResponse{
+			return &pb.ReportDroppedMetricsResponse{
 				Success: false,
 				Message: "Invalid agent credentials",
 			}, nil
@@ -408,20 +408,20 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.DroppedM
 		req.Reason,
 	)
 
-	return &pb.DroppedMetricsResponse{
+	return &pb.ReportDroppedMetricsResponse{
 		Success: true,
 		Message: "Dropped metrics report received",
 	}, nil
 }
 
 // SendPackageInventory handles package inventory updates from agents
-func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.PackageInventoryRequest) (*pb.PackageInventoryResponse, error) {
+func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPackageInventoryRequest) (*pb.SendPackageInventoryResponse, error) {
 	// Verify agent credentials
 	var server models.Server
 	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return &pb.PackageInventoryResponse{
+			return &pb.SendPackageInventoryResponse{
 				Success: false,
 				Message: "Invalid agent credentials",
 			}, nil
@@ -433,7 +433,7 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.PackageI
 	packagesProcessed, changesDetected, err := processPackageInventory(server.ID, req)
 	if err != nil {
 		log.Printf("Error: Failed to process package inventory for server %s: %v", server.ID, err)
-		return &pb.PackageInventoryResponse{
+		return &pb.SendPackageInventoryResponse{
 			Success: false,
 			Message: fmt.Sprintf("Failed to process package inventory: %v", err),
 		}, nil
@@ -449,7 +449,7 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.PackageI
 		req.CollectionDurationMs,
 	)
 
-	return &pb.PackageInventoryResponse{
+	return &pb.SendPackageInventoryResponse{
 		Success:           true,
 		Message:           "Package inventory received successfully",
 		PackagesProcessed: int32(packagesProcessed),
@@ -458,7 +458,7 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.PackageI
 }
 
 // processPackageInventory handles the business logic for package inventory updates
-func processPackageInventory(serverID string, req *pb.PackageInventoryRequest) (int, int, error) {
+func processPackageInventory(serverID string, req *pb.SendPackageInventoryRequest) (int, int, error) {
 	tx := database.DB.Begin()
 	if tx.Error != nil {
 		return 0, 0, tx.Error

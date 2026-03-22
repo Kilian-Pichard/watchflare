@@ -25,7 +25,7 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
 		// Skip authentication for RegisterServer (uses registration token instead)
-		if info.FullMethod == "/agent.AgentService/RegisterServer" {
+		if info.FullMethod == "/agent.v1.AgentService/RegisterServer" {
 			return handler(ctx, req)
 		}
 
@@ -70,7 +70,7 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 		if err := ValidateTimestamp(timestamp, timestampWindow); err != nil {
 			log.Printf("Timestamp validation failed for agent %s: %v", agentID, err)
 			// Track clock desync for heartbeat RPCs so frontend can show a banner
-			if info.FullMethod == "/agent.AgentService/Heartbeat" || info.FullMethod == "/agent.AgentService/SendMetrics" {
+			if info.FullMethod == "/agent.v1.AgentService/Heartbeat" || info.FullMethod == "/agent.v1.AgentService/SendMetrics" {
 				cache.GetCache().SetClockDesync(agentID)
 			}
 			return nil, status.Error(codes.InvalidArgument, "Timestamp outside acceptable window")

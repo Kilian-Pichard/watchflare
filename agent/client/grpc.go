@@ -126,7 +126,7 @@ func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	req := &pb.RegisterRequest{
+	req := &pb.RegisterServerRequest{
 		RegistrationToken:   token,
 		Hostname:            hostname,
 		IpAddressV4:         ipv4,
@@ -225,7 +225,7 @@ func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) error {
 func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.SystemMetrics) error {
 	timestamp := time.Now().Unix()
 
-	req := &pb.MetricsRequest{
+	req := &pb.SendMetricsRequest{
 		AgentId:  agentID,
 		AgentKey: agentKey,
 		Metrics: &pb.Metrics{
@@ -291,7 +291,7 @@ func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.
 func (c *Client) ReportDroppedMetrics(agentID, agentKey string, count int32, firstDroppedAt, lastDroppedAt int64, reason string) error {
 	timestamp := time.Now().Unix()
 
-	req := &pb.DroppedMetricsReport{
+	req := &pb.ReportDroppedMetricsRequest{
 		AgentId:        agentID,
 		AgentKey:       agentKey,
 		Timestamp:      timestamp,
@@ -338,7 +338,7 @@ type PackageInventoryData struct {
 func (c *Client) SendPackageInventory(agentID, agentKey string, data *PackageInventoryData) error {
 	timestamp := time.Now().Unix()
 
-	req := &pb.PackageInventoryRequest{
+	req := &pb.SendPackageInventoryRequest{
 		AgentId:              agentID,
 		AgentKey:             agentKey,
 		Timestamp:            timestamp,
