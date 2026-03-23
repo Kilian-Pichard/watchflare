@@ -352,6 +352,7 @@
     />
 
     <ServerMetricsCharts
+        serverID={serverId}
         {metrics}
         {containerMetrics}
         bind:timeRange

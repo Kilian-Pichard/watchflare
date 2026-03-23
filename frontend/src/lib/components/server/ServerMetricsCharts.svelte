@@ -16,11 +16,13 @@
 	import type { Metric, ContainerMetric, TimeRange } from '$lib/types';
 
 	let {
+		serverID,
 		metrics,
 		containerMetrics = [],
 		timeRange = $bindable(),
 		onTimeRangeChange,
 	}: {
+		serverID: string;
 		metrics: Metric[];
 		containerMetrics?: ContainerMetric[];
 		timeRange: TimeRange;
@@ -155,7 +157,7 @@
 						{formatTemperature(latestMetric.cpu_temperature_celsius, tempUnit)}
 					</span>
 				</div>
-				<TemperatureChart data={metrics} {timeRange} />
+				<TemperatureChart data={metrics} {serverID} {timeRange} />
 			</div>
 		{/if}
 	</div>

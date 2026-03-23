@@ -153,6 +153,54 @@ func GetContainerMetrics(c *gin.Context) {
 	})
 }
 
+// GetSensorReadings returns per-sensor temperature data for a specific server
+func GetSensorReadings(c *gin.Context) {
+	serverID := c.Param("id")
+	timeRange := c.DefaultQuery("time_range", "1h")
+
+	end := time.Now()
+	var start time.Time
+	var interval string
+
+	switch timeRange {
+	case "1h":
+		start = end.Add(-1 * time.Hour)
+		interval = ""
+	case "12h":
+		start = end.Add(-12 * time.Hour)
+		interval = "10m"
+	case "24h":
+		start = end.Add(-24 * time.Hour)
+		interval = "15m"
+	case "7d":
+		start = end.Add(-7 * 24 * time.Hour)
+		interval = "2h"
+	case "30d":
+		start = end.Add(-30 * 24 * time.Hour)
+		interval = "8h"
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_range. valid values: 1h, 12h, 24h, 7d, 30d"})
+		return
+	}
+
+	data, err := services.GetSensorReadings(serverID, start, end, interval)
+	if err != nil {
+		if err.Error() == "server not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"server_id":  serverID,
+		"time_range": timeRange,
+		"count":      len(data),
+		"data":       data,
+	})
+}
+
 // parseTime attempts to parse time from RFC3339 format or Unix timestamp
 func parseTime(timeStr string) (time.Time, error) {
 	// Try RFC3339 format first

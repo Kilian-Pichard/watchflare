@@ -1,10 +1,15 @@
 <script lang="ts">
 	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import { userStore } from '$lib/stores/user';
-	import type { Metric, TimeRange } from '$lib/types';
+	import * as api from '$lib/api';
+	import type { Metric, SensorDataPoint, TimeRange } from '$lib/types';
 	import type uPlot from 'uplot';
 
-	let { data = [], timeRange }: { data: Metric[]; timeRange?: TimeRange } = $props();
+	let { data = [], serverID, timeRange }: {
+		data: Metric[];
+		serverID: string;
+		timeRange?: TimeRange;
+	} = $props();
 
 	const tempUnit = $derived($userStore.user?.temperature_unit ?? 'celsius');
 
@@ -30,12 +35,36 @@
 		return CPU_PATTERNS.some(p => lower.includes(p));
 	}
 
+	// For aggregated views (>1h), fetch sensor readings from the dedicated endpoint
+	let fetchedSensorData: SensorDataPoint[] | null = $state(null);
+
+	$effect(() => {
+		if (!serverID || !timeRange || timeRange === '1h') {
+			fetchedSensorData = null;
+			return;
+		}
+		api.getSensorReadings(serverID, timeRange).then(res => {
+			fetchedSensorData = res.data ?? null;
+		}).catch(() => {
+			fetchedSensorData = null;
+		});
+	});
+
+	// Active source: fetched data for >1h, inline sensor_readings for 1h
+	const activeData = $derived(fetchedSensorData ?? null);
+
 	// Sorted unique sensor keys: CPU sensors first, then alphabetical
 	const sensorKeys = $derived.by(() => {
 		const keys = new Set<string>();
-		for (const d of data) {
-			if (d.sensor_readings) {
+		if (activeData) {
+			for (const d of activeData) {
 				for (const sr of d.sensor_readings) keys.add(sr.key);
+			}
+		} else {
+			for (const d of data) {
+				if (d.sensor_readings) {
+					for (const sr of d.sensor_readings) keys.add(sr.key);
+				}
 			}
 		}
 		return [...keys].sort((a, b) => {
@@ -49,8 +78,23 @@
 	const hasSensorReadings = $derived(sensorKeys.length > 0);
 
 	const chartData = $derived.by((): uPlot.AlignedData => {
-		if (data.length === 0) return [[], []] as uPlot.AlignedData;
+		if (activeData) {
+			if (activeData.length === 0) return [[], []] as uPlot.AlignedData;
+			const timestamps: number[] = [];
+			const seriesArrays: (number | null)[][] = sensorKeys.map(() => []);
+			for (const d of activeData) {
+				timestamps.push(new Date(d.timestamp).getTime() / 1000);
+				const readingMap = new Map(d.sensor_readings.map(sr => [sr.key, sr.temperature_celsius]));
+				for (let i = 0; i < sensorKeys.length; i++) {
+					const val = readingMap.get(sensorKeys[i]);
+					seriesArrays[i].push(val != null ? val : null);
+				}
+			}
+			return [timestamps, ...seriesArrays] as uPlot.AlignedData;
+		}
 
+		// 1h path: use inline sensor_readings from Metric[]
+		if (data.length === 0) return [[], []] as uPlot.AlignedData;
 		const timestamps: number[] = [];
 
 		if (hasSensorReadings) {
@@ -64,7 +108,6 @@
 						seriesArrays[i].push(val != null ? val : null);
 					}
 				} else {
-					// Old metric: use cpu_temperature_celsius for the primary (first) CPU sensor
 					for (let i = 0; i < sensorKeys.length; i++) {
 						seriesArrays[i].push(i === 0 && d.cpu_temperature_celsius > 0 ? d.cpu_temperature_celsius : null);
 					}

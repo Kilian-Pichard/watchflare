@@ -374,6 +374,22 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		return nil, fmt.Errorf("failed to save metrics: %w", err)
 	}
 
+	// Persist normalized sensor readings for multi-range aggregation
+	if len(sensorReadings) > 0 {
+		sensorMetrics := make([]models.SensorMetric, len(sensorReadings))
+		for i, sr := range sensorReadings {
+			sensorMetrics[i] = models.SensorMetric{
+				Time:        metric.Timestamp,
+				ServerID:    server.ID,
+				SensorKey:   sr.Key,
+				Temperature: sr.TemperatureCelsius,
+			}
+		}
+		if err := database.DB.Create(&sensorMetrics).Error; err != nil {
+			slog.Warn("failed to save sensor metrics", "server_id", server.ID, "error", err)
+		}
+	}
+
 	return &pb.SendMetricsResponse{
 		Success: true,
 		Message: "Metrics received successfully",

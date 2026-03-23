@@ -39,6 +39,27 @@ type MetricDataPoint struct {
 	SensorReadings        models.SensorReadings `json:"sensor_readings,omitempty"`
 }
 
+// aggregatedMetricRow is used to scan continuous aggregate query results.
+// It intentionally omits SensorReadings to avoid GORM errors on missing JSONB columns.
+type aggregatedMetricRow struct {
+	Timestamp            time.Time `gorm:"column:timestamp"`
+	CPUUsagePercent      float64   `gorm:"column:cpu_usage_percent"`
+	MemoryTotalBytes     uint64    `gorm:"column:memory_total_bytes"`
+	MemoryUsedBytes      uint64    `gorm:"column:memory_used_bytes"`
+	MemoryAvailableBytes uint64    `gorm:"column:memory_available_bytes"`
+	LoadAvg1Min          float64   `gorm:"column:load_avg_1min"`
+	LoadAvg5Min          float64   `gorm:"column:load_avg_5min"`
+	LoadAvg15Min         float64   `gorm:"column:load_avg_15min"`
+	DiskTotalBytes        uint64   `gorm:"column:disk_total_bytes"`
+	DiskUsedBytes         uint64   `gorm:"column:disk_used_bytes"`
+	DiskReadBytesPerSec   uint64   `gorm:"column:disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec  uint64   `gorm:"column:disk_write_bytes_per_sec"`
+	NetworkRxBytesPerSec  uint64   `gorm:"column:network_rx_bytes_per_sec"`
+	NetworkTxBytesPerSec  uint64   `gorm:"column:network_tx_bytes_per_sec"`
+	CPUTemperatureCelsius float64  `gorm:"column:cpu_temperature_celsius"`
+	UptimeSeconds         uint64   `gorm:"column:uptime_seconds"`
+}
+
 // GetMetrics retrieves metrics for a server with optional time range and aggregation
 func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 	// Verify server exists
@@ -119,9 +140,31 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 		ORDER BY bucket ASC
 	`, tableName)
 
+	var rows []aggregatedMetricRow
 	if err := database.DB.Raw(query, params.ServerID, params.Start, params.End).
-		Scan(&results).Error; err != nil {
+		Scan(&rows).Error; err != nil {
 		return nil, err
+	}
+
+	for _, r := range rows {
+		results = append(results, MetricDataPoint{
+			Timestamp:            r.Timestamp,
+			CPUUsagePercent:      r.CPUUsagePercent,
+			MemoryTotalBytes:     r.MemoryTotalBytes,
+			MemoryUsedBytes:      r.MemoryUsedBytes,
+			MemoryAvailableBytes: r.MemoryAvailableBytes,
+			LoadAvg1Min:          r.LoadAvg1Min,
+			LoadAvg5Min:          r.LoadAvg5Min,
+			LoadAvg15Min:         r.LoadAvg15Min,
+			DiskTotalBytes:        r.DiskTotalBytes,
+			DiskUsedBytes:         r.DiskUsedBytes,
+			DiskReadBytesPerSec:   r.DiskReadBytesPerSec,
+			DiskWriteBytesPerSec:  r.DiskWriteBytesPerSec,
+			NetworkRxBytesPerSec:  r.NetworkRxBytesPerSec,
+			NetworkTxBytesPerSec:  r.NetworkTxBytesPerSec,
+			CPUTemperatureCelsius: r.CPUTemperatureCelsius,
+			UptimeSeconds:         r.UptimeSeconds,
+		})
 	}
 
 	return results, nil

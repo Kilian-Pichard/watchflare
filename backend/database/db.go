@@ -45,6 +45,9 @@ var agentVersionSQL string
 //go:embed migrations/011_sensor_readings.sql
 var sensorReadingsSQL string
 
+//go:embed migrations/013_sensor_metrics.sql
+var sensorMetricsSQL string
+
 var DB *gorm.DB
 
 // Connect establishes database connection and runs migrations
@@ -163,6 +166,7 @@ func Connect() error {
 	RunUsernameMigration()
 	RunAgentVersionMigration()
 	RunSensorReadingsMigration()
+	RunSensorMetricsMigration()
 	slog.Info("SQL migrations complete")
 
 	return nil
@@ -288,6 +292,15 @@ func RunSensorReadingsMigration() error {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
 	return execStatementsOutsideTx(sqlDB, sensorReadingsSQL)
+}
+
+// RunSensorMetricsMigration runs the sensor metrics hypertable migration
+func RunSensorMetricsMigration() error {
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
+	}
+	return execStatementsOutsideTx(sqlDB, sensorMetricsSQL)
 }
 
 // getEnv retrieves environment variable or returns default value

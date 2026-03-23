@@ -93,6 +93,11 @@ export interface SensorReading {
 	temperature_celsius: number;
 }
 
+export interface SensorDataPoint {
+	timestamp: string;
+	sensor_readings: SensorReading[];
+}
+
 export interface Metric {
 	id: number;
 	server_id: string;
@@ -305,6 +310,10 @@ export interface GetDroppedMetricsResponse {
 
 export interface GetContainerMetricsResponse {
 	metrics: ContainerMetric[];
+}
+
+export interface GetSensorReadingsResponse {
+	data: SensorDataPoint[];
 }
 
 export interface GetPackagesResponse {

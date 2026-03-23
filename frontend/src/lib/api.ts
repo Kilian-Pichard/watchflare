@@ -9,6 +9,7 @@ import type {
 	GetAggregatedMetricsResponse,
 	GetDroppedMetricsResponse,
 	GetContainerMetricsResponse,
+	GetSensorReadingsResponse,
 	GetPackagesResponse,
 	GetPackageStatsResponse,
 	GetPackageCollectionsResponse,
@@ -337,6 +338,15 @@ export async function getServerMetrics(
 // Get dropped metrics summary for the last 24 hours
 export async function getDroppedMetrics(): Promise<GetDroppedMetricsResponse> {
 	return apiRequest<GetDroppedMetricsResponse>('/servers/dropped-metrics');
+}
+
+// Get per-sensor temperature readings for a specific server
+export async function getSensorReadings(
+	serverId: string,
+	timeRange?: string
+): Promise<GetSensorReadingsResponse> {
+	const query = buildQueryString({ time_range: timeRange });
+	return apiRequest<GetSensorReadingsResponse>(`/servers/${serverId}/sensor-readings${query}`);
 }
 
 // Get container metrics for a specific server
