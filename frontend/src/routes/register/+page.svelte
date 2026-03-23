@@ -32,7 +32,7 @@
 
         try {
             await register(email, password, username);
-            await updatePreferences("1h", get(authTheme));
+            await updatePreferences({ theme: get(authTheme) });
             goto("/");
         } catch (err) {
             error = err.message;

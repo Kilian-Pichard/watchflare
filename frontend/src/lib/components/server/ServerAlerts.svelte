@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { formatDateTime } from '$lib/utils';
+	import { userStore } from '$lib/stores/user';
 	import type { Server } from '$lib/types';
+
+	const timeFormat = $derived(($userStore.user?.time_format ?? '24h') as '12h' | '24h');
 
 	const {
 		server,
@@ -87,7 +90,7 @@
 				<div>
 					<p class="text-sm font-medium text-foreground">Agent Reactivated</p>
 					<p class="text-sm text-muted-foreground mt-1">
-						Same physical server detected via UUID at {formatDateTime(server.reactivated_at)}
+						Same physical server detected via UUID at {formatDateTime(server.reactivated_at, timeFormat)}
 					</p>
 				</div>
 			</div>

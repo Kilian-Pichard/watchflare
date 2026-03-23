@@ -103,9 +103,9 @@ export function getStatusClass(status: string): string {
 }
 
 // Metric threshold class (CPU, memory, disk percentages)
-export function getMetricClass(percent: number): string {
-	if (percent >= 90) return 'text-danger font-semibold';
-	if (percent >= 70) return 'text-warning font-medium';
+export function getMetricClass(percent: number, warningThreshold = 70, criticalThreshold = 90): string {
+	if (percent >= criticalThreshold) return 'text-danger font-semibold';
+	if (percent >= warningThreshold) return 'text-warning font-medium';
 	return 'text-foreground';
 }
 
@@ -123,9 +123,16 @@ export function formatRelativeTime(dateString: string | null | undefined): strin
 }
 
 // Format date as locale string
-export function formatDateTime(dateString: string | null | undefined): string {
+export function formatDateTime(dateString: string | null | undefined, timeFormat: '12h' | '24h' = '24h'): string {
 	if (!dateString) return '-';
-	return new Date(dateString).toLocaleString('fr-FR');
+	return new Date(dateString).toLocaleString('en-US', {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: timeFormat === '12h',
+	});
 }
 
 // Package manager display helpers

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatPercent, formatUptime } from '$lib/utils';
 	import { formatRate } from '$lib/chart-utils';
+	import { userStore } from '$lib/stores/user';
 	import { Cpu, MemoryStick, HardDrive, Network, Clock } from 'lucide-svelte';
 	import type { Metric } from '$lib/types';
 
@@ -17,6 +18,8 @@
 			? (metric.disk_used_bytes / metric.disk_total_bytes) * 100
 			: 0
 	);
+
+	const networkUnit = $derived($userStore.user?.network_unit ?? 'bytes');
 </script>
 
 {#if metric}
@@ -39,7 +42,7 @@
 		<div class="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2">
 			<Network class="h-3.5 w-3.5 text-muted-foreground" />
 			<span class="text-xs text-muted-foreground">Net</span>
-			<span class="text-sm font-medium text-foreground">↓ {formatRate(metric.network_rx_bytes_per_sec)} ↑ {formatRate(metric.network_tx_bytes_per_sec)}</span>
+			<span class="text-sm font-medium text-foreground">↓ {formatRate(metric.network_rx_bytes_per_sec, networkUnit)} ↑ {formatRate(metric.network_tx_bytes_per_sec, networkUnit)}</span>
 		</div>
 		<div class="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2">
 			<Clock class="h-3.5 w-3.5 text-muted-foreground" />

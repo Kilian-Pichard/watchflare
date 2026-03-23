@@ -17,7 +17,10 @@
         getManagerColor,
         formatDateTime,
     } from "$lib/utils";
+    import { userStore } from "$lib/stores/user";
     import { Filter, ChevronDown } from "lucide-svelte";
+
+    const timeFormat = $derived(($userStore.user?.time_format ?? '24h') as '12h' | '24h');
 
     let server: Server | null = $state(null);
     let packages: Package[] = $state([]);
@@ -478,12 +481,12 @@
                             <td
                                 class="px-4 py-3 text-right text-sm text-muted-foreground hidden md:table-cell"
                             >
-                                {formatDateTime(pkg.first_seen)}
+                                {formatDateTime(pkg.first_seen, timeFormat)}
                             </td>
                             <td
                                 class="px-4 py-3 text-right text-sm text-muted-foreground"
                             >
-                                {formatDateTime(pkg.last_seen)}
+                                {formatDateTime(pkg.last_seen, timeFormat)}
                             </td>
                         </tr>
                     {/each}
@@ -573,7 +576,7 @@
                                     <td
                                         class="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap"
                                     >
-                                        {formatDateTime(entry.timestamp)}
+                                        {formatDateTime(entry.timestamp, timeFormat)}
                                     </td>
                                     <td class="px-4 py-3">
                                         <span
@@ -677,7 +680,7 @@
                             <td
                                 class="px-4 py-3 text-sm text-foreground whitespace-nowrap"
                             >
-                                {formatDateTime(collection.timestamp)}
+                                {formatDateTime(collection.timestamp, timeFormat)}
                             </td>
                             <td class="px-4 py-3">
                                 <span

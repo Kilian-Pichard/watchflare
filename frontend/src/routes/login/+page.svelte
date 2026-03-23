@@ -37,7 +37,7 @@
             const theme = get(authTheme);
             if (theme !== "light") {
                 const { user } = await getCurrentUser();
-                await updatePreferences(user.default_time_range, theme);
+                await updatePreferences({ default_time_range: user.default_time_range, theme });
             }
             goto("/");
         } catch (err) {

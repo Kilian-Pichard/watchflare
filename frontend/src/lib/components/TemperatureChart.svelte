@@ -1,9 +1,18 @@
 <script lang="ts">
 	import UPlotChart from '$lib/components/UPlotChart.svelte';
+	import { userStore } from '$lib/stores/user';
 	import type { Metric, TimeRange } from '$lib/types';
 	import type uPlot from 'uplot';
 
 	let { data = [], timeRange }: { data: Metric[]; timeRange?: TimeRange } = $props();
+
+	const tempUnit = $derived($userStore.user?.temperature_unit ?? 'celsius');
+
+	function fmtTemp(v: number | null): string {
+		if (v == null) return '—';
+		if (tempUnit === 'fahrenheit') return `${(v * 9 / 5 + 32).toFixed(1)}°F`;
+		return `${v.toFixed(1)}°C`;
+	}
 
 	const CHART_COLORS = [
 		'var(--chart-1)',
@@ -81,21 +90,21 @@
 				label: key,
 				stroke: CHART_COLORS[i % CHART_COLORS.length],
 				width: 2,
-				value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(1) + '°C' : '—',
+				value: (_u: uPlot, v: number | null) => fmtTemp(v),
 			}))
 			: [{
 				label: 'CPU Temp',
 				stroke: CHART_COLORS[0],
 				fill: CHART_COLORS[0],
 				width: 2,
-				value: (_u: uPlot, v: number | null) => v != null ? v.toFixed(1) + '°C' : '—',
+				value: (_u: uPlot, v: number | null) => fmtTemp(v),
 			}] as uPlot.Series[]
 	);
 
-	const axes: uPlot.Axis[] = [
+	const axes = $derived<uPlot.Axis[]>([
 		{},
-		{ values: (_u: uPlot, ticks: number[]) => ticks.map(v => v + '°C') }
-	];
+		{ values: (_u: uPlot, ticks: number[]) => ticks.map(v => fmtTemp(v)) }
+	]);
 </script>
 
 <UPlotChart data={chartData} {series} {axes} {timeRange} />

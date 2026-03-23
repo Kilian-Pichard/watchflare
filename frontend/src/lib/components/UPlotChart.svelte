@@ -3,6 +3,7 @@
     import uPlot from "uplot";
     import "uplot/dist/uPlot.min.css";
     import { formatTooltipDate } from "$lib/chart-utils";
+    import { userStore } from "$lib/stores/user";
     import type { TimeRange } from "$lib/types";
 
     const TIME_RANGE_SECONDS: Record<string, number> = {
@@ -45,6 +46,10 @@
         scales?: uPlot.Scales;
         timeRange?: TimeRange;
     } = $props();
+
+    const timeFormat = $derived(
+        ($userStore.user?.time_format ?? "24h") as "12h" | "24h",
+    );
 
     let container: HTMLDivElement | undefined = $state(undefined);
     let chart: uPlot | null = null;
@@ -160,7 +165,7 @@
             }
 
             const ts = u.data[0][idx];
-            let html = `<div style="margin-bottom:4px;font-weight:500;">${formatTooltipDate(new Date(ts * 1000))}</div>`;
+            let html = `<div style="margin-bottom:4px;font-weight:500;">${formatTooltipDate(new Date(ts * 1000), timeFormat)}</div>`;
 
             let hasValue = false;
             for (let i = 1; i < u.series.length; i++) {
@@ -417,6 +422,7 @@
                 grid: { stroke: gridStroke, width: 1 },
                 ticks: { stroke: gridStroke, width: 1 },
                 font: "11px system-ui",
+                space: timeFormat === "12h" ? 70 : 50,
                 values: (_u: uPlot, ticks: number[]) =>
                     ticks.map((t) => {
                         const d = new Date(t * 1000);
@@ -425,6 +431,13 @@
                                 day: "numeric",
                                 month: "short",
                             });
+                        }
+                        if (timeFormat === "12h") {
+                            let h = d.getHours();
+                            const ampm = h >= 12 ? "PM" : "AM";
+                            h = h % 12 || 12;
+                            const mm = String(d.getMinutes()).padStart(2, "0");
+                            return `${h}:${mm} ${ampm}`;
                         }
                         const hh = String(d.getHours()).padStart(2, "0");
                         const mm = String(d.getMinutes()).padStart(2, "0");
@@ -436,7 +449,6 @@
                 grid: { stroke: gridStroke, width: 1 },
                 ticks: { stroke: gridStroke, width: 1 },
                 font: "11px system-ui",
-                size: 70,
                 splits: (u: uPlot) => {
                     const min = (u.scales.y as any).min ?? 0;
                     const max = (u.scales.y as any).max ?? 100;
@@ -486,9 +498,7 @@
                           range: (): uPlot.Range.MinMax => {
                               // Use the later of browser clock and last data timestamp
                               // to tolerate clock skew between browser and server
-                              const browserNow = Math.floor(
-                                  Date.now() / 1000,
-                              );
+                              const browserNow = Math.floor(Date.now() / 1000);
                               const lastDataTs =
                                   data?.[0]?.length > 0
                                       ? data[0][data[0].length - 1]
@@ -558,17 +568,21 @@
     // Track scales for recreation (timeRange excluded: handled via setData + reactive range fn)
     let scalesKey = $derived(JSON.stringify(scales || {}));
     let prevScalesKey = "";
+    let prevTimeFormat = "";
 
-    // When data, series, or scales change, update or recreate the chart
+    // When data, series, scales, or timeFormat change, update or recreate the chart
     $effect(() => {
         const _data = data;
         const _key = seriesKey;
         const _scales = scalesKey;
+        const _timeFormat = timeFormat;
 
         if (!mounted || !container) return;
 
         const scalesChanged = _scales !== prevScalesKey;
+        const timeFormatChanged = _timeFormat !== prevTimeFormat;
         prevScalesKey = _scales;
+        prevTimeFormat = _timeFormat;
 
         const _prevScales = prevScalesKey;
         if (
@@ -576,7 +590,8 @@
             _data &&
             _data[0].length > 0 &&
             _data.length === chart.series.length &&
-            !scalesChanged
+            !scalesChanged &&
+            !timeFormatChanged
         ) {
             chart.setData(_data);
         } else if (_data && _data[0].length > 0) {
@@ -597,10 +612,7 @@
                     ? data[0][data[0].length - 1]
                     : browserNow;
             const now = Math.max(browserNow, lastDataTs);
-            chart.setScale("x", [
-                now - TIME_RANGE_SECONDS[timeRange!],
-                now,
-            ]);
+            chart.setScale("x", [now - TIME_RANGE_SECONDS[timeRange!], now]);
         }, tickMs);
         return () => clearInterval(id);
     });

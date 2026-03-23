@@ -18,7 +18,7 @@
 
 		// Save to user preferences
 		try {
-			await updatePreferences(newValue, undefined);
+			await updatePreferences({ default_time_range: newValue });
 		} catch (err) {
 			logger.error('Failed to save time range preference:', err);
 		}

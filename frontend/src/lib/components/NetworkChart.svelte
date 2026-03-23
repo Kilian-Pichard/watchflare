@@ -1,11 +1,14 @@
 <script lang="ts">
 	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import { formatRate } from '$lib/chart-utils';
+	import { userStore } from '$lib/stores/user';
 	import type { Metric, AggregatedMetric, TimeRange } from '$lib/types';
 	import type uPlot from 'uplot';
 
 	let { data = [], timeRange }: { data: (Metric | AggregatedMetric)[]; timeRange?: TimeRange } =
 		$props();
+
+	const networkUnit = $derived($userStore.user?.network_unit ?? 'bytes');
 
 	let chartData = $derived.by(() => {
 		if (data.length === 0) return [[], [], []] as uPlot.AlignedData;
@@ -20,30 +23,30 @@
 		return [timestamps, rx, tx] as uPlot.AlignedData;
 	});
 
-	const series: uPlot.Series[] = [
+	const series = $derived<uPlot.Series[]>([
 		{
 			label: 'Download (RX)',
 			stroke: 'var(--chart-1)',
 			fill: 'var(--chart-1)',
 			width: 2,
-			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v) : '—',
+			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v, networkUnit) : '—',
 		},
 		{
 			label: 'Upload (TX)',
 			stroke: 'var(--chart-2)',
 			fill: 'var(--chart-2)',
 			width: 2,
-			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v) : '—',
+			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v, networkUnit) : '—',
 		}
-	];
+	]);
 
-	const axes: uPlot.Axis[] = [
+	const axes = $derived<uPlot.Axis[]>([
 		{},
 		{
-			values: (_u: uPlot, ticks: number[]) => ticks.map(v => formatRate(v)),
-			size: 70,
+			values: (_u: uPlot, ticks: number[]) => ticks.map(v => formatRate(v, networkUnit)),
+			size: networkUnit === 'bits' ? 88 : 70,
 		}
-	];
+	]);
 </script>
 
 <UPlotChart data={chartData} {series} {axes} {timeRange} />

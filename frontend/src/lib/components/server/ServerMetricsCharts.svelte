@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatBytes, formatPercent } from '$lib/utils';
 	import { formatRate, formatTemperature } from '$lib/chart-utils';
+	import { userStore } from '$lib/stores/user';
 	import CPUChart from '$lib/components/CPUChart.svelte';
 	import MemoryChart from '$lib/components/MemoryChart.svelte';
 	import DiskChart from '$lib/components/DiskChart.svelte';
@@ -27,6 +28,9 @@
 	} = $props();
 
 	const latestMetric = $derived(metrics.length > 0 ? metrics[metrics.length - 1] : null);
+	const diskUnit = $derived($userStore.user?.disk_unit ?? 'bytes');
+	const networkUnit = $derived($userStore.user?.network_unit ?? 'bytes');
+	const tempUnit = $derived($userStore.user?.temperature_unit ?? 'celsius');
 	const hasContainerData = $derived(containerMetrics.length > 0);
 
 	// Compute container names once
@@ -124,8 +128,8 @@
 				<h3 class="text-sm font-medium">Disk I/O</h3>
 				{#if latestMetric}
 					<span class="text-xs text-muted-foreground">
-						<span class="sm:hidden">{formatRate(latestMetric.disk_read_bytes_per_sec)}</span>
-						<span class="hidden sm:inline">R: {formatRate(latestMetric.disk_read_bytes_per_sec)} / W: {formatRate(latestMetric.disk_write_bytes_per_sec)}</span>
+						<span class="sm:hidden">{formatRate(latestMetric.disk_read_bytes_per_sec, diskUnit)}</span>
+						<span class="hidden sm:inline">R: {formatRate(latestMetric.disk_read_bytes_per_sec, diskUnit)} / W: {formatRate(latestMetric.disk_write_bytes_per_sec, diskUnit)}</span>
 					</span>
 				{/if}
 			</div>
@@ -136,8 +140,8 @@
 				<h3 class="text-sm font-medium">Network</h3>
 				{#if latestMetric}
 					<span class="text-xs text-muted-foreground">
-						<span class="sm:hidden">{formatRate(latestMetric.network_rx_bytes_per_sec)}</span>
-						<span class="hidden sm:inline">↓ {formatRate(latestMetric.network_rx_bytes_per_sec)} / ↑ {formatRate(latestMetric.network_tx_bytes_per_sec)}</span>
+						<span class="sm:hidden">{formatRate(latestMetric.network_rx_bytes_per_sec, networkUnit)}</span>
+						<span class="hidden sm:inline">↓ {formatRate(latestMetric.network_rx_bytes_per_sec, networkUnit)} / ↑ {formatRate(latestMetric.network_tx_bytes_per_sec, networkUnit)}</span>
 					</span>
 				{/if}
 			</div>
@@ -148,7 +152,7 @@
 				<div class="mb-3 flex items-center justify-between">
 					<h3 class="text-sm font-medium">CPU Temperature</h3>
 					<span class="text-xs text-muted-foreground">
-						{formatTemperature(latestMetric.cpu_temperature_celsius)}
+						{formatTemperature(latestMetric.cpu_temperature_celsius, tempUnit)}
 					</span>
 				</div>
 				<TemperatureChart data={metrics} {timeRange} />

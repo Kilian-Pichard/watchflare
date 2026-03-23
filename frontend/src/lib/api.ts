@@ -301,16 +301,23 @@ export async function getCurrentUser(): Promise<CurrentUserResponse> {
 	return apiRequest<CurrentUserResponse>('/auth/user');
 }
 
+export interface UpdatePreferencesPayload {
+	default_time_range?: string;
+	theme?: string;
+	time_format?: string;
+	temperature_unit?: string;
+	network_unit?: string;
+	disk_unit?: string;
+	gauge_warning_threshold?: number;
+	gauge_critical_threshold?: number;
+}
+
 export async function updatePreferences(
-	defaultTimeRange: string,
-	theme: string
-): Promise<{ message: string }> {
-	return apiRequest<{ message: string }>('/auth/preferences', {
+	payload: UpdatePreferencesPayload
+): Promise<{ message: string; user: User }> {
+	return apiRequest<{ message: string; user: User }>('/auth/preferences', {
 		method: 'PUT',
-		body: JSON.stringify({
-			default_time_range: defaultTimeRange,
-			theme: theme
-		})
+		body: JSON.stringify(payload)
 	});
 }
 

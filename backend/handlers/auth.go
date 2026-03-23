@@ -57,8 +57,14 @@ type ChangeUsernameRequest struct {
 
 // UpdatePreferencesRequest represents the update preferences request body
 type UpdatePreferencesRequest struct {
-	DefaultTimeRange string `json:"default_time_range"`
-	Theme            string `json:"theme"`
+	DefaultTimeRange       string `json:"default_time_range"`
+	Theme                  string `json:"theme"`
+	TimeFormat             string `json:"time_format"`
+	TemperatureUnit        string `json:"temperature_unit"`
+	NetworkUnit            string `json:"network_unit"`
+	DiskUnit               string `json:"disk_unit"`
+	GaugeWarningThreshold  *int   `json:"gauge_warning_threshold"`
+	GaugeCriticalThreshold *int   `json:"gauge_critical_threshold"`
 }
 
 // Register creates the first admin user and automatically logs them in
@@ -294,6 +300,40 @@ func UpdatePreferences(c *gin.Context) {
 		return
 	}
 
+	// Validate time_format
+	if req.TimeFormat != "" && req.TimeFormat != "24h" && req.TimeFormat != "12h" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_format. valid values: 24h, 12h"})
+		return
+	}
+
+	// Validate temperature_unit
+	if req.TemperatureUnit != "" && req.TemperatureUnit != "celsius" && req.TemperatureUnit != "fahrenheit" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid temperature_unit. valid values: celsius, fahrenheit"})
+		return
+	}
+
+	// Validate network_unit
+	if req.NetworkUnit != "" && req.NetworkUnit != "bytes" && req.NetworkUnit != "bits" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid network_unit. valid values: bytes, bits"})
+		return
+	}
+
+	// Validate disk_unit
+	if req.DiskUnit != "" && req.DiskUnit != "bytes" && req.DiskUnit != "bits" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid disk_unit. valid values: bytes, bits"})
+		return
+	}
+
+	// Validate gauge thresholds
+	if req.GaugeWarningThreshold != nil && (*req.GaugeWarningThreshold < 1 || *req.GaugeWarningThreshold > 99) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gauge_warning_threshold. must be between 1 and 99"})
+		return
+	}
+	if req.GaugeCriticalThreshold != nil && (*req.GaugeCriticalThreshold < 1 || *req.GaugeCriticalThreshold > 100) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gauge_critical_threshold. must be between 1 and 100"})
+		return
+	}
+
 	// Update user preferences
 	updates := make(map[string]interface{})
 	if req.DefaultTimeRange != "" {
@@ -301,6 +341,24 @@ func UpdatePreferences(c *gin.Context) {
 	}
 	if req.Theme != "" {
 		updates["theme"] = req.Theme
+	}
+	if req.TimeFormat != "" {
+		updates["time_format"] = req.TimeFormat
+	}
+	if req.TemperatureUnit != "" {
+		updates["temperature_unit"] = req.TemperatureUnit
+	}
+	if req.NetworkUnit != "" {
+		updates["network_unit"] = req.NetworkUnit
+	}
+	if req.DiskUnit != "" {
+		updates["disk_unit"] = req.DiskUnit
+	}
+	if req.GaugeWarningThreshold != nil {
+		updates["gauge_warning_threshold"] = *req.GaugeWarningThreshold
+	}
+	if req.GaugeCriticalThreshold != nil {
+		updates["gauge_critical_threshold"] = *req.GaugeCriticalThreshold
 	}
 
 	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {

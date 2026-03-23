@@ -1,6 +1,7 @@
 <script lang="ts">
 	import UPlotChart from '$lib/components/UPlotChart.svelte';
 	import { formatRate } from '$lib/chart-utils';
+	import { userStore } from '$lib/stores/user';
 	import type { TimeRange } from '$lib/types';
 	import type uPlot from 'uplot';
 
@@ -11,6 +12,8 @@
 		seriesKeys: string[];
 		timeRange?: TimeRange;
 	} = $props();
+
+	const networkUnit = $derived($userStore.user?.network_unit ?? 'bytes');
 
 	let chartData = $derived.by(() => {
 		if (pivotedData.length === 0 || seriesKeys.length === 0) return [[]] as uPlot.AlignedData;
@@ -32,18 +35,17 @@
 			stroke: CHART_COLORS[Math.floor(i / 2) % CHART_COLORS.length],
 			fill: CHART_COLORS[Math.floor(i / 2) % CHART_COLORS.length],
 			width: 2,
-			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v) : '—',
+			value: (_u: uPlot, v: number | null) => v != null ? formatRate(v, networkUnit) : '—',
 		}))
 	);
 
-	const axes: uPlot.Axis[] = [
+	const axes = $derived<uPlot.Axis[]>([
 		{},
 		{
-			values: (_u: uPlot, ticks: number[]) => ticks.map(v => formatRate(v)),
-			size: 70,
+			values: (_u: uPlot, ticks: number[]) => ticks.map(v => formatRate(v, networkUnit)),
+			size: networkUnit === 'bits' ? 88 : 70,
 		}
-	];
-
+	]);
 </script>
 
 <UPlotChart data={chartData} {series} {axes} {timeRange} />

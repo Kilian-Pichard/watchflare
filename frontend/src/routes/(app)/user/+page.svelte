@@ -1,11 +1,8 @@
 <script lang="ts">
     import { changePassword, changeEmail, changeUsername } from "$lib/api";
     import { changePasswordSchema, validateForm } from "$lib/validation";
-    import { userStore, themeStore } from "$lib/stores/user";
-    import { TIME_RANGES } from "$lib/utils";
-    import { Sun, Moon, Monitor, Eye, EyeOff } from "lucide-svelte";
-    import type { Theme, TimeRange } from "$lib/types";
-    import * as Select from "$lib/components/ui/select";
+    import { userStore } from "$lib/stores/user";
+    import { Eye, EyeOff } from "lucide-svelte";
 
     // Username form state
     let usernameOverride = $state<string | null>(null);
@@ -58,21 +55,6 @@
     let showCurrentPassword = $state(false);
     let showNewPassword = $state(false);
     let showConfirmPassword = $state(false);
-
-    const activeTheme = $derived($themeStore);
-    const activeTimeRange = $derived(
-        $userStore.user?.default_time_range || "24h",
-    );
-    const selectedTimeRangeLabel = $derived(
-        TIME_RANGES.find((r) => r.value === activeTimeRange)?.label ||
-            activeTimeRange,
-    );
-
-    const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
-        { value: "light", label: "Light", icon: Sun },
-        { value: "dark", label: "Dark", icon: Moon },
-        { value: "system", label: "System", icon: Monitor },
-    ];
 
     async function handleChangeEmail() {
         emailError = "";
@@ -139,18 +121,10 @@
             loading = false;
         }
     }
-
-    async function handleThemeChange(theme: Theme) {
-        await userStore.updateTheme(theme);
-    }
-
-    async function handleTimeRangeChange(value: TimeRange) {
-        await userStore.updatePreferences(value, activeTheme);
-    }
 </script>
 
 <svelte:head>
-    <title>User Settings - Watchflare</title>
+    <title>Account - Watchflare</title>
 </svelte:head>
 
 <div class="max-w-2xl space-y-6">
@@ -158,12 +132,13 @@
 <!-- Header -->
 <div class="mb-6">
     <h1 class="text-xl sm:text-2xl font-semibold text-foreground">
-        User Settings
+        Account
     </h1>
     <p class="text-sm text-muted-foreground mt-1">
-        Manage your account and preferences
+        Manage your profile and credentials
     </p>
 </div>
+
     <!-- Profile Card -->
     <div class="rounded-lg border bg-card p-4 sm:p-6">
         <h2 class="text-lg font-semibold text-foreground mb-6">Profile</h2>
@@ -274,8 +249,7 @@
                     />
                     <button
                         type="button"
-                        onclick={() =>
-                            (showCurrentPassword = !showCurrentPassword)}
+                        onclick={() => (showCurrentPassword = !showCurrentPassword)}
                         class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                         tabindex={-1}
                     >
@@ -287,10 +261,7 @@
                     </button>
                 </div>
                 {#if fieldErrors.currentPassword}
-                    <p
-                        id="currentPassword-error"
-                        class="mt-1 text-xs text-destructive"
-                    >
+                    <p id="currentPassword-error" class="mt-1 text-xs text-destructive">
                         {fieldErrors.currentPassword}
                     </p>
                 {/if}
@@ -332,10 +303,7 @@
                     </button>
                 </div>
                 {#if fieldErrors.newPassword}
-                    <p
-                        id="newPassword-error"
-                        class="mt-1 text-xs text-destructive"
-                    >
+                    <p id="newPassword-error" class="mt-1 text-xs text-destructive">
                         {fieldErrors.newPassword}
                     </p>
                 {/if}
@@ -365,8 +333,7 @@
                     />
                     <button
                         type="button"
-                        onclick={() =>
-                            (showConfirmPassword = !showConfirmPassword)}
+                        onclick={() => (showConfirmPassword = !showConfirmPassword)}
                         class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                         tabindex={-1}
                     >
@@ -378,27 +345,20 @@
                     </button>
                 </div>
                 {#if fieldErrors.confirmPassword}
-                    <p
-                        id="confirmPassword-error"
-                        class="mt-1 text-xs text-destructive"
-                    >
+                    <p id="confirmPassword-error" class="mt-1 text-xs text-destructive">
                         {fieldErrors.confirmPassword}
                     </p>
                 {/if}
             </div>
 
             {#if error}
-                <div
-                    class="mb-4 rounded-lg border border-destructive bg-destructive/10 p-3"
-                >
+                <div class="mb-4 rounded-lg border border-destructive bg-destructive/10 p-3">
                     <p class="text-sm text-destructive">{error}</p>
                 </div>
             {/if}
 
             {#if success}
-                <div
-                    class="mb-4 rounded-lg border border-success bg-success/10 p-3"
-                >
+                <div class="mb-4 rounded-lg border border-success bg-success/10 p-3">
                     <p class="text-sm text-success">{success}</p>
                 </div>
             {/if}
@@ -413,63 +373,4 @@
         </form>
     </div>
 
-    <!-- Preferences Card -->
-    <div class="rounded-lg border bg-card p-4 sm:p-6">
-        <h2 class="text-lg font-semibold text-foreground mb-6">Preferences</h2>
-
-        <!-- Theme -->
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-foreground mb-3">
-                Theme
-            </label>
-            <div class="flex gap-2">
-                {#each themeOptions as option}
-                    {@const Icon = option.icon}
-                    <button
-                        onclick={() => handleThemeChange(option.value)}
-                        class="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors {activeTheme ===
-                        option.value
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'}"
-                    >
-                        <Icon class="h-4 w-4" />
-                        {option.label}
-                    </button>
-                {/each}
-            </div>
-        </div>
-
-        <!-- Default Time Range -->
-        <div>
-            <label class="block text-sm font-medium text-foreground mb-3">
-                Default Time Range
-            </label>
-            <p class="text-xs text-muted-foreground mb-3">
-                Default time range used for dashboard and server metrics charts
-            </p>
-            <div class="w-48">
-                <Select.Root
-                    type="single"
-                    value={activeTimeRange}
-                    onValueChange={handleTimeRangeChange}
-                >
-                    <Select.Trigger
-                        items={TIME_RANGES.map((r) => r.label)}
-                    >
-                        <span>{selectedTimeRangeLabel}</span>
-                    </Select.Trigger>
-                    <Select.Content>
-                        {#each TIME_RANGES as range}
-                            <Select.Item
-                                value={range.value}
-                                label={range.label}
-                            >
-                                {range.label}
-                            </Select.Item>
-                        {/each}
-                    </Select.Content>
-                </Select.Root>
-            </div>
-        </div>
-    </div>
 </div>

@@ -5,6 +5,10 @@
 // ===== User & Authentication =====
 
 export type Theme = 'light' | 'dark' | 'system';
+export type TimeFormat = '24h' | '12h';
+export type TemperatureUnit = 'celsius' | 'fahrenheit';
+export type NetworkUnit = 'bytes' | 'bits';
+export type DiskUnit = 'bytes' | 'bits';
 
 export interface User {
 	id: number;
@@ -12,6 +16,12 @@ export interface User {
 	username: string;
 	default_time_range: TimeRange;
 	theme: Theme;
+	time_format: TimeFormat;
+	temperature_unit: TemperatureUnit;
+	network_unit: NetworkUnit;
+	disk_unit: DiskUnit;
+	gauge_warning_threshold: number;
+	gauge_critical_threshold: number;
 	created_at: string;
 }
 

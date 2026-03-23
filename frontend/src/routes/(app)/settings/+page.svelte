@@ -1,8 +1,87 @@
 <script lang="ts">
     import { APP_VERSION } from "$lib/version";
+    import { userStore } from "$lib/stores/user";
+    import { TIME_RANGES } from "$lib/utils";
+    import { Sun, Moon, Monitor, Check } from "lucide-svelte";
+    import type { Theme, TimeRange, TimeFormat, TemperatureUnit, NetworkUnit, DiskUnit } from "$lib/types";
+    import * as Select from "$lib/components/ui/select";
 
     const githubUrl = "https://github.com/Kilian-Pichard/watchflare";
     const releaseUrl = `${githubUrl}/releases/tag/v${APP_VERSION}`;
+
+    // Local state — mirrors user preferences, editable before save
+    const user = $derived($userStore.user);
+
+    let selectedTimeRange = $state<TimeRange>('1h');
+    let selectedTheme = $state<Theme>('system');
+    let selectedTimeFormat = $state<TimeFormat>('24h');
+    let selectedTempUnit = $state<TemperatureUnit>('celsius');
+    let selectedNetworkUnit = $state<NetworkUnit>('bytes');
+    let selectedDiskUnit = $state<DiskUnit>('bytes');
+    let gaugeWarning = $state(70);
+    let gaugeCritical = $state(90);
+
+    // Sync local state when user loads
+    $effect(() => {
+        if (user) {
+            selectedTimeRange = user.default_time_range ?? '1h';
+            selectedTheme = user.theme ?? 'system';
+            selectedTimeFormat = user.time_format ?? '24h';
+            selectedTempUnit = user.temperature_unit ?? 'celsius';
+            selectedNetworkUnit = user.network_unit ?? 'bytes';
+            selectedDiskUnit = user.disk_unit ?? 'bytes';
+            gaugeWarning = user.gauge_warning_threshold ?? 70;
+            gaugeCritical = user.gauge_critical_threshold ?? 90;
+        }
+    });
+
+    let saving = $state(false);
+    let saveError = $state('');
+    let saveSuccess = $state(false);
+
+    const selectedTimeRangeLabel = $derived(
+        TIME_RANGES.find((r) => r.value === selectedTimeRange)?.label ?? selectedTimeRange
+    );
+
+    const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
+        { value: 'light', label: 'Light', icon: Sun },
+        { value: 'dark', label: 'Dark', icon: Moon },
+        { value: 'system', label: 'System', icon: Monitor },
+    ];
+
+    async function handleSave() {
+        saveError = '';
+        saveSuccess = false;
+
+        // Validate gauge thresholds
+        if (gaugeWarning < 1 || gaugeWarning > 99) {
+            saveError = 'Warning threshold must be between 1 and 99.';
+            return;
+        }
+        if (gaugeCritical < 1 || gaugeCritical > 100) {
+            saveError = 'Critical threshold must be between 1 and 100.';
+            return;
+        }
+
+        saving = true;
+        try {
+            await userStore.updatePreferences({
+                default_time_range: selectedTimeRange,
+                time_format: selectedTimeFormat,
+                temperature_unit: selectedTempUnit,
+                network_unit: selectedNetworkUnit,
+                disk_unit: selectedDiskUnit,
+                gauge_warning_threshold: gaugeWarning,
+                gauge_critical_threshold: gaugeCritical,
+            });
+            saveSuccess = true;
+            setTimeout(() => { saveSuccess = false; }, 3000);
+        } catch (err) {
+            saveError = err instanceof Error ? err.message : 'Failed to save preferences.';
+        } finally {
+            saving = false;
+        }
+    }
 </script>
 
 <svelte:head>
@@ -12,12 +91,179 @@
 <div class="mb-6">
     <h1 class="text-xl sm:text-2xl font-semibold text-foreground">Settings</h1>
     <p class="text-sm text-muted-foreground mt-1">
-        Application settings
+        Application preferences and configuration
     </p>
 </div>
 
-<div class="flex flex-col items-center justify-center rounded-lg border bg-card py-20 text-center">
-    <p class="text-sm text-muted-foreground">Coming soon</p>
+<!-- General Preferences Card -->
+<div class="rounded-lg border bg-card p-4 sm:p-6 mb-6">
+    <h2 class="text-lg font-semibold text-foreground mb-6">General</h2>
+
+    <!-- Theme -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-foreground mb-1">Theme</label>
+        <p class="text-xs text-muted-foreground mb-3">Interface color scheme</p>
+        <div class="flex gap-2">
+            {#each themeOptions as option}
+                {@const Icon = option.icon}
+                <button
+                    onclick={() => userStore.updateTheme(option.value)}
+                    class="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors {selectedTheme === option.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                >
+                    <Icon class="h-4 w-4" />
+                    {option.label}
+                </button>
+            {/each}
+        </div>
+    </div>
+
+    <!-- Default Time Range -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-foreground mb-1">Default Time Range</label>
+        <p class="text-xs text-muted-foreground mb-3">Default range for dashboard and server metrics charts</p>
+        <div class="w-48">
+            <Select.Root
+                type="single"
+                value={selectedTimeRange}
+                onValueChange={(v) => { if (v) selectedTimeRange = v as TimeRange; }}
+            >
+                <Select.Trigger items={TIME_RANGES.map((r) => r.label)}>
+                    <span>{selectedTimeRangeLabel}</span>
+                </Select.Trigger>
+                <Select.Content>
+                    {#each TIME_RANGES as range}
+                        <Select.Item value={range.value} label={range.label}>
+                            {range.label}
+                        </Select.Item>
+                    {/each}
+                </Select.Content>
+            </Select.Root>
+        </div>
+    </div>
+
+    <!-- Time Format -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-foreground mb-1">Time Format</label>
+        <p class="text-xs text-muted-foreground mb-3">Clock format used throughout the interface</p>
+        <div class="flex gap-2">
+            {#each [{ value: '24h', label: '24-hour' }, { value: '12h', label: '12-hour (AM/PM)' }] as opt}
+                <button
+                    onclick={() => { selectedTimeFormat = opt.value as TimeFormat; }}
+                    class="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors {selectedTimeFormat === opt.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                >
+                    {opt.label}
+                </button>
+            {/each}
+        </div>
+    </div>
+
+    <!-- Temperature Unit -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-foreground mb-1">Temperature Unit</label>
+        <p class="text-xs text-muted-foreground mb-3">Unit for CPU and sensor temperature readings</p>
+        <div class="flex gap-2">
+            {#each [{ value: 'celsius', label: '°C — Celsius' }, { value: 'fahrenheit', label: '°F — Fahrenheit' }] as opt}
+                <button
+                    onclick={() => { selectedTempUnit = opt.value as TemperatureUnit; }}
+                    class="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors {selectedTempUnit === opt.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                >
+                    {opt.label}
+                </button>
+            {/each}
+        </div>
+    </div>
+
+    <!-- Network Unit -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-foreground mb-1">Network Throughput Unit</label>
+        <p class="text-xs text-muted-foreground mb-3">Unit for network RX/TX rates</p>
+        <div class="flex gap-2">
+            {#each [{ value: 'bytes', label: 'Bytes/s (MB/s)' }, { value: 'bits', label: 'Bits/s (Mbps)' }] as opt}
+                <button
+                    onclick={() => { selectedNetworkUnit = opt.value as NetworkUnit; }}
+                    class="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors {selectedNetworkUnit === opt.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                >
+                    {opt.label}
+                </button>
+            {/each}
+        </div>
+    </div>
+
+    <!-- Disk Unit -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-foreground mb-1">Disk I/O Unit</label>
+        <p class="text-xs text-muted-foreground mb-3">Unit for disk read/write rates</p>
+        <div class="flex gap-2">
+            {#each [{ value: 'bytes', label: 'Bytes/s (MB/s)' }, { value: 'bits', label: 'Bits/s (Mbps)' }] as opt}
+                <button
+                    onclick={() => { selectedDiskUnit = opt.value as DiskUnit; }}
+                    class="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors {selectedDiskUnit === opt.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                >
+                    {opt.label}
+                </button>
+            {/each}
+        </div>
+    </div>
+
+    <!-- Gauge Thresholds -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-foreground mb-1">Gauge Color Thresholds</label>
+        <p class="text-xs text-muted-foreground mb-3">Percentage values that trigger warning and critical colors in CPU, memory and disk gauges</p>
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-medium text-warning w-16">Warning</span>
+                <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    bind:value={gaugeWarning}
+                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <span class="text-xs text-muted-foreground">%</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-medium text-danger w-16">Critical</span>
+                <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    bind:value={gaugeCritical}
+                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <span class="text-xs text-muted-foreground">%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save button -->
+    {#if saveError}
+        <div class="mb-4 rounded-lg border border-destructive bg-destructive/10 p-3">
+            <p class="text-sm text-destructive">{saveError}</p>
+        </div>
+    {/if}
+
+    <button
+        onclick={handleSave}
+        disabled={saving}
+        class="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+        {#if saveSuccess}
+            <Check class="h-4 w-4" />
+            Saved
+        {:else}
+            {saving ? 'Saving...' : 'Save preferences'}
+        {/if}
+    </button>
 </div>
 
 <!-- About -->

@@ -1,6 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import type { User, TimeRange, Theme } from '$lib/types';
-import { getCurrentUser, updatePreferences } from '$lib/api';
+import { getCurrentUser, updatePreferences, type UpdatePreferencesPayload } from '$lib/api';
 import { logger } from '$lib/utils';
 
 interface UserState {
@@ -74,28 +74,40 @@ function createUserStore() {
 			}
 		},
 
-		// Update user preferences
-		async updatePreferences(timeRange: TimeRange, theme: Theme): Promise<void> {
-			// Optimistic update
-			themeStore.set(theme);
-			applyTheme(theme);
+		// Update user preferences (partial — only sends provided fields)
+		async updatePreferences(payload: UpdatePreferencesPayload): Promise<void> {
+			// Optimistic update for theme
+			if (payload.theme) {
+				themeStore.set(payload.theme as Theme);
+				applyTheme(payload.theme as Theme);
+			}
 
 			update(state => {
-				if (state.user) {
-					return {
-						...state,
-						user: {
-							...state.user,
-							default_time_range: timeRange,
-							theme
-						}
-					};
-				}
-				return state;
+				if (!state.user) return state;
+				return {
+					...state,
+					user: {
+						...state.user,
+						...(payload.default_time_range && { default_time_range: payload.default_time_range as TimeRange }),
+						...(payload.theme && { theme: payload.theme as Theme }),
+						...(payload.time_format && { time_format: payload.time_format as User['time_format'] }),
+						...(payload.temperature_unit && { temperature_unit: payload.temperature_unit as User['temperature_unit'] }),
+						...(payload.network_unit && { network_unit: payload.network_unit as User['network_unit'] }),
+						...(payload.disk_unit && { disk_unit: payload.disk_unit as User['disk_unit'] }),
+						...(payload.gauge_warning_threshold !== undefined && { gauge_warning_threshold: payload.gauge_warning_threshold }),
+						...(payload.gauge_critical_threshold !== undefined && { gauge_critical_threshold: payload.gauge_critical_threshold })
+					}
+				};
 			});
 
 			try {
-				await updatePreferences(timeRange, theme);
+				const res = await updatePreferences(payload);
+				// Sync store with server response to ensure consistency
+				update(state => ({ ...state, user: res.user }));
+				if (res.user.theme) {
+					themeStore.set(res.user.theme);
+					applyTheme(res.user.theme);
+				}
 			} catch (err) {
 				logger.error('Failed to update preferences:', err);
 				throw err;
@@ -106,18 +118,14 @@ function createUserStore() {
 		async updateTheme(theme: Theme): Promise<void> {
 			applyTheme(theme);
 			themeStore.set(theme);
-
-			let timeRange = '1h';
 			update(state => {
-				if (state.user) {
-					timeRange = state.user.default_time_range;
-					return { ...state, user: { ...state.user, theme } };
-				}
+				if (state.user) return { ...state, user: { ...state.user, theme } };
 				return state;
 			});
 
 			try {
-				await updatePreferences(timeRange, theme);
+				const res = await updatePreferences({ theme });
+				update(state => ({ ...state, user: res.user }));
 			} catch (err) {
 				logger.error('Failed to update theme:', err);
 			}
