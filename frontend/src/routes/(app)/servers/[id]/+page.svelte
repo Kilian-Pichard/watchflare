@@ -386,7 +386,9 @@
     confirmLabel="Regenerate"
 >
     <p class="text-sm text-muted-foreground">
-        This will invalidate the current registration token and generate a new one.
+        This will generate a new registration token and set the server to pending until the agent
+        re-registers. Use the new token to run <code class="font-mono">watchflare-agent register</code>
+        on the server.
     </p>
 </ConfirmDialog>
 

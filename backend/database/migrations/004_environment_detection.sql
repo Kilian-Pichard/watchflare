@@ -1,7 +1,6 @@
--- Migration: Environment Detection
--- Description: Adds environment detection fields to servers table
--- Author: Watchflare
--- Date: 2026-01-18
+-- +goose Up
+-- Migration 004: Environment Detection
+-- Adds environment_type, hypervisor, container_runtime fields to servers table
 
 -- =====================================================
 -- Add Environment Detection Fields to Servers Table
@@ -26,3 +25,9 @@ CREATE INDEX IF NOT EXISTS idx_servers_environment_type ON servers(environment_t
 COMMENT ON COLUMN servers.environment_type IS 'Environment type: physical, physical_with_containers, vm, vm_with_containers, container';
 COMMENT ON COLUMN servers.hypervisor IS 'Hypervisor type if running in VM: kvm, vmware, virtualbox, hyperv, xen, unknown (NULL if physical)';
 COMMENT ON COLUMN servers.container_runtime IS 'Container runtime if running in container: docker, lxc, podman, kubernetes, unknown (NULL if not in container)';
+
+-- +goose Down
+DROP INDEX IF EXISTS idx_servers_environment_type;
+ALTER TABLE servers DROP COLUMN IF EXISTS container_runtime;
+ALTER TABLE servers DROP COLUMN IF EXISTS hypervisor;
+ALTER TABLE servers DROP COLUMN IF EXISTS environment_type;

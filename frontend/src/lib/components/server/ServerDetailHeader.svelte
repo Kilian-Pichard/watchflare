@@ -147,17 +147,15 @@
                     <Globe class="h-4 w-4" />
                     Change IP
                 </DropdownMenu.Item>
-                {#if server.status === "pending"}
-                    <DropdownMenu.Item
-                        onclick={() => {
-                            open = false;
-                            onRegenerateToken();
-                        }}
-                    >
-                        <RefreshCw class="h-4 w-4" />
-                        Regenerate Token
-                    </DropdownMenu.Item>
-                {/if}
+                <DropdownMenu.Item
+                    onclick={() => {
+                        open = false;
+                        onRegenerateToken();
+                    }}
+                >
+                    <RefreshCw class="h-4 w-4" />
+                    Regenerate Token
+                </DropdownMenu.Item>
                 {#if server.status !== "pending"}
                     {#if server.status === "paused"}
                         <DropdownMenu.Item

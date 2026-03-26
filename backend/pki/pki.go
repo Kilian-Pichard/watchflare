@@ -2,47 +2,52 @@ package pki
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 )
 
-// PKI manages the TLS certificates
+// PKI manages TLS certificates for the gRPC server.
+// After Initialize() is called, tlsConfig and caCertPEM are loaded
+// from disk and cached — no further disk reads occur.
 type PKI struct {
-	config *Config
+	config    *Config
+	tlsConfig *tls.Config
+	caCertPEM []byte
 }
 
-// New creates a new PKI instance
+// New creates a new PKI instance and validates the configuration.
 func New(config *Config) (*PKI, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid PKI config: %w", err)
 	}
-
-	return &PKI{
-		config: config,
-	}, nil
+	return &PKI{config: config}, nil
 }
 
-// Initialize sets up the PKI (generates certificates if needed in auto mode)
+// Initialize generates or validates certificates, then loads them into memory.
+// Must be called before GetTLSConfig or GetCACertPEM.
 func (p *PKI) Initialize() error {
 	switch p.config.Mode {
 	case ModeAuto:
-		return p.initializeAuto()
+		if err := p.initializeAuto(); err != nil {
+			return err
+		}
 	case ModeCustom:
-		return p.initializeCustom()
+		if err := p.initializeCustom(); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("invalid TLS mode: %s", p.config.Mode)
 	}
+	return p.load()
 }
 
-// initializeAuto handles auto-generated PKI
+// initializeAuto generates CA + server certificate if they don't exist yet.
 func (p *PKI) initializeAuto() error {
 	slog.Info("initializing PKI", "mode", "auto", "dir", p.config.PKIDir)
 
-	// Create PKI directory if it doesn't exist
-	if err := os.MkdirAll(p.config.PKIDir, 0755); err != nil {
+	if err := os.MkdirAll(p.config.PKIDir, 0750); err != nil {
 		return fmt.Errorf("failed to create PKI directory: %w", err)
 	}
 
@@ -51,66 +56,54 @@ func (p *PKI) initializeAuto() error {
 	serverCertPath := filepath.Join(p.config.PKIDir, "server.pem")
 	serverKeyPath := filepath.Join(p.config.PKIDir, "server.key")
 
-	// Check if PKI already exists
 	if fileExists(caPath) && fileExists(serverCertPath) {
 		slog.Info("PKI already exists, reusing existing certificates")
 		return nil
 	}
 
-	// Generate new PKI
 	slog.Info("generating new PKI (CA + server certificate)")
 
-	// Generate CA
 	slog.Info("generating CA certificate", "validity", "10y")
 	caCert, caKey, err := generateCA()
 	if err != nil {
 		return fmt.Errorf("failed to generate CA: %w", err)
 	}
 
-	// Save CA certificate and key
 	if err := saveCertificate(caCert, caPath); err != nil {
 		return err
 	}
 	if err := savePrivateKey(caKey, caKeyPath); err != nil {
 		return err
 	}
-
 	slog.Info("CA certificate saved", "path", caPath)
-	slog.Info("CA private key saved", "path", caKeyPath, "permissions", "0600")
 
-	// Generate server certificate
 	slog.Info("generating server certificate", "validity", "5y")
 	serverCert, serverKey, err := generateServerCert(caCert, caKey)
 	if err != nil {
 		return fmt.Errorf("failed to generate server certificate: %w", err)
 	}
 
-	// Save server certificate and key
 	if err := saveCertificate(serverCert, serverCertPath); err != nil {
 		return err
 	}
 	if err := savePrivateKey(serverKey, serverKeyPath); err != nil {
 		return err
 	}
-
 	slog.Info("server certificate saved", "path", serverCertPath)
-	slog.Info("server private key saved", "path", serverKeyPath, "permissions", "0600")
 	slog.Info("PKI initialization complete")
+
 	return nil
 }
 
-// initializeCustom validates custom certificates
+// initializeCustom validates that the user-provided certificates are readable.
 func (p *PKI) initializeCustom() error {
-	slog.Info("initializing PKI", "mode", "custom")
-	slog.Info("using custom certificates",
+	slog.Info("initializing PKI", "mode", "custom",
 		"cert", p.config.CertFile,
 		"key", p.config.KeyFile,
 		"ca", p.config.CAFile,
 	)
 
-	// Load and validate certificate/key pair
-	_, err := tls.LoadX509KeyPair(p.config.CertFile, p.config.KeyFile)
-	if err != nil {
+	if _, err := tls.LoadX509KeyPair(p.config.CertFile, p.config.KeyFile); err != nil {
 		return fmt.Errorf("failed to load certificate/key pair: %w", err)
 	}
 
@@ -118,56 +111,49 @@ func (p *PKI) initializeCustom() error {
 	return nil
 }
 
-// GetTLSConfig returns a TLS configuration for the gRPC server
-func (p *PKI) GetTLSConfig() (*tls.Config, error) {
-	certFile, keyFile, _ := p.config.GetPaths()
+// load reads the certificate files from disk and caches them in the struct.
+// Called once at the end of Initialize().
+func (p *PKI) load() error {
+	certFile, keyFile, caFile := p.config.GetPaths()
 
-	// Load server certificate and key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load server certificate: %w", err)
+		return fmt.Errorf("failed to load server certificate: %w", err)
 	}
 
-	// Create TLS configuration
-	tlsConfig := &tls.Config{
+	p.tlsConfig = &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS13, // TLS 1.3 only
+		MinVersion:   tls.VersionTLS13,
 		MaxVersion:   tls.VersionTLS13,
 	}
 
-	return tlsConfig, nil
-}
-
-// GetCACertPEM returns the CA certificate in PEM format
-// This is used to send the CA cert to agents during registration
-func (p *PKI) GetCACertPEM() ([]byte, error) {
-	_, _, caFile := p.config.GetPaths()
-
 	caPEM, err := os.ReadFile(caFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CA certificate: %w", err)
+		return fmt.Errorf("failed to read CA certificate: %w", err)
 	}
+	p.caCertPEM = caPEM
 
-	return caPEM, nil
+	return nil
 }
 
-// GetCACertPool returns a certificate pool with the CA certificate
-// This can be used for mTLS if needed in the future
-func (p *PKI) GetCACertPool() (*x509.CertPool, error) {
-	caPEM, err := p.GetCACertPEM()
-	if err != nil {
-		return nil, err
+// GetTLSConfig returns the cached TLS configuration for the gRPC server.
+func (p *PKI) GetTLSConfig() (*tls.Config, error) {
+	if p.tlsConfig == nil {
+		return nil, fmt.Errorf("PKI not initialized")
 	}
-
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(caPEM) {
-		return nil, fmt.Errorf("failed to append CA certificate to pool")
-	}
-
-	return pool, nil
+	return p.tlsConfig, nil
 }
 
-// fileExists checks if a file exists
+// GetCACertPEM returns the cached CA certificate in PEM format.
+// Used to send the CA cert to agents during registration.
+func (p *PKI) GetCACertPEM() ([]byte, error) {
+	if p.caCertPEM == nil {
+		return nil, fmt.Errorf("PKI not initialized")
+	}
+	return p.caCertPEM, nil
+}
+
+// fileExists checks if a file exists.
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

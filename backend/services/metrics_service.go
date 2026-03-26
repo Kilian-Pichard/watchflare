@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// MetricsQueryParams represents the query parameters for metrics retrieval
+// MetricsQueryParams holds parameters for metrics retrieval.
 type MetricsQueryParams struct {
 	ServerID string
 	Start    time.Time
@@ -18,16 +18,16 @@ type MetricsQueryParams struct {
 	Interval string // e.g., "1m", "5m", "15m", "1h"
 }
 
-// MetricDataPoint represents an aggregated metric data point
+// MetricDataPoint represents an aggregated metric data point.
 type MetricDataPoint struct {
-	Timestamp            time.Time             `json:"timestamp"`
-	CPUUsagePercent      float64               `json:"cpu_usage_percent"`
-	MemoryTotalBytes     uint64                `json:"memory_total_bytes"`
-	MemoryUsedBytes      uint64                `json:"memory_used_bytes"`
-	MemoryAvailableBytes uint64                `json:"memory_available_bytes"`
-	LoadAvg1Min          float64               `json:"load_avg_1min"`
-	LoadAvg5Min          float64               `json:"load_avg_5min"`
-	LoadAvg15Min         float64               `json:"load_avg_15min"`
+	Timestamp             time.Time             `json:"timestamp"`
+	CPUUsagePercent       float64               `json:"cpu_usage_percent"`
+	MemoryTotalBytes      uint64                `json:"memory_total_bytes"`
+	MemoryUsedBytes       uint64                `json:"memory_used_bytes"`
+	MemoryAvailableBytes  uint64                `json:"memory_available_bytes"`
+	LoadAvg1Min           float64               `json:"load_avg_1min"`
+	LoadAvg5Min           float64               `json:"load_avg_5min"`
+	LoadAvg15Min          float64               `json:"load_avg_15min"`
 	DiskTotalBytes        uint64                `json:"disk_total_bytes"`
 	DiskUsedBytes         uint64                `json:"disk_used_bytes"`
 	DiskReadBytesPerSec   uint64                `json:"disk_read_bytes_per_sec"`
@@ -39,62 +39,58 @@ type MetricDataPoint struct {
 	SensorReadings        models.SensorReadings `json:"sensor_readings,omitempty"`
 }
 
-// aggregatedMetricRow is used to scan continuous aggregate query results.
-// It intentionally omits SensorReadings to avoid GORM errors on missing JSONB columns.
+// aggregatedMetricRow scans continuous aggregate query results.
+// SensorReadings is intentionally omitted — JSONB columns are absent from aggregate views.
 type aggregatedMetricRow struct {
-	Timestamp            time.Time `gorm:"column:timestamp"`
-	CPUUsagePercent      float64   `gorm:"column:cpu_usage_percent"`
-	MemoryTotalBytes     uint64    `gorm:"column:memory_total_bytes"`
-	MemoryUsedBytes      uint64    `gorm:"column:memory_used_bytes"`
-	MemoryAvailableBytes uint64    `gorm:"column:memory_available_bytes"`
-	LoadAvg1Min          float64   `gorm:"column:load_avg_1min"`
-	LoadAvg5Min          float64   `gorm:"column:load_avg_5min"`
-	LoadAvg15Min         float64   `gorm:"column:load_avg_15min"`
-	DiskTotalBytes        uint64   `gorm:"column:disk_total_bytes"`
-	DiskUsedBytes         uint64   `gorm:"column:disk_used_bytes"`
-	DiskReadBytesPerSec   uint64   `gorm:"column:disk_read_bytes_per_sec"`
-	DiskWriteBytesPerSec  uint64   `gorm:"column:disk_write_bytes_per_sec"`
-	NetworkRxBytesPerSec  uint64   `gorm:"column:network_rx_bytes_per_sec"`
-	NetworkTxBytesPerSec  uint64   `gorm:"column:network_tx_bytes_per_sec"`
-	CPUTemperatureCelsius float64  `gorm:"column:cpu_temperature_celsius"`
-	UptimeSeconds         uint64   `gorm:"column:uptime_seconds"`
+	Timestamp             time.Time `gorm:"column:timestamp"`
+	CPUUsagePercent       float64   `gorm:"column:cpu_usage_percent"`
+	MemoryTotalBytes      uint64    `gorm:"column:memory_total_bytes"`
+	MemoryUsedBytes       uint64    `gorm:"column:memory_used_bytes"`
+	MemoryAvailableBytes  uint64    `gorm:"column:memory_available_bytes"`
+	LoadAvg1Min           float64   `gorm:"column:load_avg_1min"`
+	LoadAvg5Min           float64   `gorm:"column:load_avg_5min"`
+	LoadAvg15Min          float64   `gorm:"column:load_avg_15min"`
+	DiskTotalBytes        uint64    `gorm:"column:disk_total_bytes"`
+	DiskUsedBytes         uint64    `gorm:"column:disk_used_bytes"`
+	DiskReadBytesPerSec   uint64    `gorm:"column:disk_read_bytes_per_sec"`
+	DiskWriteBytesPerSec  uint64    `gorm:"column:disk_write_bytes_per_sec"`
+	NetworkRxBytesPerSec  uint64    `gorm:"column:network_rx_bytes_per_sec"`
+	NetworkTxBytesPerSec  uint64    `gorm:"column:network_tx_bytes_per_sec"`
+	CPUTemperatureCelsius float64   `gorm:"column:cpu_temperature_celsius"`
+	UptimeSeconds         uint64    `gorm:"column:uptime_seconds"`
 }
 
-// GetMetrics retrieves metrics for a server with optional time range and aggregation
+// GetMetrics retrieves metrics for a server. When Interval is empty, raw data is
+// returned; otherwise the appropriate continuous aggregate view is used.
 func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
-	// Verify server exists
 	var server models.Server
 	if err := database.DB.Where("id = ?", params.ServerID).First(&server).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("server not found")
+			return nil, ErrServerNotFound
 		}
 		return nil, err
 	}
 
-	var results []MetricDataPoint
-
-	// If no interval specified, return raw data
 	if params.Interval == "" {
 		var metrics []models.Metric
-		query := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
+		if err := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
 			params.ServerID, params.Start, params.End).
-			Order("timestamp ASC")
-
-		if err := query.Find(&metrics).Error; err != nil {
+			Order("timestamp ASC").
+			Find(&metrics).Error; err != nil {
 			return nil, err
 		}
 
-		// Convert to response format
-		for _, m := range metrics {
-			results = append(results, MetricDataPoint{
-				Timestamp:            m.Timestamp,
-				CPUUsagePercent:      m.CPUUsagePercent,
-				MemoryTotalBytes:     m.MemoryTotalBytes,
-				MemoryUsedBytes:      m.MemoryUsedBytes,
-				MemoryAvailableBytes: m.MemoryAvailableBytes,
-				LoadAvg1Min:          m.LoadAvg1Min,
-				LoadAvg5Min:          m.LoadAvg5Min,
-				LoadAvg15Min:         m.LoadAvg15Min,
+		results := make([]MetricDataPoint, len(metrics))
+		for i, m := range metrics {
+			results[i] = MetricDataPoint{
+				Timestamp:             m.Timestamp,
+				CPUUsagePercent:       m.CPUUsagePercent,
+				MemoryTotalBytes:      m.MemoryTotalBytes,
+				MemoryUsedBytes:       m.MemoryUsedBytes,
+				MemoryAvailableBytes:  m.MemoryAvailableBytes,
+				LoadAvg1Min:           m.LoadAvg1Min,
+				LoadAvg5Min:           m.LoadAvg5Min,
+				LoadAvg15Min:          m.LoadAvg15Min,
 				DiskTotalBytes:        m.DiskTotalBytes,
 				DiskUsedBytes:         m.DiskUsedBytes,
 				DiskReadBytesPerSec:   m.DiskReadBytesPerSec,
@@ -104,19 +100,18 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 				CPUTemperatureCelsius: m.CPUTemperatureCelsius,
 				UptimeSeconds:         m.UptimeSeconds,
 				SensorReadings:        m.SensorReadings,
-			})
+			}
 		}
-
 		return results, nil
 	}
 
-	// Use pre-calculated continuous aggregates for better performance
+	// Use pre-calculated continuous aggregates for better performance.
 	tableName, err := getContinuousAggregateTable(params.Interval)
 	if err != nil {
 		return nil, err
 	}
 
-	// Query from the appropriate continuous aggregate view
+	// tableName comes from a whitelist map — no SQL injection risk.
 	query := fmt.Sprintf(`
 		SELECT
 			bucket AS timestamp,
@@ -146,16 +141,17 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 		return nil, err
 	}
 
-	for _, r := range rows {
-		results = append(results, MetricDataPoint{
-			Timestamp:            r.Timestamp,
-			CPUUsagePercent:      r.CPUUsagePercent,
-			MemoryTotalBytes:     r.MemoryTotalBytes,
-			MemoryUsedBytes:      r.MemoryUsedBytes,
-			MemoryAvailableBytes: r.MemoryAvailableBytes,
-			LoadAvg1Min:          r.LoadAvg1Min,
-			LoadAvg5Min:          r.LoadAvg5Min,
-			LoadAvg15Min:         r.LoadAvg15Min,
+	results := make([]MetricDataPoint, len(rows))
+	for i, r := range rows {
+		results[i] = MetricDataPoint{
+			Timestamp:             r.Timestamp,
+			CPUUsagePercent:       r.CPUUsagePercent,
+			MemoryTotalBytes:      r.MemoryTotalBytes,
+			MemoryUsedBytes:       r.MemoryUsedBytes,
+			MemoryAvailableBytes:  r.MemoryAvailableBytes,
+			LoadAvg1Min:           r.LoadAvg1Min,
+			LoadAvg5Min:           r.LoadAvg5Min,
+			LoadAvg15Min:          r.LoadAvg15Min,
 			DiskTotalBytes:        r.DiskTotalBytes,
 			DiskUsedBytes:         r.DiskUsedBytes,
 			DiskReadBytesPerSec:   r.DiskReadBytesPerSec,
@@ -164,24 +160,22 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 			NetworkTxBytesPerSec:  r.NetworkTxBytesPerSec,
 			CPUTemperatureCelsius: r.CPUTemperatureCelsius,
 			UptimeSeconds:         r.UptimeSeconds,
-		})
+		}
 	}
 
 	return results, nil
 }
 
-// GetContainerMetrics retrieves container metrics for a server within a time range
+// GetContainerMetrics retrieves container metrics for a server within a time range.
 func GetContainerMetrics(serverID string, start, end time.Time, interval string) ([]models.ContainerMetric, error) {
-	// Verify server exists
 	var server models.Server
 	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("server not found")
+			return nil, ErrServerNotFound
 		}
 		return nil, err
 	}
 
-	// Raw data for 1h view
 	if interval == "" {
 		var metrics []models.ContainerMetric
 		if err := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
@@ -193,7 +187,7 @@ func GetContainerMetrics(serverID string, start, end time.Time, interval string)
 		return metrics, nil
 	}
 
-	// Use continuous aggregates for longer time ranges
+	// Use continuous aggregates for longer time ranges.
 	tableName, err := getContainerAggregateTable(interval)
 	if err != nil {
 		return nil, err
@@ -224,37 +218,30 @@ func GetContainerMetrics(serverID string, start, end time.Time, interval string)
 	return metrics, nil
 }
 
-// getContinuousAggregateTable returns the appropriate continuous aggregate table for the given interval
 func getContinuousAggregateTable(interval string) (string, error) {
-	aggregateTables := map[string]string{
-		"10m": "metrics_10min", // Vue 12h
-		"15m": "metrics_15min", // Vue 24h
-		"2h":  "metrics_2h",    // Vue 7j
-		"8h":  "metrics_8h",    // Vue 30j
+	tables := map[string]string{
+		"10m": "metrics_10min",
+		"15m": "metrics_15min",
+		"2h":  "metrics_2h",
+		"8h":  "metrics_8h",
 	}
-
-	tableName, ok := aggregateTables[interval]
+	name, ok := tables[interval]
 	if !ok {
-		return "", fmt.Errorf("invalid interval: %s. Valid intervals: 10m, 15m, 2h, 8h", interval)
+		return "", fmt.Errorf("invalid interval: %s (valid: 10m, 15m, 2h, 8h)", interval)
 	}
-
-	return tableName, nil
+	return name, nil
 }
 
-// getContainerAggregateTable returns the appropriate container continuous aggregate table
 func getContainerAggregateTable(interval string) (string, error) {
-	aggregateTables := map[string]string{
+	tables := map[string]string{
 		"10m": "container_metrics_10min",
 		"15m": "container_metrics_15min",
 		"2h":  "container_metrics_2h",
 		"8h":  "container_metrics_8h",
 	}
-
-	tableName, ok := aggregateTables[interval]
+	name, ok := tables[interval]
 	if !ok {
-		return "", fmt.Errorf("invalid interval: %s. Valid intervals: 10m, 15m, 2h, 8h", interval)
+		return "", fmt.Errorf("invalid interval: %s (valid: 10m, 15m, 2h, 8h)", interval)
 	}
-
-	return tableName, nil
+	return name, nil
 }
-

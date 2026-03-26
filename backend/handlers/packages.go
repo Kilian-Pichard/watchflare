@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -8,52 +10,10 @@ import (
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 
+	"gorm.io/gorm"
+
 	"github.com/gin-gonic/gin"
 )
-
-// PackageResponse represents a package with additional metadata
-type PackageResponse struct {
-	ID             int64     `json:"id"`
-	ServerID       string    `json:"server_id"`
-	Name           string    `json:"name"`
-	Version        string    `json:"version"`
-	Architecture   string    `json:"architecture"`
-	PackageManager string    `json:"package_manager"`
-	Source         string    `json:"source"`
-	InstalledAt    *time.Time `json:"installed_at"`
-	PackageSize    int64     `json:"package_size"`
-	Description    string    `json:"description"`
-	FirstSeen      time.Time `json:"first_seen"`
-	LastSeen       time.Time `json:"last_seen"`
-}
-
-// PackageHistoryResponse represents a package history record
-type PackageHistoryResponse struct {
-	ID             int64     `json:"id"`
-	Timestamp      time.Time `json:"timestamp"`
-	ServerID       string    `json:"server_id"`
-	Name           string    `json:"name"`
-	Version        string    `json:"version"`
-	Architecture   string    `json:"architecture"`
-	PackageManager string    `json:"package_manager"`
-	Source         string    `json:"source"`
-	PackageSize    int64     `json:"package_size"`
-	Description    string    `json:"description"`
-	ChangeType     string    `json:"change_type"`
-}
-
-// PackageCollectionResponse represents collection metadata
-type PackageCollectionResponse struct {
-	ID             int64     `json:"id"`
-	ServerID       string    `json:"server_id"`
-	Timestamp      time.Time `json:"timestamp"`
-	CollectionType string    `json:"collection_type"`
-	PackageCount   int       `json:"package_count"`
-	ChangesCount   int       `json:"changes_count"`
-	DurationMs     int       `json:"duration_ms"`
-	Status         string    `json:"status"`
-	ErrorMessage   string    `json:"error_message"`
-}
 
 // GetServerPackages returns current packages for a server
 // GET /api/servers/:id/packages
@@ -68,6 +28,12 @@ func GetServerPackages(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
+	if limit <= 0 || limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	// Build query
 	query := database.DB.Where("server_id = ?", serverID)
@@ -84,38 +50,19 @@ func GetServerPackages(c *gin.Context) {
 	// Get total count
 	var totalCount int64
 	if err := query.Model(&models.Package{}).Count(&totalCount).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count packages"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count packages"})
 		return
 	}
 
 	// Get packages
 	var packages []models.Package
 	if err := query.Order("name ASC").Limit(limit).Offset(offset).Find(&packages).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch packages"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch packages"})
 		return
 	}
 
-	// Convert to response format
-	response := make([]PackageResponse, len(packages))
-	for i, pkg := range packages {
-		response[i] = PackageResponse{
-			ID:             pkg.ID,
-			ServerID:       pkg.ServerID,
-			Name:           pkg.Name,
-			Version:        pkg.Version,
-			Architecture:   pkg.Architecture,
-			PackageManager: pkg.PackageManager,
-			Source:         pkg.Source,
-			InstalledAt:    pkg.InstalledAt,
-			PackageSize:    pkg.PackageSize,
-			Description:    pkg.Description,
-			FirstSeen:      pkg.FirstSeen,
-			LastSeen:       pkg.LastSeen,
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"packages":    response,
+		"packages":    packages,
 		"total_count": totalCount,
 		"limit":       limit,
 		"offset":      offset,
@@ -138,6 +85,22 @@ func GetServerPackageHistory(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
+	if limit <= 0 || limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Validate change_type if provided
+	if changeType != "" &&
+		changeType != models.ChangeTypeAdded &&
+		changeType != models.ChangeTypeRemoved &&
+		changeType != models.ChangeTypeUpdated &&
+		changeType != models.ChangeTypeInitial {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid change_type, valid values: added, removed, updated, initial"})
+		return
+	}
 
 	// Build query
 	query := database.DB.Where("server_id = ?", serverID)
@@ -145,7 +108,7 @@ func GetServerPackageHistory(c *gin.Context) {
 	if changeType != "" {
 		query = query.Where("change_type = ?", changeType)
 	} else if excludeInitial {
-		query = query.Where("change_type != ?", "initial")
+		query = query.Where("change_type != ?", models.ChangeTypeInitial)
 	}
 
 	if packageName != "" {
@@ -167,37 +130,19 @@ func GetServerPackageHistory(c *gin.Context) {
 	// Get total count
 	var totalCount int64
 	if err := query.Model(&models.PackageHistory{}).Count(&totalCount).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count history records"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count history records"})
 		return
 	}
 
 	// Get history
 	var history []models.PackageHistory
 	if err := query.Order("timestamp DESC").Limit(limit).Offset(offset).Find(&history).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch history"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch history"})
 		return
 	}
 
-	// Convert to response format
-	response := make([]PackageHistoryResponse, len(history))
-	for i, h := range history {
-		response[i] = PackageHistoryResponse{
-			ID:             h.ID,
-			Timestamp:      h.Timestamp,
-			ServerID:       h.ServerID,
-			Name:           h.Name,
-			Version:        h.Version,
-			Architecture:   h.Architecture,
-			PackageManager: h.PackageManager,
-			Source:         h.Source,
-			PackageSize:    h.PackageSize,
-			Description:    h.Description,
-			ChangeType:     h.ChangeType,
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"history":     response,
+		"history":     history,
 		"total_count": totalCount,
 		"limit":       limit,
 		"offset":      offset,
@@ -213,14 +158,20 @@ func GetServerPackageCollections(c *gin.Context) {
 	offsetStr := c.DefaultQuery("offset", "0")
 
 	limit, _ := strconv.Atoi(limitStr)
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
 	offset, _ := strconv.Atoi(offsetStr)
+	if offset < 0 {
+		offset = 0
+	}
 
 	// Get total count
 	var totalCount int64
 	if err := database.DB.Model(&models.PackageCollection{}).
 		Where("server_id = ?", serverID).
 		Count(&totalCount).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count collections"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count collections"})
 		return
 	}
 
@@ -231,28 +182,12 @@ func GetServerPackageCollections(c *gin.Context) {
 		Limit(limit).
 		Offset(offset).
 		Find(&collections).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch collections"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch collections"})
 		return
 	}
 
-	// Convert to response format
-	response := make([]PackageCollectionResponse, len(collections))
-	for i, col := range collections {
-		response[i] = PackageCollectionResponse{
-			ID:             col.ID,
-			ServerID:       col.ServerID,
-			Timestamp:      col.Timestamp,
-			CollectionType: col.CollectionType,
-			PackageCount:   col.PackageCount,
-			ChangesCount:   col.ChangesCount,
-			DurationMs:     col.DurationMs,
-			Status:         col.Status,
-			ErrorMessage:   col.ErrorMessage,
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"collections": response,
+		"collections": collections,
 		"total_count": totalCount,
 		"limit":       limit,
 		"offset":      offset,
@@ -275,14 +210,14 @@ func GetPackageStats(c *gin.Context) {
 		Where("server_id = ?", serverID).
 		Group("package_manager").
 		Scan(&managerStats).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch stats"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch stats"})
 		return
 	}
 
 	// Total packages
 	var totalPackages int64
 	if err := database.DB.Model(&models.Package{}).Where("server_id = ?", serverID).Count(&totalPackages).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count packages"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count packages"})
 		return
 	}
 
@@ -290,17 +225,17 @@ func GetPackageStats(c *gin.Context) {
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
 	var recentChanges int64
 	if err := database.DB.Model(&models.PackageHistory{}).
-		Where("server_id = ? AND timestamp >= ? AND change_type != 'initial'", serverID, thirtyDaysAgo).
+		Where("server_id = ? AND timestamp >= ? AND change_type != ?", serverID, thirtyDaysAgo, models.ChangeTypeInitial).
 		Count(&recentChanges).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count recent changes"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count recent changes"})
 		return
 	}
 
-	// Last collection
+	// Last collection (zero value is fine if none exists yet)
 	var lastCollection models.PackageCollection
-	database.DB.Where("server_id = ?", serverID).
-		Order("timestamp DESC").
-		First(&lastCollection) // Ignore ErrRecordNotFound — zero value is fine
+	if err := database.DB.Where("server_id = ?", serverID).Order("timestamp DESC").First(&lastCollection).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		slog.Warn("failed to fetch last collection", "server_id", serverID, "error", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"total_packages":     totalPackages,

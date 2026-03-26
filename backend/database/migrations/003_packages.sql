@@ -1,7 +1,9 @@
--- Migration: Package Inventory Tables
--- Description: Creates tables for package inventory collection and history
--- Author: Watchflare
--- Date: 2024-12-22
+-- +goose NO TRANSACTION
+-- Required: TimescaleDB DDL (CREATE MATERIALIZED VIEW, create_hypertable, etc.) cannot run inside a transaction
+
+-- +goose Up
+-- Migration 003: Package Inventory Tables
+-- Creates tables for package inventory collection and history
 
 -- =====================================================
 -- Current Package State (one row per package per server)
@@ -31,10 +33,10 @@ CREATE TABLE IF NOT EXISTS packages (
 );
 
 -- Indexes for fast queries
-CREATE INDEX idx_packages_server ON packages(server_id);
-CREATE INDEX idx_packages_name ON packages(name);
-CREATE INDEX idx_packages_name_version ON packages(name, version);
-CREATE INDEX idx_packages_last_seen ON packages(last_seen DESC);
+CREATE INDEX IF NOT EXISTS idx_packages_server ON packages(server_id);
+CREATE INDEX IF NOT EXISTS idx_packages_name ON packages(name);
+CREATE INDEX IF NOT EXISTS idx_packages_name_version ON packages(name, version);
+CREATE INDEX IF NOT EXISTS idx_packages_last_seen ON packages(last_seen DESC);
 
 -- =====================================================
 -- Package History (TimescaleDB Hypertable - snapshots)
@@ -54,7 +56,7 @@ CREATE TABLE IF NOT EXISTS package_history (
     description VARCHAR(100),
 
     -- Change type
-    change_type VARCHAR(20) NOT NULL, -- 'added', 'removed', 'updated', 'initial'
+    change_type VARCHAR(20) NOT NULL CHECK (change_type IN ('added', 'removed', 'updated', 'initial')),
 
     PRIMARY KEY (id, timestamp)
 );
@@ -75,8 +77,8 @@ ALTER TABLE package_history SET (
 SELECT add_compression_policy('package_history', INTERVAL '7 days', if_not_exists => TRUE);
 
 -- Indexes for historical queries
-CREATE INDEX idx_package_history_server_time ON package_history(server_id, timestamp DESC);
-CREATE INDEX idx_package_history_name ON package_history(name, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_package_history_server_time ON package_history(server_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_package_history_name ON package_history(name, timestamp DESC);
 
 -- =====================================================
 -- Package Collection Metadata (tracking collection jobs)
@@ -87,14 +89,17 @@ CREATE TABLE IF NOT EXISTS package_collections (
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Collection details
-    collection_type VARCHAR(20) NOT NULL, -- 'full', 'delta', 'initial'
+    collection_type VARCHAR(20) NOT NULL CHECK (collection_type IN ('full', 'delta', 'initial')),
     package_count INTEGER NOT NULL,
     changes_count INTEGER DEFAULT 0,     -- Number of changes detected
     duration_ms INTEGER,                 -- Collection time in milliseconds
 
     -- Status
-    status VARCHAR(20) NOT NULL DEFAULT 'success', -- 'success', 'failed', 'partial'
+    status VARCHAR(20) NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'failed', 'partial')),
     error_message TEXT
 );
 
-CREATE INDEX idx_package_collections_server_time ON package_collections(server_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_package_collections_server_time ON package_collections(server_id, timestamp DESC);
+
+-- +goose Down
+-- Not reversible without data loss

@@ -1,3 +1,7 @@
+-- +goose NO TRANSACTION
+-- Required: TimescaleDB DDL (CREATE MATERIALIZED VIEW, create_hypertable, etc.) cannot run inside a transaction
+
+-- +goose Up
 -- =====================================================
 -- Migration 008: Continuous aggregates for container metrics
 -- Same bucket pattern as system metrics (10min, 15min, 2h, 8h)
@@ -141,4 +145,7 @@ CREATE INDEX IF NOT EXISTS idx_container_metrics_8h_server_bucket
 CALL refresh_continuous_aggregate('container_metrics_10min', NULL, NULL);
 CALL refresh_continuous_aggregate('container_metrics_15min', NULL, NULL);
 CALL refresh_continuous_aggregate('container_metrics_2h', NULL, NULL);
-CALL refresh_continuous_aggregate('container_metrics_8h', NULL, NULL)
+CALL refresh_continuous_aggregate('container_metrics_8h', NULL, NULL);
+
+-- +goose Down
+-- Not reversible without data loss

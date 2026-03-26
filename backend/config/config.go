@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -10,10 +11,10 @@ import (
 )
 
 type Config struct {
-	Port         string
-	GRPCPort     string
-	DBPath       string
-	JWTSecret    string
+	Port        string
+	GRPCPort    string
+	DatabaseURL string
+	JWTSecret   string
 	CORSOrigins  []string
 	Environment  string
 	CookieDomain string // Domain for JWT cookie (empty = localhost, set in production)
@@ -39,10 +40,17 @@ func Load() {
 	_ = godotenv.Load()
 
 	AppConfig = &Config{
-		Port:         "8080",
-		GRPCPort:     getEnv("GRPC_PORT", "50051"),
-		DBPath:       getEnv("DB_PATH", "./watchflare.db"),
-		JWTSecret:    getEnv("JWT_SECRET", ""),
+		Port:     getEnv("DEFAULT_PORT", "8080"),
+		GRPCPort: getEnv("GRPC_PORT", "50051"),
+		DatabaseURL: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			getEnv("POSTGRES_HOST", "localhost"),
+			getEnv("POSTGRES_PORT", "5432"),
+			getEnv("POSTGRES_USER", "watchflare"),
+			getEnv("POSTGRES_PASSWORD", "watchflare_dev"),
+			getEnv("POSTGRES_DB", "watchflare"),
+			getEnv("POSTGRES_SSLMODE", "disable"),
+		),
+		JWTSecret: getEnv("JWT_SECRET", ""),
 		CORSOrigins:  parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
 		Environment:  getEnv("ENV", "development"),
 		CookieDomain: getEnv("COOKIE_DOMAIN", ""), // Empty for dev (localhost), set in production
@@ -109,18 +117,6 @@ func parseOrigins(originsStr string) []string {
 		origins[i] = strings.TrimSpace(origin)
 	}
 	return origins
-}
-
-func getBoolEnv(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		boolVal, err := strconv.ParseBool(value)
-		if err != nil {
-			slog.Warn("invalid boolean env var, using default", "key", key, "default", defaultValue)
-			return defaultValue
-		}
-		return boolVal
-	}
-	return defaultValue
 }
 
 func getIntEnv(key string, defaultValue int) int {

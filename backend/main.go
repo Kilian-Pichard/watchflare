@@ -35,7 +35,7 @@ func main() {
 	config.Load()
 
 	// Connect to database
-	if err := database.Connect(); err != nil {
+	if err := database.Connect(config.AppConfig.DatabaseURL); err != nil {
 		logger.Fatal("failed to connect to database", "error", err)
 	}
 
@@ -198,13 +198,18 @@ func setupRouter() *gin.Engine {
 	serverGroup := api.Group("/servers")
 	serverGroup.Use(middleware.AuthMiddleware())
 	{
+		// Collection routes (no :id param)
 		serverGroup.POST("", handlers.CreateAgent)
 		serverGroup.GET("", handlers.ListServers)
+		serverGroup.GET("/events", handlers.ServerEvents)
+		serverGroup.GET("/dropped-metrics", handlers.GetDroppedMetrics)
+		serverGroup.GET("/metrics/aggregated", handlers.GetAggregatedMetrics)
+
+		// Per-server routes
 		serverGroup.GET("/:id", handlers.GetServer)
 		serverGroup.GET("/:id/metrics", handlers.GetMetrics)
 		serverGroup.GET("/:id/sensor-readings", handlers.GetSensorReadings)
 		serverGroup.GET("/:id/container-metrics", handlers.GetContainerMetrics)
-		serverGroup.GET("/metrics/aggregated", handlers.GetAggregatedMetrics)
 		serverGroup.PUT("/:id/validate-ip", handlers.ValidateIP)
 		serverGroup.PUT("/:id/rename", handlers.RenameServer)
 		serverGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
@@ -214,10 +219,6 @@ func setupRouter() *gin.Engine {
 		serverGroup.PUT("/:id/resume", handlers.ResumeServer)
 		serverGroup.POST("/:id/regenerate-token", handlers.RegenerateToken)
 		serverGroup.DELETE("/:id", handlers.DeleteServer)
-		serverGroup.GET("/events", handlers.ServerEvents)
-		serverGroup.GET("/dropped-metrics", handlers.GetDroppedMetrics)
-
-		// Package inventory routes
 		serverGroup.GET("/:id/packages", handlers.GetServerPackages)
 		serverGroup.GET("/:id/packages/history", handlers.GetServerPackageHistory)
 		serverGroup.GET("/:id/packages/collections", handlers.GetServerPackageCollections)

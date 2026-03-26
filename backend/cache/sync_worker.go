@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// SyncWorker periodically syncs heartbeat cache to database
+// SyncWorker periodically flushes updated heartbeat entries to the database.
 type SyncWorker struct {
 	cache    *HeartbeatCache
 	interval time.Duration
@@ -20,7 +21,6 @@ type SyncWorker struct {
 	cancel   context.CancelFunc
 }
 
-// NewSyncWorker creates a new sync worker
 func NewSyncWorker(interval time.Duration) *SyncWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &SyncWorker{
@@ -31,7 +31,7 @@ func NewSyncWorker(interval time.Duration) *SyncWorker {
 	}
 }
 
-// Start begins the sync worker
+// Start runs the sync loop. Call in a goroutine.
 func (w *SyncWorker) Start() {
 	slog.Info("heartbeat sync worker started", "interval", w.interval)
 	ticker := time.NewTicker(w.interval)
@@ -41,7 +41,6 @@ func (w *SyncWorker) Start() {
 		select {
 		case <-ticker.C:
 			w.syncToDatabase()
-
 		case <-w.ctx.Done():
 			slog.Info("heartbeat sync worker stopped")
 			return
@@ -49,26 +48,23 @@ func (w *SyncWorker) Start() {
 	}
 }
 
-// Stop stops the sync worker
 func (w *SyncWorker) Stop() {
 	w.cancel()
 }
 
-// syncToDatabase writes updated heartbeat data to the database
 func (w *SyncWorker) syncToDatabase() {
 	allData := w.cache.GetAll()
 	syncCount := 0
 
 	for _, data := range allData {
 		if !data.Updated {
-			continue // Skip if not updated since last sync
+			continue
 		}
 
-		// Update database
 		var server models.Server
 		result := database.DB.Where("agent_id = ?", data.AgentID).First(&server)
 		if result.Error != nil {
-			if result.Error == gorm.ErrRecordNotFound {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 				slog.Warn("agent not found in database, skipping sync", "agent_id", data.AgentID)
 			} else {
 				slog.Error("failed to query agent", "agent_id", data.AgentID, "error", result.Error)
@@ -76,7 +72,6 @@ func (w *SyncWorker) syncToDatabase() {
 			continue
 		}
 
-		// Update server status and IP addresses
 		updates := map[string]interface{}{
 			"last_seen":     data.LastSeen,
 			"status":        data.Status,
@@ -89,7 +84,6 @@ func (w *SyncWorker) syncToDatabase() {
 			continue
 		}
 
-		// Mark as synced
 		w.cache.MarkSynced(data.AgentID)
 		syncCount++
 	}
@@ -99,16 +93,16 @@ func (w *SyncWorker) syncToDatabase() {
 	}
 }
 
-// StaleChecker periodically checks for stale agents and marks them as offline
+// StaleChecker periodically transitions agents to offline when no heartbeat is received
+// within the configured timeout.
 type StaleChecker struct {
 	cache    *HeartbeatCache
 	interval time.Duration
-	timeout  time.Duration // How long before an agent is considered offline
+	timeout  time.Duration // duration without heartbeat before an agent is marked offline
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
-// NewStaleChecker creates a new stale checker
 func NewStaleChecker(interval, timeout time.Duration) *StaleChecker {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &StaleChecker{
@@ -120,7 +114,7 @@ func NewStaleChecker(interval, timeout time.Duration) *StaleChecker {
 	}
 }
 
-// Start begins the stale checker
+// Start runs the stale-check loop. Call in a goroutine.
 func (c *StaleChecker) Start() {
 	slog.Info("heartbeat stale checker started", "interval", c.interval, "timeout", c.timeout)
 	ticker := time.NewTicker(c.interval)
@@ -130,7 +124,6 @@ func (c *StaleChecker) Start() {
 		select {
 		case <-ticker.C:
 			c.checkStaleAgents()
-
 		case <-c.ctx.Done():
 			slog.Info("heartbeat stale checker stopped")
 			return
@@ -138,12 +131,10 @@ func (c *StaleChecker) Start() {
 	}
 }
 
-// Stop stops the stale checker
 func (c *StaleChecker) Stop() {
 	c.cancel()
 }
 
-// checkStaleAgents marks agents as offline if they haven't sent a heartbeat recently
 func (c *StaleChecker) checkStaleAgents() {
 	staleAgents := c.cache.CheckStale(c.timeout)
 
@@ -151,31 +142,26 @@ func (c *StaleChecker) checkStaleAgents() {
 		return
 	}
 
-	// For each stale agent, broadcast SSE update and log
 	for _, agentID := range staleAgents {
-		// Get server details for SSE broadcast
 		var server models.Server
-		result := database.DB.Where("agent_id = ?", agentID).First(&server)
-		if result.Error != nil {
+		if err := database.DB.Where("agent_id = ?", agentID).First(&server).Error; err != nil {
 			slog.Warn("stale agent not found in database", "agent_id", agentID)
 			continue
 		}
 
-		// Get cached data
 		data, ok := c.cache.Get(agentID)
 		if !ok {
 			continue
 		}
 
-		// Broadcast offline status to SSE
-		broker := sse.GetBroker()
 		configuredIP := ""
 		if server.ConfiguredIP != nil {
 			configuredIP = *server.ConfiguredIP
 		}
-		broker.BroadcastServerUpdate(sse.ServerUpdate{
+
+		sse.GetBroker().BroadcastServerUpdate(sse.ServerUpdate{
 			ID:               server.ID,
-			Status:           "offline",
+			Status:           models.StatusOffline,
 			IPv4Address:      data.IPv4Address,
 			IPv6Address:      data.IPv6Address,
 			ConfiguredIP:     configuredIP,

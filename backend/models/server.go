@@ -7,23 +7,32 @@ import (
 	"gorm.io/gorm"
 )
 
+// Server status values.
+const (
+	StatusPending = "pending"
+	StatusOnline  = "online"
+	StatusOffline = "offline"
+	StatusPaused  = "paused"
+	StatusExpired = "expired"
+)
+
 type Server struct {
 	ID        string `gorm:"type:char(36);primarykey" json:"id"`
 	AgentID   string `gorm:"unique;not null" json:"agent_id"`
 	AgentKey  string `gorm:"not null" json:"-"` // AES-256 key, hidden in JSON
 
-	// Infos saisies lors de la création (admin)
+	// Set at creation time (admin)
 	Name                   string  `gorm:"not null" json:"name"`
-	ConfiguredIP           *string `json:"configured_ip"`           // Nullable
-	PreviousConfiguredIP   *string `json:"previous_configured_ip"` // Ancienne IP configurée
+	ConfiguredIP           *string `json:"configured_ip"`
+	PreviousConfiguredIP   *string `json:"previous_configured_ip"`
 	AllowAnyIPRegistration bool    `gorm:"default:false" json:"allow_any_ip_registration"`
-	IgnoreIPMismatch       bool    `gorm:"default:false" json:"ignore_ip_mismatch"` // L'utilisateur a choisi d'ignorer l'alerte
+	IgnoreIPMismatch       bool    `gorm:"default:false" json:"ignore_ip_mismatch"`
 
-	// Token d'enregistrement
-	RegistrationToken *string    `json:"-"` // Hashé, NULL après enregistrement
-	ExpiresAt         *time.Time `json:"expires_at"` // NULL après enregistrement réussi
+	// Registration token
+	RegistrationToken *string    `json:"-"` // hashed, NULL after registration
+	ExpiresAt         *time.Time `json:"expires_at"` // NULL after successful registration
 
-	// Infos remontées par l'agent (NULL si pas encore installé)
+	// Populated by the agent (NULL until first connection)
 	AgentVersion    *string `json:"agent_version"`
 	Hostname        *string `json:"hostname"`
 	IPAddressV4     *string `json:"ip_address_v4"`
@@ -40,7 +49,7 @@ type Server struct {
 
 	// Statut du serveur
 	// Valeurs: "pending", "online", "offline", "paused", "expired"
-	Status string `gorm:"default:pending" json:"status"`
+	Status string `gorm:"not null;default:pending;index:idx_servers_status" json:"status"`
 
 	// Timestamp when agent was reactivated (via UUID reuse)
 	// NULL if never reactivated or badge was dismissed

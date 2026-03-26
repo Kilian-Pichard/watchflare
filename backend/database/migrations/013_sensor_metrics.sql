@@ -1,3 +1,7 @@
+-- +goose NO TRANSACTION
+-- Required: TimescaleDB DDL (CREATE MATERIALIZED VIEW, create_hypertable, etc.) cannot run inside a transaction
+
+-- +goose Up
 -- =====================================================
 -- Migration 013: Sensor Metrics Table
 -- Normalized hypertable for per-sensor temperature data.
@@ -6,7 +10,7 @@
 
 CREATE TABLE IF NOT EXISTS sensor_metrics (
     time        TIMESTAMPTZ NOT NULL,
-    server_id   VARCHAR(36) NOT NULL,
+    server_id   CHAR(36) NOT NULL,
     sensor_key  TEXT NOT NULL,
     temperature DOUBLE PRECISION NOT NULL
 );
@@ -24,3 +28,6 @@ ALTER TABLE sensor_metrics SET (
 SELECT add_compression_policy('sensor_metrics', INTERVAL '1 day', if_not_exists => TRUE);
 
 CREATE INDEX IF NOT EXISTS idx_sensor_metrics_server_time ON sensor_metrics (server_id, time DESC);
+
+-- +goose Down
+-- Not reversible without data loss

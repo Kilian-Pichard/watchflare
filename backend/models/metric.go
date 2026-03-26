@@ -94,7 +94,3 @@ func (m *Metric) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// TableName returns the table name for GORM
-func (Metric) TableName() string {
-	return "metrics"
-}

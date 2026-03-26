@@ -13,40 +13,34 @@ import (
 	"gorm.io/gorm"
 )
 
-// Register creates a new user (first admin only) and returns a JWT token
+// Register creates the first admin user. Returns an error if a user already exists.
 func Register(email, password, username string) (*models.User, string, error) {
-	// Check if any user already exists
 	var count int64
-	database.DB.Model(&models.User{}).Count(&count)
+	if err := database.DB.Model(&models.User{}).Count(&count).Error; err != nil {
+		return nil, "", err
+	}
 	if count > 0 {
 		return nil, "", errors.New("registration is closed - admin user already exists")
 	}
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// Fallback: derive username from email prefix if not provided
+	// Derive username from email prefix if not provided.
 	if username == "" {
 		if idx := strings.Index(email, "@"); idx > 0 {
 			username = email[:idx]
 		}
 	}
 
-	// Create user
 	user := &models.User{
 		Email:    email,
-		Password: string(hashedPassword),
 		Username: username,
 	}
-
+	if err := user.HashPassword(password); err != nil {
+		return nil, "", err
+	}
 	if err := database.DB.Create(user).Error; err != nil {
 		return nil, "", err
 	}
 
-	// Generate JWT token
 	token, err := generateJWT(user.ID)
 	if err != nil {
 		return nil, "", err
@@ -55,11 +49,9 @@ func Register(email, password, username string) (*models.User, string, error) {
 	return user, token, nil
 }
 
-// Login authenticates a user and returns a JWT token
+// Login authenticates a user and returns a JWT token.
 func Login(email, password string) (string, error) {
 	var user models.User
-
-	// Find user by email
 	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("invalid credentials")
@@ -67,25 +59,16 @@ func Login(email, password string) (string, error) {
 		return "", err
 	}
 
-	// Check password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return "", errors.New("invalid credentials")
 	}
 
-	// Generate JWT token
-	token, err := generateJWT(user.ID)
-	if err != nil {
-		return "", err
-	}
-
-	return token, nil
+	return generateJWT(user.ID)
 }
 
-// ChangePassword updates user password after verifying current password
+// ChangePassword updates a user's password after verifying the current one.
 func ChangePassword(userID string, currentPassword, newPassword string) error {
 	var user models.User
-
-	// Find user by ID
 	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("user not found")
@@ -93,33 +76,68 @@ func ChangePassword(userID string, currentPassword, newPassword string) error {
 		return err
 	}
 
-	// Verify current password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(currentPassword)); err != nil {
 		return errors.New("current password is incorrect")
 	}
 
-	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-	if err != nil {
+	if err := user.HashPassword(newPassword); err != nil {
 		return err
 	}
 
-	// Update password
-	user.Password = string(hashedPassword)
-	if err := database.DB.Save(&user).Error; err != nil {
-		return err
-	}
-
-	return nil
+	return database.DB.Save(&user).Error
 }
 
-// generateJWT creates a new JWT token for a user
+// ChangeEmail updates a user's email address.
+func ChangeEmail(userID, newEmail string) error {
+	return database.DB.Model(&models.User{}).Where("id = ?", userID).Update("email", newEmail).Error
+}
+
+// ChangeUsername updates a user's username and returns the updated user.
+func ChangeUsername(userID, username string) (*models.User, error) {
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Update("username", username).Error; err != nil {
+		return nil, err
+	}
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// IsSetupRequired returns true if no users exist yet.
+func IsSetupRequired() (bool, error) {
+	var count int64
+	if err := database.DB.Model(&models.User{}).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count == 0, nil
+}
+
+// GetUser returns the user with the given ID.
+func GetUser(userID string) (*models.User, error) {
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpdatePreferences applies a partial update to the user's preferences and returns the updated user.
+func UpdatePreferences(userID string, updates map[string]interface{}) (*models.User, error) {
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	return GetUser(userID)
+}
+
 func generateJWT(userID string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour * 24 * 7).Unix(), // 7 days expiration
+		"exp":     time.Now().Add(time.Hour * 24 * 7).Unix(),
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(config.AppConfig.JWTSecret))
 }

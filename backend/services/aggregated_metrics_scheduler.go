@@ -1,74 +1,65 @@
 package services
 
 import (
+	"context"
 	"log/slog"
 	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/sse"
 )
 
-// AggregatedMetricsScheduler handles periodic calculation and broadcasting of aggregated metrics
+// AggregatedMetricsScheduler periodically calculates and broadcasts aggregated metrics.
 type AggregatedMetricsScheduler struct {
 	interval time.Duration
-	ticker   *time.Ticker
-	stopChan chan bool
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
-// NewAggregatedMetricsScheduler creates a new scheduler with the given interval
 func NewAggregatedMetricsScheduler(interval time.Duration) *AggregatedMetricsScheduler {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &AggregatedMetricsScheduler{
 		interval: interval,
-		stopChan: make(chan bool),
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 }
 
-// Start begins the scheduler - calculates and broadcasts aggregated metrics at regular intervals
+// Start runs the scheduler. Call in a goroutine.
+// It waits for the next interval boundary plus a 2s processing delay before each run,
+// giving agents time to deliver their metrics (typically 50–500ms).
 func (s *AggregatedMetricsScheduler) Start() {
-	// Wait 2 seconds after each bucket boundary to ensure agents have sent their metrics
-	// This gives agents time to send (typically 50-500ms) while keeping latency minimal
 	const processingDelay = 2 * time.Second
 
 	slog.Info("aggregated metrics scheduler starting", "interval", s.interval, "processing_delay", processingDelay)
 
-	// Run in a loop, recalculating alignment on each iteration
 	for {
-		// Calculate delay to next interval boundary + processing delay
 		now := time.Now()
-		nextBoundary := now.Truncate(s.interval).Add(s.interval)
-		nextTick := nextBoundary.Add(processingDelay)
+		nextTick := now.Truncate(s.interval).Add(s.interval).Add(processingDelay)
 		delay := nextTick.Sub(now)
 
-		// Wait until the next aligned boundary + processing delay
 		select {
 		case <-time.After(delay):
-			// Calculate and broadcast
 			s.calculateAndBroadcast()
-		case <-s.stopChan:
+		case <-s.ctx.Done():
 			slog.Info("aggregated metrics scheduler stopped")
 			return
 		}
 	}
 }
 
-// Stop stops the scheduler
 func (s *AggregatedMetricsScheduler) Stop() {
-	s.stopChan <- true
+	s.cancel()
 }
 
-// calculateAndBroadcast calculates aggregated metrics for the last interval and broadcasts via SSE
 func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
-	// Calculate the bucket time for the interval that just completed
-	// Example: if now is 18:34:05, we calculate metrics for 18:34:00 bucket
-	// The bucket window is (18:33:30, 18:34:00]
+	// Compute the bucket that just completed.
+	// Example: if now is 18:34:05 and interval is 30s,
+	// bucket = 18:34:00, window = (18:33:30, 18:34:00].
 	now := time.Now()
 	bucketTime := now.Truncate(s.interval)
-
-	// Calculate time window for the bucket
-	// For 30s interval: if bucket is 18:34:00, window is (18:33:30, 18:34:00]
 	endTime := bucketTime
 	startTime := bucketTime.Add(-s.interval)
 
-	// Query aggregated metrics for the interval
 	query := `
 		SELECT
 			COALESCE(AVG(m.cpu_usage_percent), 0) as cpu_usage_percent,
@@ -84,31 +75,21 @@ func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
 	`
 
 	var cpuUsagePercent float64
-	var memoryTotalBytes uint64
-	var memoryUsedBytes uint64
-	var diskTotalBytes uint64
-	var diskUsedBytes uint64
+	var memoryTotalBytes, memoryUsedBytes, diskTotalBytes, diskUsedBytes uint64
 
-	err := database.DB.Raw(query, startTime, endTime).Row().Scan(
-		&cpuUsagePercent,
-		&memoryTotalBytes,
-		&memoryUsedBytes,
-		&diskTotalBytes,
-		&diskUsedBytes,
-	)
-
-	if err != nil {
+	if err := database.DB.Raw(query, startTime, endTime).Row().Scan(
+		&cpuUsagePercent, &memoryTotalBytes, &memoryUsedBytes, &diskTotalBytes, &diskUsedBytes,
+	); err != nil {
 		slog.Error("failed to calculate aggregated metrics", "error", err)
 		return
 	}
 
-	// Skip broadcasting if no data (all servers paused/offline)
+	// Skip broadcasting when all servers are paused or offline.
 	if memoryTotalBytes == 0 && diskTotalBytes == 0 && cpuUsagePercent == 0 {
 		return
 	}
 
-	// Create aggregated metrics update
-	update := sse.AggregatedMetricsUpdate{
+	sse.GetBroker().BroadcastAggregatedMetricsUpdate(sse.AggregatedMetricsUpdate{
 		Timestamp:            bucketTime.Format(time.RFC3339),
 		CPUUsagePercent:      cpuUsagePercent,
 		MemoryTotalBytes:     memoryTotalBytes,
@@ -116,9 +97,5 @@ func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
 		MemoryAvailableBytes: memoryTotalBytes - memoryUsedBytes,
 		DiskTotalBytes:       diskTotalBytes,
 		DiskUsedBytes:        diskUsedBytes,
-	}
-
-	// Broadcast via SSE
-	broker := sse.GetBroker()
-	broker.BroadcastAggregatedMetricsUpdate(update)
+	})
 }

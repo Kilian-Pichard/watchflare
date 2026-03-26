@@ -31,7 +31,7 @@ func GetSensorReadings(serverID string, start, end time.Time, interval string) (
 	var server models.Server
 	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("server not found")
+			return nil, ErrServerNotFound
 		}
 		return nil, err
 	}
@@ -42,6 +42,7 @@ func GetSensorReadings(serverID string, start, end time.Time, interval string) (
 	switch interval {
 	case "", "10m", "15m":
 		// 1h / 12h / 24h — expand JSONB from the metrics table (retained 24h)
+		// bucket comes from a fixed map — no SQL injection risk.
 		bucket := map[string]string{"": "30 seconds", "10m": "10 minutes", "15m": "15 minutes"}[interval]
 		err = database.DB.Raw(fmt.Sprintf(`
 			SELECT time_bucket('%s', timestamp) AS ts,
@@ -60,6 +61,7 @@ func GetSensorReadings(serverID string, start, end time.Time, interval string) (
 
 	case "2h", "8h":
 		// 7d / 30d — dedicated sensor_metrics hypertable
+		// bucket comes from a fixed map — no SQL injection risk.
 		bucket := map[string]string{"2h": "2 hours", "8h": "8 hours"}[interval]
 		err = database.DB.Raw(fmt.Sprintf(`
 			SELECT time_bucket('%s', time) AS ts,

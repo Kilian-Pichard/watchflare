@@ -1,8 +1,9 @@
 package pki
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -17,17 +18,13 @@ const (
 	CAValidityYears     = 10 // CA valid for 10 years
 	ServerValidityYears = 5  // Server cert valid for 5 years
 
-	// Key size
-	RSAKeySize = 4096
-
 	// Common Name
 	CommonName = "watchflare"
 )
 
 // generateCA generates a new CA certificate and private key
-func generateCA() (*x509.Certificate, *rsa.PrivateKey, error) {
-	// Generate RSA private key
-	privateKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
+func generateCA() (*x509.Certificate, *ecdsa.PrivateKey, error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate CA private key: %w", err)
 	}
@@ -71,9 +68,8 @@ func generateCA() (*x509.Certificate, *rsa.PrivateKey, error) {
 }
 
 // generateServerCert generates a server certificate signed by the CA
-func generateServerCert(caCert *x509.Certificate, caKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey, error) {
-	// Generate RSA private key
-	privateKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
+func generateServerCert(caCert *x509.Certificate, caKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate server private key: %w", err)
 	}
@@ -95,11 +91,9 @@ func generateServerCert(caCert *x509.Certificate, caKey *rsa.PrivateKey) (*x509.
 		},
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
-		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:    []string{CommonName, "localhost"},
-		// Note: IPs can be added here if needed
-		// IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames: []string{CommonName, "localhost"},
 	}
 
 	// Sign the server certificate with the CA
@@ -132,13 +126,17 @@ func saveCertificate(cert *x509.Certificate, path string) error {
 }
 
 // savePrivateKey saves a private key to a PEM file with strict permissions
-func savePrivateKey(key *rsa.PrivateKey, path string) error {
+func savePrivateKey(key *ecdsa.PrivateKey, path string) error {
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return fmt.Errorf("failed to marshal private key: %w", err)
+	}
+
 	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyDER,
 	})
 
-	// Write with strict permissions (0600)
 	if err := os.WriteFile(path, keyPEM, 0600); err != nil {
 		return fmt.Errorf("failed to write private key to %s: %w", path, err)
 	}

@@ -1,3 +1,7 @@
+-- +goose NO TRANSACTION
+-- Required: TimescaleDB DDL (CREATE MATERIALIZED VIEW, create_hypertable, etc.) cannot run inside a transaction
+
+-- +goose Up
 -- =====================================================
 -- Migration 006: Add Disk I/O, Network, Temperature metrics
 -- =====================================================
@@ -189,3 +193,6 @@ CALL refresh_continuous_aggregate('metrics_10min', NULL, NULL);
 CALL refresh_continuous_aggregate('metrics_15min', NULL, NULL);
 CALL refresh_continuous_aggregate('metrics_2h', NULL, NULL);
 CALL refresh_continuous_aggregate('metrics_8h', NULL, NULL);
+
+-- +goose Down
+-- Not reversible without data loss

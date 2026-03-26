@@ -3,23 +3,25 @@ package cache
 import (
 	"sync"
 	"time"
+
+	"watchflare/backend/models"
 )
 
-// HeartbeatData represents cached heartbeat information for an agent
+// HeartbeatData represents cached heartbeat information for an agent.
 type HeartbeatData struct {
 	AgentID      string
 	LastSeen     time.Time
-	Status       string // "online" or "offline"
+	Status       string // models.StatusOnline or models.StatusOffline
 	IPv4Address  string
 	IPv6Address  string
-	Updated      bool // Flag indicating if data has been updated since last DB sync
-	ClockDesync  bool // True if agent's clock is out of sync (timestamp rejected)
+	Updated      bool // true if changed since last DB sync
+	ClockDesync  bool // true if agent's timestamp was rejected (clock out of sync)
 }
 
-// HeartbeatCache stores heartbeat data in memory
+// HeartbeatCache is an in-memory store for agent heartbeat state.
 type HeartbeatCache struct {
 	mu    sync.RWMutex
-	cache map[string]*HeartbeatData // Key: agent_id
+	cache map[string]*HeartbeatData // key: agent_id
 }
 
 var (
@@ -27,7 +29,7 @@ var (
 	once        sync.Once
 )
 
-// GetCache returns the global heartbeat cache instance (singleton)
+// GetCache returns the global HeartbeatCache singleton.
 func GetCache() *HeartbeatCache {
 	once.Do(func() {
 		globalCache = &HeartbeatCache{
@@ -37,7 +39,6 @@ func GetCache() *HeartbeatCache {
 	return globalCache
 }
 
-// Update updates heartbeat data for an agent
 func (c *HeartbeatCache) Update(agentID, ipv4, ipv6 string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -45,19 +46,17 @@ func (c *HeartbeatCache) Update(agentID, ipv4, ipv6 string) {
 	now := time.Now()
 
 	if existing, ok := c.cache[agentID]; ok {
-		// Update existing entry
 		existing.LastSeen = now
-		existing.Status = "online"
+		existing.Status = models.StatusOnline
 		existing.IPv4Address = ipv4
 		existing.IPv6Address = ipv6
 		existing.Updated = true
 		existing.ClockDesync = false
 	} else {
-		// Create new entry
 		c.cache[agentID] = &HeartbeatData{
 			AgentID:     agentID,
 			LastSeen:    now,
-			Status:      "online",
+			Status:      models.StatusOnline,
 			IPv4Address: ipv4,
 			IPv6Address: ipv6,
 			Updated:     true,
@@ -65,7 +64,6 @@ func (c *HeartbeatCache) Update(agentID, ipv4, ipv6 string) {
 	}
 }
 
-// Get retrieves heartbeat data for an agent
 func (c *HeartbeatCache) Get(agentID string) (*HeartbeatData, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -75,7 +73,7 @@ func (c *HeartbeatCache) Get(agentID string) (*HeartbeatData, bool) {
 		return nil, false
 	}
 
-	// Return a copy to avoid race conditions
+	// Return a copy to prevent the caller from mutating cached state.
 	return &HeartbeatData{
 		AgentID:     data.AgentID,
 		LastSeen:    data.LastSeen,
@@ -87,7 +85,6 @@ func (c *HeartbeatCache) Get(agentID string) (*HeartbeatData, bool) {
 	}, true
 }
 
-// GetAll returns all cached heartbeat data
 func (c *HeartbeatCache) GetAll() []*HeartbeatData {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -107,7 +104,6 @@ func (c *HeartbeatCache) GetAll() []*HeartbeatData {
 	return result
 }
 
-// MarkSynced marks an agent's heartbeat data as synced to DB
 func (c *HeartbeatCache) MarkSynced(agentID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -117,17 +113,18 @@ func (c *HeartbeatCache) MarkSynced(agentID string) {
 	}
 }
 
-// CheckStale marks agents as offline if they haven't sent a heartbeat in >15s
+// CheckStale transitions online agents to offline if they haven't sent a heartbeat
+// within timeout. Returns the list of agent IDs that were just transitioned.
 func (c *HeartbeatCache) CheckStale(timeout time.Duration) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	now := time.Now()
-	staleAgents := []string{}
+	var staleAgents []string
 
 	for agentID, data := range c.cache {
-		if data.Status == "online" && now.Sub(data.LastSeen) > timeout {
-			data.Status = "offline"
+		if data.Status == models.StatusOnline && now.Sub(data.LastSeen) > timeout {
+			data.Status = models.StatusOffline
 			data.Updated = true
 			staleAgents = append(staleAgents, agentID)
 		}
@@ -136,7 +133,8 @@ func (c *HeartbeatCache) CheckStale(timeout time.Duration) []string {
 	return staleAgents
 }
 
-// SetClockDesync marks an agent as having clock synchronization issues
+// SetClockDesync flags an agent as having a clock out of sync.
+// If the agent is not yet in the cache (first heartbeat failed), a new entry is created.
 func (c *HeartbeatCache) SetClockDesync(agentID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -145,26 +143,24 @@ func (c *HeartbeatCache) SetClockDesync(agentID string) {
 		data.ClockDesync = true
 		data.Updated = true
 	} else {
-		// Agent not in cache yet (first heartbeat failed), create entry
 		c.cache[agentID] = &HeartbeatData{
 			AgentID:     agentID,
 			LastSeen:    time.Now(),
-			Status:      "online",
+			Status:      models.StatusOnline,
 			ClockDesync: true,
 			Updated:     true,
 		}
 	}
 }
 
-// Remove removes a specific agent from the cache
 func (c *HeartbeatCache) Remove(agentID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.cache, agentID)
 }
 
-// Clear removes all cached data (used for testing)
-func (c *HeartbeatCache) Clear() {
+// clear resets the cache. Used in tests only.
+func (c *HeartbeatCache) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cache = make(map[string]*HeartbeatData)

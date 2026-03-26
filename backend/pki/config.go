@@ -27,14 +27,6 @@ type Config struct {
 	CAFile   string
 }
 
-// DefaultConfig returns the default PKI configuration
-func DefaultConfig() *Config {
-	return &Config{
-		Mode:   ModeAuto,
-		PKIDir: "/etc/watchflare/pki",
-	}
-}
-
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	switch c.Mode {

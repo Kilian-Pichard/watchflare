@@ -15,7 +15,7 @@ func ServerEvents(c *gin.Context) {
 	// EventSource requires explicit origin when using credentials
 	requestOrigin := c.Request.Header.Get("Origin")
 
-	// Check if the request origin is in the allowed list
+	// Only reflect the request origin if it is explicitly allowed.
 	allowedOrigin := ""
 	for _, origin := range config.AppConfig.CORSOrigins {
 		if origin == requestOrigin {
@@ -24,12 +24,9 @@ func ServerEvents(c *gin.Context) {
 		}
 	}
 
-	// Fallback to first allowed origin if request origin not found
-	if allowedOrigin == "" && len(config.AppConfig.CORSOrigins) > 0 {
-		allowedOrigin = config.AppConfig.CORSOrigins[0]
+	if allowedOrigin != "" {
+		c.Header("Access-Control-Allow-Origin", allowedOrigin)
 	}
-
-	c.Header("Access-Control-Allow-Origin", allowedOrigin)
 	c.Header("Access-Control-Allow-Credentials", "true")
 	c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
@@ -51,7 +48,7 @@ func ServerEvents(c *gin.Context) {
 
 	// Send initial connection message
 	c.Writer.Write([]byte(sse.FormatSSE(sse.Event{
-		Type: "connected",
+		Type: sse.EventTypeConnected,
 		Data: map[string]string{"client_id": clientID},
 	})))
 	c.Writer.Flush()

@@ -1,69 +1,27 @@
 package database
 
 import (
-	"database/sql"
-	_ "embed"
+	"embed"
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"watchflare/backend/models"
 
 	applogger "watchflare/backend/logger"
 
+	"github.com/pressly/goose/v3"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-//go:embed migrations/001_continuous_aggregates.sql
-var continuousAggregatesSQL string
-
-//go:embed migrations/002_dropped_metrics.sql
-var droppedMetricsSQL string
-
-//go:embed migrations/003_packages.sql
-var packagesSQL string
-
-//go:embed migrations/004_environment_detection.sql
-var environmentDetectionSQL string
-
-//go:embed migrations/006_new_metrics.sql
-var newMetricsSQL string
-
-//go:embed migrations/007_container_metrics.sql
-var containerMetricsSQL string
-
-//go:embed migrations/008_container_continuous_aggregates.sql
-var containerContinuousAggregatesSQL string
-
-//go:embed migrations/009_username.sql
-var usernameSQL string
-
-//go:embed migrations/010_agent_version.sql
-var agentVersionSQL string
-
-//go:embed migrations/011_sensor_readings.sql
-var sensorReadingsSQL string
-
-//go:embed migrations/013_sensor_metrics.sql
-var sensorMetricsSQL string
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
 
 var DB *gorm.DB
 
-// Connect establishes database connection and runs migrations
-func Connect() error {
+// Connect establishes the database connection and runs all migrations.
+func Connect(dsn string) error {
 	var err error
-
-	// Build PostgreSQL DSN from environment variables
-	host := getEnv("POSTGRES_HOST", "localhost")
-	port := getEnv("POSTGRES_PORT", "5432")
-	user := getEnv("POSTGRES_USER", "watchflare")
-	password := getEnv("POSTGRES_PASSWORD", "watchflare_dev")
-	dbname := getEnv("POSTGRES_DB", "watchflare")
-	sslmode := getEnv("POSTGRES_SSLMODE", "disable")
-
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode)
 
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: applogger.NewGORMLogger(),
@@ -71,29 +29,51 @@ func Connect() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-
 	slog.Info("database connected")
 
-	// Enable TimescaleDB extension
+	// Enable TimescaleDB extension (non-fatal: app can still run without it,
+	// but time-series features will be unavailable)
 	if err := DB.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE").Error; err != nil {
-		slog.Warn("failed to enable TimescaleDB extension", "error", err)
+		slog.Warn("timescaledb extension unavailable", "error", err)
 	} else {
-		slog.Info("TimescaleDB extension enabled")
+		slog.Info("timescaledb extension enabled")
 	}
 
-	// Auto-migrate models (excluding Metric - managed by TimescaleDB migrations)
-	err = DB.AutoMigrate(
-		&models.User{},
-		&models.Server{},
-	)
+	// AutoMigrate core tables (users, servers)
+	if err := DB.AutoMigrate(&models.User{}, &models.Server{}); err != nil {
+		return fmt.Errorf("failed to migrate core tables: %w", err)
+	}
+	slog.Info("core tables ready")
+
+	// Create the metrics hypertable before goose migrations run:
+	// migration 001 (continuous aggregates) depends on it existing.
+	if err := initMetricsTable(); err != nil {
+		return fmt.Errorf("failed to initialize metrics table: %w", err)
+	}
+
+	// Run SQL migrations with goose
+	sqlDB, err := DB.DB()
 	if err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
+		return fmt.Errorf("failed to get raw DB connection: %w", err)
 	}
 
-	slog.Info("database migrations completed")
+	goose.SetBaseFS(embedMigrations)
+	goose.SetLogger(&slogGooseLogger{})
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("failed to set goose dialect: %w", err)
+	}
+	if err := goose.Up(sqlDB, "migrations"); err != nil {
+		return fmt.Errorf("failed to run SQL migrations: %w", err)
+	}
+	slog.Info("SQL migrations complete")
 
-	// Create metrics table manually (since it's excluded from AutoMigrate due to TimescaleDB compression)
-	err = DB.Exec(`
+	return nil
+}
+
+// initMetricsTable creates the metrics hypertable if it doesn't exist.
+// This must run before goose migrations since migration 001 depends on it.
+func initMetricsTable() error {
+	if err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS metrics (
 			id CHAR(36) NOT NULL,
 			server_id CHAR(36) NOT NULL,
@@ -112,201 +92,32 @@ func Connect() error {
 			network_rx_bytes_per_sec BIGINT DEFAULT 0,
 			network_tx_bytes_per_sec BIGINT DEFAULT 0,
 			cpu_temperature_celsius DOUBLE PRECISION DEFAULT 0,
+			sensor_readings JSONB,
 			uptime_seconds BIGINT,
 			created_at TIMESTAMPTZ DEFAULT NOW(),
-			updated_at TIMESTAMPTZ DEFAULT NOW(),
 			PRIMARY KEY (id, timestamp)
-		);
-	`).Error
-	if err != nil {
-		slog.Warn("failed to create metrics table (may already exist)", "error", err)
-	} else {
-		slog.Info("metrics table created/verified")
+		)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create metrics table: %w", err)
 	}
 
-	// Convert metrics table to TimescaleDB hypertable
-	// This should only be done once, TimescaleDB will handle it gracefully if already a hypertable
-	err = DB.Exec(`
-		SELECT create_hypertable(
-			'metrics',
-			'timestamp',
-			if_not_exists => TRUE,
-			migrate_data => TRUE
-		);
-	`).Error
-	if err != nil {
-		slog.Warn("failed to create hypertable (may already exist)", "error", err)
-	} else {
-		slog.Info("TimescaleDB hypertable created/verified", "table", "metrics")
+	if err := DB.Exec(
+		`SELECT create_hypertable('metrics', 'timestamp', if_not_exists => TRUE, migrate_data => TRUE)`,
+	).Error; err != nil {
+		return fmt.Errorf("failed to create metrics hypertable: %w", err)
 	}
-
-	// Add retention policy: keep metrics for 30 days
-	err = DB.Exec(`
-		SELECT add_retention_policy(
-			'metrics',
-			INTERVAL '30 days',
-			if_not_exists => TRUE
-		);
-	`).Error
-	if err != nil {
-		slog.Warn("failed to add retention policy", "error", err)
-	} else {
-		slog.Info("TimescaleDB retention policy set", "interval", "30d")
-	}
-
-	// Run SQL migrations (idempotent — warnings for already-existing objects are expected)
-	slog.Info("running SQL migrations")
-	RunContinuousAggregatesMigration()
-	RunDroppedMetricsMigration()
-	RunPackagesMigration()
-	RunEnvironmentDetectionMigration()
-	RunNewMetricsMigration()
-	RunContainerMetricsMigration()
-	RunContainerContinuousAggregatesMigration()
-	RunUsernameMigration()
-	RunAgentVersionMigration()
-	RunSensorReadingsMigration()
-	RunSensorMetricsMigration()
-	slog.Info("SQL migrations complete")
 
 	return nil
 }
 
-// RunContinuousAggregatesMigration runs the continuous aggregates migration
-// Statements are executed individually outside transactions because
-// refresh_continuous_aggregate() cannot run inside a transaction block.
-func RunContinuousAggregatesMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, continuousAggregatesSQL)
+// slogGooseLogger adapts goose's Logger interface to log/slog.
+type slogGooseLogger struct{}
+
+func (l *slogGooseLogger) Fatalf(format string, v ...any) {
+	slog.Error(fmt.Sprintf(format, v...))
+	os.Exit(1)
 }
 
-// execStatementsOutsideTx splits SQL into individual statements and executes
-// each one outside a transaction. Skips comments and empty statements.
-func execStatementsOutsideTx(db *sql.DB, sqlContent string) error {
-	statements := strings.Split(sqlContent, ";")
-	for _, stmt := range statements {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
-		}
-		// Skip comment-only blocks
-		lines := strings.Split(stmt, "\n")
-		hasCode := false
-		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
-				hasCode = true
-				break
-			}
-		}
-		if !hasCode {
-			continue
-		}
-
-		if _, err := db.Exec(stmt); err != nil {
-			slog.Warn("migration statement failed (may be idempotent)", "error", err)
-		}
-	}
-	return nil
-}
-
-// RunDroppedMetricsMigration runs the dropped metrics migration
-func RunDroppedMetricsMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, droppedMetricsSQL)
-}
-
-// RunPackagesMigration runs the packages migration
-func RunPackagesMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, packagesSQL)
-}
-
-// RunEnvironmentDetectionMigration runs the environment detection migration
-func RunEnvironmentDetectionMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, environmentDetectionSQL)
-}
-
-// RunNewMetricsMigration runs the new metrics migration (disk I/O, network, temperature)
-func RunNewMetricsMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, newMetricsSQL)
-}
-
-// RunContainerMetricsMigration runs the container metrics migration
-func RunContainerMetricsMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, containerMetricsSQL)
-}
-
-// RunContainerContinuousAggregatesMigration runs the container continuous aggregates migration
-func RunContainerContinuousAggregatesMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, containerContinuousAggregatesSQL)
-}
-
-// RunAgentVersionMigration runs the agent version migration
-func RunAgentVersionMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, agentVersionSQL)
-}
-
-// RunUsernameMigration runs the username migration
-func RunUsernameMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, usernameSQL)
-}
-
-// RunSensorReadingsMigration runs the sensor readings migration
-func RunSensorReadingsMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, sensorReadingsSQL)
-}
-
-// RunSensorMetricsMigration runs the sensor metrics hypertable migration
-func RunSensorMetricsMigration() error {
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get raw DB connection: %w", err)
-	}
-	return execStatementsOutsideTx(sqlDB, sensorMetricsSQL)
-}
-
-// getEnv retrieves environment variable or returns default value
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
+func (l *slogGooseLogger) Printf(format string, v ...any) {
+	slog.Info(fmt.Sprintf(format, v...))
 }

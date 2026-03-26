@@ -1,26 +1,32 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
-	"strings"
 	"watchflare/backend/config"
-	"watchflare/backend/database"
-	"watchflare/backend/models"
 	"watchflare/backend/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// setJWTCookie sets the JWT token as an HttpOnly cookie.
+func setJWTCookie(c *gin.Context, token string) {
+	isProd := config.AppConfig.Environment == "production"
+	domain := config.AppConfig.CookieDomain
+	c.SetCookie("jwt_token", token, 60*60*24*7, "/", domain, isProd, true)
+}
 
 // getUserID extracts the authenticated user ID from the Gin context
 func getUserID(c *gin.Context) (string, bool) {
 	val, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
 		return "", false
 	}
 	id, ok := val.(string)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id type"})
 		return "", false
 	}
 	return id, true
@@ -81,20 +87,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// Set JWT token in HttpOnly cookie (auto-login after registration)
-	isProd := config.AppConfig.Environment == "production"
-	domain := config.AppConfig.CookieDomain
-	secure := isProd && domain != "" // Only secure if HTTPS is likely (custom domain set)
-
-	c.SetCookie(
-		"jwt_token",           // name
-		token,                 // value
-		60*60*24*7,           // maxAge (7 days in seconds)
-		"/",                   // path
-		domain,                // domain (empty = current host)
-		secure,                // secure (only with custom domain/HTTPS)
-		true,                  // httpOnly
-	)
+	setJWTCookie(c, token)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
@@ -116,20 +109,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Set JWT token in HttpOnly cookie
-	isProd := config.AppConfig.Environment == "production"
-	domain := config.AppConfig.CookieDomain
-	secure := isProd && domain != "" // Only secure if HTTPS is likely (custom domain set)
-
-	c.SetCookie(
-		"jwt_token",           // name
-		token,                 // value
-		60*60*24*7,           // maxAge (7 days in seconds)
-		"/",                   // path
-		domain,                // domain (empty = current host)
-		secure,                // secure (only with custom domain/HTTPS)
-		true,                  // httpOnly
-	)
+	setJWTCookie(c, token)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
@@ -138,19 +118,10 @@ func Login(c *gin.Context) {
 
 // Logout clears the JWT cookie
 func Logout(c *gin.Context) {
-	c.SetCookie(
-		"jwt_token",
-		"",
-		-1,    // maxAge -1 deletes the cookie
-		"/",
-		"",
-		false,
-		true,
-	)
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Logout successful",
-	})
+	isProd := config.AppConfig.Environment == "production"
+	domain := config.AppConfig.CookieDomain
+	c.SetCookie("jwt_token", "", -1, "/", domain, isProd, true)
+	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
 
 // ChangePassword updates the authenticated user's password
@@ -190,11 +161,12 @@ func ChangeEmail(c *gin.Context) {
 		return
 	}
 
-	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Update("email", req.NewEmail).Error; err != nil {
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
-			c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
+	if err := services.ChangeEmail(userID, req.NewEmail); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update email"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update email"})
 		}
 		return
 	}
@@ -217,14 +189,9 @@ func ChangeUsername(c *gin.Context) {
 		return
 	}
 
-	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Update("username", req.Username).Error; err != nil {
+	user, err := services.ChangeUsername(userID, req.Username)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update username"})
-		return
-	}
-
-	var user models.User
-	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch updated user"})
 		return
 	}
 
@@ -236,14 +203,14 @@ func ChangeUsername(c *gin.Context) {
 
 // SetupRequired checks if initial setup is required (no users exist)
 func SetupRequired(c *gin.Context) {
-	var count int64
-	if err := database.DB.Model(&models.User{}).Count(&count).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check setup status"})
+	required, err := services.IsSetupRequired()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check setup status"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"setup_required": count == 0,
+		"setup_required": required,
 	})
 }
 
@@ -254,9 +221,9 @@ func GetCurrentUser(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+	user, err := services.GetUser(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -278,63 +245,57 @@ func UpdatePreferences(c *gin.Context) {
 		return
 	}
 
-	// Validate time range
-	validTimeRanges := []string{"1h", "12h", "24h", "7d", "30d"}
-	if req.DefaultTimeRange != "" {
-		valid := false
-		for _, tr := range validTimeRanges {
-			if req.DefaultTimeRange == tr {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time range. Valid values: 1h, 12h, 24h, 7d, 30d"})
-			return
-		}
+	// Validate preferences
+	if req.DefaultTimeRange != "" && req.DefaultTimeRange != "1h" && req.DefaultTimeRange != "12h" && req.DefaultTimeRange != "24h" && req.DefaultTimeRange != "7d" && req.DefaultTimeRange != "30d" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid default_time_range, valid values: 1h, 12h, 24h, 7d, 30d"})
+		return
 	}
 
-	// Validate theme
 	if req.Theme != "" && req.Theme != "light" && req.Theme != "dark" && req.Theme != "system" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid theme. Valid values: light, dark, system"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid theme, valid values: light, dark, system"})
 		return
 	}
 
 	// Validate time_format
 	if req.TimeFormat != "" && req.TimeFormat != "24h" && req.TimeFormat != "12h" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_format. valid values: 24h, 12h"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_format, valid values: 24h, 12h"})
 		return
 	}
 
 	// Validate temperature_unit
 	if req.TemperatureUnit != "" && req.TemperatureUnit != "celsius" && req.TemperatureUnit != "fahrenheit" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid temperature_unit. valid values: celsius, fahrenheit"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid temperature_unit, valid values: celsius, fahrenheit"})
 		return
 	}
 
 	// Validate network_unit
 	if req.NetworkUnit != "" && req.NetworkUnit != "bytes" && req.NetworkUnit != "bits" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid network_unit. valid values: bytes, bits"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid network_unit, valid values: bytes, bits"})
 		return
 	}
 
 	// Validate disk_unit
 	if req.DiskUnit != "" && req.DiskUnit != "bytes" && req.DiskUnit != "bits" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid disk_unit. valid values: bytes, bits"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid disk_unit, valid values: bytes, bits"})
 		return
 	}
 
 	// Validate gauge thresholds
 	if req.GaugeWarningThreshold != nil && (*req.GaugeWarningThreshold < 1 || *req.GaugeWarningThreshold > 99) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gauge_warning_threshold. must be between 1 and 99"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gauge_warning_threshold, must be between 1 and 99"})
 		return
 	}
 	if req.GaugeCriticalThreshold != nil && (*req.GaugeCriticalThreshold < 1 || *req.GaugeCriticalThreshold > 100) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gauge_critical_threshold. must be between 1 and 100"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gauge_critical_threshold, must be between 1 and 100"})
+		return
+	}
+	if req.GaugeWarningThreshold != nil && req.GaugeCriticalThreshold != nil &&
+		*req.GaugeWarningThreshold >= *req.GaugeCriticalThreshold {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gauge_warning_threshold must be less than gauge_critical_threshold"})
 		return
 	}
 
-	// Update user preferences
+	// Build updates map
 	updates := make(map[string]interface{})
 	if req.DefaultTimeRange != "" {
 		updates["default_time_range"] = req.DefaultTimeRange
@@ -361,15 +322,9 @@ func UpdatePreferences(c *gin.Context) {
 		updates["gauge_critical_threshold"] = *req.GaugeCriticalThreshold
 	}
 
-	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update preferences"})
-		return
-	}
-
-	// Fetch updated user
-	var user models.User
-	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated user"})
+	user, err := services.UpdatePreferences(userID, updates)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update preferences"})
 		return
 	}
 

@@ -30,7 +30,3 @@ func (cm *ContainerMetric) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// TableName returns the table name for GORM
-func (ContainerMetric) TableName() string {
-	return "container_metrics"
-}

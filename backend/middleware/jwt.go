@@ -12,13 +12,19 @@ import (
 	"gorm.io/gorm"
 )
 
+func clearJWTCookie(c *gin.Context) {
+	isProd := config.AppConfig.Environment == "production"
+	domain := config.AppConfig.CookieDomain
+	c.SetCookie("jwt_token", "", -1, "/", domain, isProd, true)
+}
+
 // AuthMiddleware validates JWT token from cookie and extracts user ID
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get token from cookie
 		tokenString, err := c.Cookie("jwt_token")
 		if err != nil {
-			c.SetCookie("jwt_token", "", -1, "/", "", false, true)
+			clearJWTCookie(c)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 			c.Abort()
 			return
@@ -34,7 +40,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			c.SetCookie("jwt_token", "", -1, "/", "", false, true)
+			clearJWTCookie(c)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
 			return
@@ -60,7 +66,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		var user models.User
 		if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 			// Clear invalid JWT cookie (user deleted from database)
-			c.SetCookie("jwt_token", "", -1, "/", "", false, true)
+			clearJWTCookie(c)
 
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})

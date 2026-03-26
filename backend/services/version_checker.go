@@ -38,7 +38,7 @@ func GetCachedLatestAgentVersion() string {
 // agent version from GitHub every 6 hours and caches it in memory.
 func StartVersionChecker(ctx context.Context) {
 	go func() {
-		fetchAndCacheLatestVersion()
+		fetchAndCacheLatestVersion(githubReleaseURL)
 
 		ticker := time.NewTicker(versionCheckInterval)
 		defer ticker.Stop()
@@ -46,7 +46,7 @@ func StartVersionChecker(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				fetchAndCacheLatestVersion()
+				fetchAndCacheLatestVersion(githubReleaseURL)
 			case <-ctx.Done():
 				return
 			}
@@ -54,8 +54,8 @@ func StartVersionChecker(ctx context.Context) {
 	}()
 }
 
-func fetchAndCacheLatestVersion() {
-	version, err := fetchLatestVersionFromGitHub()
+func fetchAndCacheLatestVersion(url string) {
+	version, err := fetchLatestVersionFromGitHub(url)
 	if err != nil {
 		slog.Warn("failed to fetch latest agent version from GitHub", "error", err)
 		return
@@ -68,14 +68,15 @@ func fetchAndCacheLatestVersion() {
 	slog.Debug("latest agent version cached", "version", version)
 }
 
-func fetchLatestVersionFromGitHub() (string, error) {
+func fetchLatestVersionFromGitHub(url string) (string, error) {
 	client := &http.Client{Timeout: versionCheckTimeout}
 
-	req, err := http.NewRequest(http.MethodGet, githubReleaseURL, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "watchflare-backend")
 
 	resp, err := client.Do(req)
 	if err != nil {

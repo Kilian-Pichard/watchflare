@@ -8,10 +8,18 @@ import (
 	"time"
 )
 
+const (
+	EventTypeConnected               = "connected"
+	EventTypeServerUpdate            = "server_update"
+	EventTypeMetricsUpdate           = "metrics_update"
+	EventTypeAggregatedMetricsUpdate = "aggregated_metrics_update"
+	EventTypeContainerMetricsUpdate  = "container_metrics_update"
+)
+
 // Event represents a server event
 type Event struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+	Type string `json:"type"`
+	Data any    `json:"data"`
 }
 
 // ServerUpdate represents a server status update
@@ -23,22 +31,23 @@ type ServerUpdate struct {
 	ConfiguredIP     string `json:"configured_ip,omitempty"`
 	IgnoreIPMismatch bool   `json:"ignore_ip_mismatch"`
 	LastSeen         string `json:"last_seen"`
-	Reactivated      bool   `json:"reactivated,omitempty"`      // True if agent was reactivated (UUID reused)
-	Hostname         string `json:"hostname,omitempty"`         // Hostname for reactivation notification
-	ClockDesync      bool   `json:"clock_desync,omitempty"`     // True if agent's clock is out of sync
+	Reactivated      bool   `json:"reactivated,omitempty"`  // true if agent was reactivated (UUID reused)
+	Hostname         string `json:"hostname,omitempty"`     // hostname for reactivation notification
+	ClockDesync      bool   `json:"clock_desync,omitempty"` // true if agent's clock is out of sync
 }
 
-// MetricsUpdate represents a real-time metrics update
+// MetricsUpdate is the input struct for BroadcastMetricsUpdate.
+// It is converted to MetricsUpdateMinified before being sent to clients.
 type MetricsUpdate struct {
-	ServerID             string                  `json:"server_id"`
-	Timestamp            string                  `json:"timestamp"`
-	CPUUsagePercent      float64                 `json:"cpu_usage_percent"`
-	MemoryTotalBytes     uint64                  `json:"memory_total_bytes"`
-	MemoryUsedBytes      uint64                  `json:"memory_used_bytes"`
-	MemoryAvailableBytes uint64                  `json:"memory_available_bytes"`
-	LoadAvg1Min          float64                 `json:"load_avg_1min"`
-	LoadAvg5Min          float64                 `json:"load_avg_5min"`
-	LoadAvg15Min         float64                 `json:"load_avg_15min"`
+	ServerID              string                  `json:"server_id"`
+	Timestamp             string                  `json:"timestamp"`
+	CPUUsagePercent       float64                 `json:"cpu_usage_percent"`
+	MemoryTotalBytes      uint64                  `json:"memory_total_bytes"`
+	MemoryUsedBytes       uint64                  `json:"memory_used_bytes"`
+	MemoryAvailableBytes  uint64                  `json:"memory_available_bytes"`
+	LoadAvg1Min           float64                 `json:"load_avg_1min"`
+	LoadAvg5Min           float64                 `json:"load_avg_5min"`
+	LoadAvg15Min          float64                 `json:"load_avg_15min"`
 	DiskTotalBytes        uint64                  `json:"disk_total_bytes"`
 	DiskUsedBytes         uint64                  `json:"disk_used_bytes"`
 	DiskReadBytesPerSec   uint64                  `json:"disk_read_bytes_per_sec"`
@@ -56,27 +65,29 @@ type SensorReadingMinified struct {
 	V float64 `json:"v"` // temperature_celsius
 }
 
-// MetricsUpdateMinified represents a minified metrics update for SSE (reduces bandwidth)
+// MetricsUpdateMinified is the wire format sent to SSE clients.
+// Short field names reduce bandwidth on high-frequency updates.
 // Format: {"s":"srv1","t":1702741200,"c":22.5,"mu":4294967296,"mt":8589934592,...}
+// IMPORTANT: field names must stay in sync with frontend/src/lib/sse.js
 type MetricsUpdateMinified struct {
-	ServerID         string                  `json:"s"`         // server_id
-	Timestamp        int64                   `json:"t"`         // Unix timestamp
-	CPU              float64                 `json:"c"`         // cpu_usage_percent
-	MemoryUsed       uint64                  `json:"mu"`        // memory_used_bytes
-	MemoryTotal      uint64                  `json:"mt"`        // memory_total_bytes
-	MemoryAvailable  uint64                  `json:"ma"`        // memory_available_bytes
-	DiskUsed         uint64                  `json:"du"`        // disk_used_bytes
-	DiskTotal        uint64                  `json:"dt"`        // disk_total_bytes
-	LoadAvg1         float64                 `json:"l1"`        // load_avg_1min
-	LoadAvg5         float64                 `json:"l5"`        // load_avg_5min
-	LoadAvg15        float64                 `json:"l15"`       // load_avg_15min
-	DiskReadRate     uint64                  `json:"dr"`        // disk_read_bytes_per_sec
-	DiskWriteRate    uint64                  `json:"dw"`        // disk_write_bytes_per_sec
-	NetRxRate        uint64                  `json:"nr"`        // network_rx_bytes_per_sec
-	NetTxRate        uint64                  `json:"nt"`        // network_tx_bytes_per_sec
-	CPUTemp          float64                 `json:"tmp"`       // cpu_temperature_celsius
-	Uptime           uint64                  `json:"u"`         // uptime_seconds
-	SensorReadings   []SensorReadingMinified `json:"sr,omitempty"` // all sensor readings
+	ServerID        string                  `json:"s"`            // server_id
+	Timestamp       int64                   `json:"t"`            // Unix timestamp
+	CPU             float64                 `json:"c"`            // cpu_usage_percent
+	MemoryUsed      uint64                  `json:"mu"`           // memory_used_bytes
+	MemoryTotal     uint64                  `json:"mt"`           // memory_total_bytes
+	MemoryAvailable uint64                  `json:"ma"`           // memory_available_bytes
+	DiskUsed        uint64                  `json:"du"`           // disk_used_bytes
+	DiskTotal       uint64                  `json:"dt"`           // disk_total_bytes
+	LoadAvg1        float64                 `json:"l1"`           // load_avg_1min
+	LoadAvg5        float64                 `json:"l5"`           // load_avg_5min
+	LoadAvg15       float64                 `json:"l15"`          // load_avg_15min
+	DiskReadRate    uint64                  `json:"dr"`           // disk_read_bytes_per_sec
+	DiskWriteRate   uint64                  `json:"dw"`           // disk_write_bytes_per_sec
+	NetRxRate       uint64                  `json:"nr"`           // network_rx_bytes_per_sec
+	NetTxRate       uint64                  `json:"nt"`           // network_tx_bytes_per_sec
+	CPUTemp         float64                 `json:"tmp"`          // cpu_temperature_celsius
+	Uptime          uint64                  `json:"u"`            // uptime_seconds
+	SensorReadings  []SensorReadingMinified `json:"sr,omitempty"` // all sensor readings
 }
 
 // AggregatedMetricsUpdate represents aggregated metrics from all online servers
@@ -114,10 +125,10 @@ type Client struct {
 	Channel chan Event
 }
 
-// Broker manages SSE client connections and event broadcasting
+// Broker manages SSE client connections and event broadcasting.
 type Broker struct {
-	clients map[string]*Client
 	mu      sync.RWMutex
+	clients map[string]*Client
 }
 
 var (
@@ -125,7 +136,14 @@ var (
 	once   sync.Once
 )
 
-// GetBroker returns the singleton SSE broker instance
+// ClientCount returns the number of currently connected SSE clients.
+func (b *Broker) ClientCount() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.clients)
+}
+
+// GetBroker returns the global Broker singleton.
 func GetBroker() *Broker {
 	once.Do(func() {
 		broker = &Broker{
@@ -135,23 +153,26 @@ func GetBroker() *Broker {
 	return broker
 }
 
-// AddClient registers a new SSE client
 func (b *Broker) AddClient(clientID string) *Client {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	// If a client with the same ID already exists (e.g. reconnect without prior cleanup),
+	// close the old channel so its reader goroutine unblocks and exits.
+	if existing, ok := b.clients[clientID]; ok {
+		close(existing.Channel)
+	}
 
 	client := &Client{
 		ID:      clientID,
 		Channel: make(chan Event, 10),
 	}
-
 	b.clients[clientID] = client
 	slog.Info("SSE client connected", "client_id", clientID, "total", len(b.clients))
 
 	return client
 }
 
-// RemoveClient unregisters an SSE client
 func (b *Broker) RemoveClient(clientID string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -163,7 +184,6 @@ func (b *Broker) RemoveClient(clientID string) {
 	}
 }
 
-// Broadcast sends an event to all connected clients
 func (b *Broker) Broadcast(event Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -171,56 +191,31 @@ func (b *Broker) Broadcast(event Event) {
 	for _, client := range b.clients {
 		select {
 		case client.Channel <- event:
-			// Event sent successfully
 		default:
-			// Channel is full, skip this client
-			slog.Warn("SSE client channel full, skipping event", "client_id", client.ID, "event_type", event.Type)
+			slog.Warn("SSE client channel full, dropping event", "client_id", client.ID, "event_type", event.Type)
 		}
 	}
 }
 
-// BroadcastServerUpdate sends a server update event to all clients
 func (b *Broker) BroadcastServerUpdate(update ServerUpdate) {
-	event := Event{
-		Type: "server_update",
-		Data: update,
-	}
-	b.Broadcast(event)
+	b.Broadcast(Event{Type: EventTypeServerUpdate, Data: update})
 }
 
-// BroadcastMetricsUpdate sends a metrics update event to all clients (minified format)
 func (b *Broker) BroadcastMetricsUpdate(update MetricsUpdate) {
-	// Convert to minified format for bandwidth optimization
-	minified := toMinifiedMetrics(update)
-
-	event := Event{
-		Type: "metrics_update",
-		Data: minified,
-	}
-	b.Broadcast(event)
+	b.Broadcast(Event{Type: EventTypeMetricsUpdate, Data: toMinifiedMetrics(update)})
 }
 
-// BroadcastAggregatedMetricsUpdate sends an aggregated metrics update event to all clients
 func (b *Broker) BroadcastAggregatedMetricsUpdate(update AggregatedMetricsUpdate) {
-	event := Event{
-		Type: "aggregated_metrics_update",
-		Data: update,
-	}
-	b.Broadcast(event)
+	b.Broadcast(Event{Type: EventTypeAggregatedMetricsUpdate, Data: update})
 }
 
-// BroadcastContainerMetricsUpdate sends container metrics to all SSE clients
 func (b *Broker) BroadcastContainerMetricsUpdate(update ContainerMetricsUpdate) {
-	event := Event{
-		Type: "container_metrics_update",
-		Data: update,
-	}
-	b.Broadcast(event)
+	b.Broadcast(Event{Type: EventTypeContainerMetricsUpdate, Data: update})
 }
 
-// toMinifiedMetrics converts MetricsUpdate to minified format
+// toMinifiedMetrics converts a MetricsUpdate to the compact wire format.
+// If the timestamp cannot be parsed, it defaults to 0 (callers always provide RFC3339).
 func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
-	// Parse timestamp string to Unix timestamp
 	var timestamp int64
 	if t, err := time.Parse(time.RFC3339, update.Timestamp); err == nil {
 		timestamp = t.Unix()
@@ -248,7 +243,7 @@ func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
 	}
 }
 
-// FormatSSE formats an event as SSE protocol message
+// FormatSSE formats an event as an SSE protocol message.
 func FormatSSE(event Event) string {
 	data, err := json.Marshal(event.Data)
 	if err != nil {

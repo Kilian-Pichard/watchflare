@@ -1,12 +1,41 @@
 package handlers
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 	"watchflare/backend/services"
 
 	"github.com/gin-gonic/gin"
 )
+
+// resolveTimeRange maps a time_range string to start time, end time, and query interval.
+// Returns ok=false for unknown values.
+func resolveTimeRange(timeRange string) (start, end time.Time, interval string, ok bool) {
+	end = time.Now()
+	switch timeRange {
+	case "1h":
+		start = end.Add(-time.Hour)
+	case "12h":
+		start = end.Add(-12 * time.Hour)
+		interval = "10m"
+	case "24h":
+		start = end.Add(-24 * time.Hour)
+		interval = "15m"
+	case "7d":
+		start = end.Add(-7 * 24 * time.Hour)
+		interval = "2h"
+	case "30d":
+		start = end.Add(-30 * 24 * time.Hour)
+		interval = "8h"
+	default:
+		return
+	}
+	ok = true
+	return
+}
 
 // GetMetrics returns metrics for a specific server
 func GetMetrics(c *gin.Context) {
@@ -24,27 +53,10 @@ func GetMetrics(c *gin.Context) {
 
 	// If time_range is provided, calculate start/end and map to interval
 	if timeRange != "" {
-		end = time.Now()
-
-		// Map time_range to duration and interval
-		switch timeRange {
-		case "1h":
-			start = end.Add(-1 * time.Hour)
-			interval = "" // Raw data (every 30s) - 120 points
-		case "12h":
-			start = end.Add(-12 * time.Hour)
-			interval = "10m" // Continuous aggregate 10min - 72 points
-		case "24h":
-			start = end.Add(-24 * time.Hour)
-			interval = "15m" // Continuous aggregate 15min - 96 points
-		case "7d":
-			start = end.Add(-7 * 24 * time.Hour)
-			interval = "2h" // Continuous aggregate 2h - 84 points
-		case "30d":
-			start = end.Add(-30 * 24 * time.Hour)
-			interval = "8h" // Continuous aggregate 8h - 90 points
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time_range. Valid values: 1h, 12h, 24h, 7d, 30d"})
+		var ok bool
+		start, end, interval, ok = resolveTimeRange(timeRange)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_range, valid values: 1h, 12h, 24h, 7d, 30d"})
 			return
 		}
 	} else {
@@ -54,7 +66,7 @@ func GetMetrics(c *gin.Context) {
 		} else {
 			end, err = parseTime(endStr)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end time format. Use RFC3339 or Unix timestamp"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end time format, use RFC3339 or unix timestamp"})
 				return
 			}
 		}
@@ -64,7 +76,7 @@ func GetMetrics(c *gin.Context) {
 		} else {
 			start, err = parseTime(startStr)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start time format. Use RFC3339 or Unix timestamp"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start time format, use RFC3339 or unix timestamp"})
 				return
 			}
 		}
@@ -72,7 +84,7 @@ func GetMetrics(c *gin.Context) {
 
 	// Validate time range
 	if start.After(end) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Start time must be before end time"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start time must be before end time"})
 		return
 	}
 
@@ -86,7 +98,7 @@ func GetMetrics(c *gin.Context) {
 
 	metrics, err := services.GetMetrics(params)
 	if err != nil {
-		if err.Error() == "server not found" {
+		if errors.Is(err, services.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
@@ -110,34 +122,15 @@ func GetContainerMetrics(c *gin.Context) {
 	serverID := c.Param("id")
 	timeRange := c.DefaultQuery("time_range", "1h")
 
-	end := time.Now()
-	var start time.Time
-	var interval string
-
-	switch timeRange {
-	case "1h":
-		start = end.Add(-1 * time.Hour)
-		interval = "" // Raw data
-	case "12h":
-		start = end.Add(-12 * time.Hour)
-		interval = "10m"
-	case "24h":
-		start = end.Add(-24 * time.Hour)
-		interval = "15m"
-	case "7d":
-		start = end.Add(-7 * 24 * time.Hour)
-		interval = "2h"
-	case "30d":
-		start = end.Add(-30 * 24 * time.Hour)
-		interval = "8h"
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid time_range. Valid values: 1h, 12h, 24h, 7d, 30d"})
+	start, end, interval, ok := resolveTimeRange(timeRange)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_range, valid values: 1h, 12h, 24h, 7d, 30d"})
 		return
 	}
 
 	metrics, err := services.GetContainerMetrics(serverID, start, end, interval)
 	if err != nil {
-		if err.Error() == "server not found" {
+		if errors.Is(err, services.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
@@ -158,34 +151,15 @@ func GetSensorReadings(c *gin.Context) {
 	serverID := c.Param("id")
 	timeRange := c.DefaultQuery("time_range", "1h")
 
-	end := time.Now()
-	var start time.Time
-	var interval string
-
-	switch timeRange {
-	case "1h":
-		start = end.Add(-1 * time.Hour)
-		interval = ""
-	case "12h":
-		start = end.Add(-12 * time.Hour)
-		interval = "10m"
-	case "24h":
-		start = end.Add(-24 * time.Hour)
-		interval = "15m"
-	case "7d":
-		start = end.Add(-7 * 24 * time.Hour)
-		interval = "2h"
-	case "30d":
-		start = end.Add(-30 * 24 * time.Hour)
-		interval = "8h"
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_range. valid values: 1h, 12h, 24h, 7d, 30d"})
+	start, end, interval, ok := resolveTimeRange(timeRange)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid time_range, valid values: 1h, 12h, 24h, 7d, 30d"})
 		return
 	}
 
 	data, err := services.GetSensorReadings(serverID, start, end, interval)
 	if err != nil {
-		if err.Error() == "server not found" {
+		if errors.Is(err, services.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
@@ -201,27 +175,13 @@ func GetSensorReadings(c *gin.Context) {
 	})
 }
 
-// parseTime attempts to parse time from RFC3339 format or Unix timestamp
+// parseTime attempts to parse time from RFC3339 format or Unix timestamp (seconds).
 func parseTime(timeStr string) (time.Time, error) {
-	// Try RFC3339 format first
-	t, err := time.Parse(time.RFC3339, timeStr)
-	if err == nil {
+	if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
 		return t, nil
 	}
-
-	// Try Unix timestamp
-	var timestamp int64
-	if _, err := time.Parse("2006-01-02T15:04:05Z07:00", timeStr); err != nil {
-		// If not a valid timestamp format, try parsing as Unix timestamp
-		if n, err := time.Parse("1136239445", timeStr); err == nil {
-			return n, nil
-		}
+	if ts, err := strconv.ParseInt(timeStr, 10, 64); err == nil {
+		return time.Unix(ts, 0), nil
 	}
-
-	// Try parsing as integer Unix timestamp
-	if _, err := time.ParseDuration(timeStr); err == nil {
-		return time.Unix(timestamp, 0), nil
-	}
-
-	return time.Time{}, err
+	return time.Time{}, fmt.Errorf("invalid time format: %s", timeStr)
 }

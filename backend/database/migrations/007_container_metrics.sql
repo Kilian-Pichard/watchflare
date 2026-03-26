@@ -1,3 +1,7 @@
+-- +goose NO TRANSACTION
+-- Required: TimescaleDB DDL (CREATE MATERIALIZED VIEW, create_hypertable, etc.) cannot run inside a transaction
+
+-- +goose Up
 -- Migration 007: Container metrics table
 -- Stores per-container Docker metrics (CPU, memory, network) as a TimescaleDB hypertable
 
@@ -28,4 +32,7 @@ SELECT add_compression_policy('container_metrics', INTERVAL '2 days', if_not_exi
 SELECT add_retention_policy('container_metrics', INTERVAL '30 days', if_not_exists => TRUE);
 
 CREATE INDEX IF NOT EXISTS idx_container_metrics_server_time
-    ON container_metrics (server_id, timestamp DESC)
+    ON container_metrics (server_id, timestamp DESC);
+
+-- +goose Down
+-- Not reversible without data loss
