@@ -1,9 +1,11 @@
 package services
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
+	"watchflare/backend/cache"
 	"watchflare/backend/config"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
@@ -11,12 +13,27 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func testDSN() string {
+	get := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+	return "host=" + get("POSTGRES_HOST", "localhost") +
+		" port=" + get("POSTGRES_PORT", "5432") +
+		" user=" + get("POSTGRES_USER", "watchflare") +
+		" password=" + get("POSTGRES_PASSWORD", "watchflare_dev") +
+		" dbname=" + get("POSTGRES_TEST_DB", "watchflare_test") +
+		" sslmode=" + get("POSTGRES_SSLMODE", "disable")
+}
+
 func setupTestDB(t *testing.T) {
 	t.Helper()
 	config.AppConfig = &config.Config{
-		JWTSecret: "test-secret-key",
+		JWTSecret: "test-secret-key-must-be-32-chars!!",
 	}
-	if err := database.Connect(); err != nil {
+	if err := database.Connect(testDSN()); err != nil {
 		t.Skipf("skipping test: database unavailable: %v", err)
 	}
 }
@@ -40,7 +57,7 @@ func TestCreateAgent(t *testing.T) {
 	assert.Equal(t, "server01", server.Name)
 	assert.Equal(t, "192.168.1.100", *server.ConfiguredIP)
 	assert.False(t, server.AllowAnyIPRegistration)
-	assert.Equal(t, "pending", server.Status)
+	assert.Equal(t, models.StatusPending, server.Status)
 
 	// Verify agent ID is UUID
 	assert.Len(t, server.AgentID, 36) // UUID length
@@ -65,7 +82,7 @@ func TestCreateAgent(t *testing.T) {
 	var dbServer models.Server
 	database.DB.Where("id = ?", server.ID).First(&dbServer)
 	assert.Equal(t, server.ID, dbServer.ID)
-	assert.Equal(t, "pending", dbServer.Status)
+	assert.Equal(t, models.StatusPending, dbServer.Status)
 }
 
 func TestListServers(t *testing.T) {
@@ -182,22 +199,24 @@ func TestRegenerateToken(t *testing.T) {
 	updatedServer, _ := GetServer(server.ID)
 	expectedExpiry := time.Now().Add(time.Hour * 24)
 	assert.WithinDuration(t, expectedExpiry, *updatedServer.ExpiresAt, time.Minute)
-	assert.Equal(t, "pending", updatedServer.Status)
+	assert.Equal(t, models.StatusPending, updatedServer.Status)
 }
 
 func TestRegenerateToken_OnlineServer(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
-	// Create server and set to online
 	server, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
-	database.DB.Model(&server).Update("status", "online")
+	database.DB.Model(&server).Update("status", models.StatusOnline)
 
-	// Try to regenerate token
-	_, err := RegenerateToken(server.ID)
+	// Regenerating token on an online server is allowed — agent will re-register.
+	newToken, err := RegenerateToken(server.ID)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "can only regenerate token")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, newToken)
+
+	updatedServer, _ := GetServer(server.ID)
+	assert.Equal(t, models.StatusPending, updatedServer.Status)
 }
 
 func TestDeleteServer(t *testing.T) {
@@ -224,7 +243,7 @@ func TestDeleteServer_OnlineServer(t *testing.T) {
 
 	// Create server and set to online
 	server, _, _, _ := CreateAgent("server01", "192.168.1.100", false)
-	database.DB.Model(&server).Update("status", "online")
+	database.DB.Model(&server).Update("status", models.StatusOnline)
 
 	// Delete server (should succeed now - restriction removed)
 	err := DeleteServer(server.ID)
@@ -245,6 +264,261 @@ func TestDeleteServer_NotFound(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestListAllServers(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	CreateAgent("server01", "192.168.1.1", false)
+	CreateAgent("server02", "192.168.1.2", false)
+
+	servers, err := ListAllServers()
+
+	assert.NoError(t, err)
+	assert.Len(t, servers, 2)
+}
+
+func TestListServers_Pagination(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	CreateAgent("server01", "192.168.1.1", false)
+	CreateAgent("server02", "192.168.1.2", false)
+	CreateAgent("server03", "192.168.1.3", false)
+
+	servers, total, err := ListServers(ServerListParams{Page: 1, PerPage: 2})
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(3), total)
+	assert.Len(t, servers, 2)
+}
+
+func TestListServers_PaginationBeyondEnd(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	CreateAgent("server01", "192.168.1.1", false)
+
+	servers, total, err := ListServers(ServerListParams{Page: 99, PerPage: 10})
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	assert.Empty(t, servers)
+}
+
+func TestListServers_SearchFilter(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	CreateAgent("web-server", "192.168.1.1", false)
+	CreateAgent("db-server", "192.168.1.2", false)
+
+	servers, total, err := ListServers(ServerListParams{Search: "web"})
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	assert.Equal(t, "web-server", servers[0].Name)
+}
+
+func TestRenameServer(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("old-name", "192.168.1.1", false)
+
+	err := RenameServer(server.ID, "new-name")
+
+	assert.NoError(t, err)
+	updated, _ := GetServer(server.ID)
+	assert.Equal(t, "new-name", updated.Name)
+}
+
+func TestRenameServer_TooShort(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("old-name", "192.168.1.1", false)
+
+	err := RenameServer(server.ID, "x")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "between 2 and 64")
+}
+
+func TestRenameServer_TooLong(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("old-name", "192.168.1.1", false)
+
+	err := RenameServer(server.ID, strings.Repeat("a", 65))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "between 2 and 64")
+}
+
+func TestIgnoreIPMismatch(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("server01", "192.168.1.1", false)
+
+	err := IgnoreIPMismatch(server.ID)
+
+	assert.NoError(t, err)
+	updated, _ := GetServer(server.ID)
+	assert.True(t, updated.IgnoreIPMismatch)
+}
+
+func TestDismissReactivation(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("server01", "192.168.1.1", false)
+	now := time.Now()
+	database.DB.Model(&server).Update("reactivated_at", now)
+
+	err := DismissReactivation(server.ID)
+
+	assert.NoError(t, err)
+	updated, _ := GetServer(server.ID)
+	assert.Nil(t, updated.ReactivatedAt)
+}
+
+func TestPauseServer(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("server01", "192.168.1.1", false)
+	database.DB.Model(&server).Update("status", models.StatusOnline)
+
+	err := PauseServer(server.ID)
+
+	assert.NoError(t, err)
+	updated, _ := GetServer(server.ID)
+	assert.Equal(t, models.StatusPaused, updated.Status)
+}
+
+func TestPauseServer_AlreadyPaused(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("server01", "192.168.1.1", false)
+	database.DB.Model(&server).Update("status", models.StatusPaused)
+
+	err := PauseServer(server.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already paused")
+}
+
+func TestPauseServer_Pending(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("server01", "192.168.1.1", false)
+
+	err := PauseServer(server.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot pause a pending")
+}
+
+func TestResumeServer(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("server01", "192.168.1.1", false)
+	database.DB.Model(&server).Update("status", models.StatusPaused)
+
+	err := ResumeServer(server.ID)
+
+	assert.NoError(t, err)
+	updated, _ := GetServer(server.ID)
+	assert.Equal(t, models.StatusOnline, updated.Status)
+}
+
+func TestResumeServer_NotPaused(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, _ := CreateAgent("server01", "192.168.1.1", false)
+	database.DB.Model(&server).Update("status", models.StatusOnline)
+
+	err := ResumeServer(server.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not paused")
+}
+
+func TestGenerateRegistrationToken(t *testing.T) {
+	token1, hash1, err1 := generateRegistrationToken()
+	token2, hash2, err2 := generateRegistrationToken()
+
+	assert.NoError(t, err1)
+	assert.NoError(t, err2)
+
+	assert.True(t, strings.HasPrefix(token1, "wf_reg_"))
+	assert.Len(t, token1, 39) // "wf_reg_" + 32 hex chars
+
+	assert.NotEqual(t, token1, token2)
+	assert.NotEqual(t, hash1, hash2)
+
+	// Hash must differ from plaintext token.
+	assert.NotEqual(t, token1, hash1)
+	assert.Len(t, hash1, 64) // SHA-256 hex
+}
+
+func TestMergeCache(t *testing.T) {
+	c := cache.GetCache()
+	c.Remove("agent-abc")
+	c.Remove("agent-xyz")
+	defer c.Remove("agent-abc")
+
+	c.Update("agent-abc", "10.0.0.1", "::1")
+
+	servers := []models.Server{
+		{AgentID: "agent-abc", Status: models.StatusPending},
+		{AgentID: "agent-xyz", Status: models.StatusPending}, // not in cache
+	}
+	mergeCache(servers)
+
+	// Agent in cache: status and IPs must be overridden.
+	if servers[0].Status != models.StatusOnline {
+		t.Errorf("status: got %s, want online", servers[0].Status)
+	}
+	if servers[0].IPAddressV4 == nil || *servers[0].IPAddressV4 != "10.0.0.1" {
+		t.Errorf("ipv4: got %v, want 10.0.0.1", servers[0].IPAddressV4)
+	}
+	if servers[0].IPAddressV6 == nil || *servers[0].IPAddressV6 != "::1" {
+		t.Errorf("ipv6: got %v, want ::1", servers[0].IPAddressV6)
+	}
+
+	// Agent not in cache: status must be unchanged.
+	if servers[1].Status != models.StatusPending {
+		t.Errorf("status: got %s, want pending", servers[1].Status)
+	}
+}
+
+func TestListServers_PageZeroTreatedAsOne(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	CreateAgent("server01", "192.168.1.1", false)
+	CreateAgent("server02", "192.168.1.2", false)
+
+	// Page=0 must not panic and must behave like Page=1.
+	servers, total, err := ListServers(ServerListParams{Page: 0, PerPage: 1})
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	assert.Len(t, servers, 1)
+}
+
+func TestCreateAgent_EmptyConfiguredIP(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	server, _, _, err := CreateAgent("server01", "", false)
+
+	assert.NoError(t, err)
+	assert.Nil(t, server.ConfiguredIP) // empty string must not be stored as non-nil pointer
 }
 
 func TestHashToken(t *testing.T) {

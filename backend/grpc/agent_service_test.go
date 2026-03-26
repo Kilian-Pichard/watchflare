@@ -18,10 +18,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func testDSN() string {
+	get := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+	return "host=" + get("POSTGRES_HOST", "localhost") +
+		" port=" + get("POSTGRES_PORT", "5432") +
+		" user=" + get("POSTGRES_USER", "watchflare") +
+		" password=" + get("POSTGRES_PASSWORD", "watchflare_dev") +
+		" dbname=" + get("POSTGRES_TEST_DB", "watchflare_test") +
+		" sslmode=" + get("POSTGRES_SSLMODE", "disable")
+}
+
 // setupGRPCTestDB connects to the local PostgreSQL database for testing.
 func setupGRPCTestDB(t *testing.T) {
 	t.Helper()
-	if err := database.Connect(); err != nil {
+	if err := database.Connect(testDSN()); err != nil {
 		t.Skipf("skipping grpc tests: database unavailable: %v", err)
 	}
 }
@@ -57,7 +72,7 @@ func createPendingServer(t *testing.T, token string) *models.Server {
 		ID:                     uuid.New().String(),
 		AgentID:                uuid.New().String(),
 		Name:                   "test-server-" + token[:8],
-		Status:                 "pending",
+		Status:                 models.StatusPending,
 		RegistrationToken:      strPtr(hashTestToken(token)),
 		ExpiresAt:              &expiry,
 		AllowAnyIPRegistration: true,
@@ -99,7 +114,7 @@ func TestRegisterServer_AlreadyRegistered(t *testing.T) {
 		ID:                     uuid.New().String(),
 		AgentID:                uuid.New().String(),
 		Name:                   "already-registered",
-		Status:                 "online",
+		Status:                 models.StatusOnline,
 		RegistrationToken:      strPtr(hashTestToken(token)),
 		ExpiresAt:              &expiry,
 		AllowAnyIPRegistration: true,
@@ -128,7 +143,7 @@ func TestRegisterServer_ExpiredToken(t *testing.T) {
 		ID:                     uuid.New().String(),
 		AgentID:                uuid.New().String(),
 		Name:                   "expired-server",
-		Status:                 "pending",
+		Status:                 models.StatusPending,
 		RegistrationToken:      strPtr(hashTestToken(token)),
 		ExpiresAt:              &expiry,
 		AllowAnyIPRegistration: true,
@@ -198,7 +213,7 @@ func TestSendMetrics_PausedServer(t *testing.T) {
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
 		Name:     "paused-server",
-		Status:   "paused",
+		Status:   models.StatusPaused,
 		AgentKey: "paused-agent-key-abc123",
 	}
 	require.NoError(t, database.DB.Create(server).Error)
@@ -213,4 +228,233 @@ func TestSendMetrics_PausedServer(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, resp.Success)
 	assert.Contains(t, resp.Message, "paused")
+}
+
+func TestSendMetrics_NilMetrics(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	server := &models.Server{
+		ID:       uuid.New().String(),
+		AgentID:  uuid.New().String(),
+		Name:     "online-server",
+		Status:   models.StatusOnline,
+		AgentKey: "online-agent-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(server).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+
+	req := &pb.SendMetricsRequest{
+		AgentId:  server.AgentID,
+		AgentKey: server.AgentKey,
+		Metrics:  nil,
+	}
+	resp, err := s.SendMetrics(context.Background(), req)
+	require.NoError(t, err)
+	assert.False(t, resp.Success)
+	assert.Contains(t, resp.Message, "required")
+}
+
+func TestHeartbeat_InvalidCredentials(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	req := &pb.HeartbeatRequest{
+		AgentId:  "00000000-0000-0000-0000-000000000000",
+		AgentKey: "invalid-key",
+	}
+	resp, err := s.Heartbeat(context.Background(), req)
+	require.NoError(t, err)
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Invalid agent credentials", resp.Message)
+}
+
+func TestHeartbeat_PausedServer(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	server := &models.Server{
+		ID:       uuid.New().String(),
+		AgentID:  uuid.New().String(),
+		Name:     "paused-hb-server",
+		Status:   models.StatusPaused,
+		AgentKey: "paused-hb-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(server).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+
+	req := &pb.HeartbeatRequest{
+		AgentId:  server.AgentID,
+		AgentKey: server.AgentKey,
+	}
+	resp, err := s.Heartbeat(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+	assert.Contains(t, resp.Message, "paused")
+}
+
+func TestHeartbeat_Online(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	server := &models.Server{
+		ID:       uuid.New().String(),
+		AgentID:  uuid.New().String(),
+		Name:     "online-hb-server",
+		Status:   models.StatusOnline,
+		AgentKey: "online-hb-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(server).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+
+	req := &pb.HeartbeatRequest{
+		AgentId:     server.AgentID,
+		AgentKey:    server.AgentKey,
+		IpAddressV4: "10.0.0.1",
+	}
+	resp, err := s.Heartbeat(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+}
+
+func TestReportDroppedMetrics_InvalidCredentials(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	req := &pb.ReportDroppedMetricsRequest{
+		AgentId:  "00000000-0000-0000-0000-000000000000",
+		AgentKey: "invalid-key",
+	}
+	resp, err := s.ReportDroppedMetrics(context.Background(), req)
+	require.NoError(t, err)
+	assert.False(t, resp.Success)
+}
+
+func TestReportDroppedMetrics_Success(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	server := &models.Server{
+		ID:       uuid.New().String(),
+		AgentID:  uuid.New().String(),
+		Name:     "drop-server",
+		Status:   models.StatusOnline,
+		AgentKey: "drop-agent-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(server).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+
+	now := time.Now().Unix()
+	req := &pb.ReportDroppedMetricsRequest{
+		AgentId:        server.AgentID,
+		AgentKey:       server.AgentKey,
+		Count:          5,
+		FirstDroppedAt: now - 60,
+		LastDroppedAt:  now,
+		Reason:         "max_retries_exceeded",
+	}
+	resp, err := s.ReportDroppedMetrics(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+}
+
+func TestSendPackageInventory_InvalidCredentials(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	req := &pb.SendPackageInventoryRequest{
+		AgentId:  "00000000-0000-0000-0000-000000000000",
+		AgentKey: "invalid-key",
+	}
+	resp, err := s.SendPackageInventory(context.Background(), req)
+	require.NoError(t, err)
+	assert.False(t, resp.Success)
+}
+
+func TestProcessPackageInventory_UnknownType(t *testing.T) {
+	setupGRPCTestDB(t)
+
+	server := &models.Server{
+		ID:       uuid.New().String(),
+		AgentID:  uuid.New().String(),
+		Name:     "pkg-inv-server",
+		Status:   models.StatusOnline,
+		AgentKey: "pkg-inv-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(server).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+
+	req := &pb.SendPackageInventoryRequest{
+		AgentId:       server.AgentID,
+		AgentKey:      server.AgentKey,
+		InventoryType: "unknown_type",
+	}
+	_, _, err := processPackageInventory(server.ID, req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown inventory_type")
+}
+
+func TestProcessPackageInventory_FullInventory(t *testing.T) {
+	setupGRPCTestDB(t)
+
+	server := &models.Server{
+		ID:       uuid.New().String(),
+		AgentID:  uuid.New().String(),
+		Name:     "pkg-full-server",
+		Status:   models.StatusOnline,
+		AgentKey: "pkg-full-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(server).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+
+	req := &pb.SendPackageInventoryRequest{
+		InventoryType: models.CollectionTypeFull,
+		AllPackages: []*pb.Package{
+			{Name: "curl", Version: "7.88.0", PackageManager: "apt"},
+			{Name: "git", Version: "2.39.0", PackageManager: "apt"},
+		},
+		TotalPackageCount: 2,
+	}
+	processed, changes, err := processPackageInventory(server.ID, req)
+	require.NoError(t, err)
+	assert.Equal(t, 2, processed)
+	assert.Equal(t, 2, changes)
+}
+
+func TestProcessPackageInventory_DeltaInventory(t *testing.T) {
+	setupGRPCTestDB(t)
+
+	server := &models.Server{
+		ID:       uuid.New().String(),
+		AgentID:  uuid.New().String(),
+		Name:     "pkg-delta-server",
+		Status:   models.StatusOnline,
+		AgentKey: "pkg-delta-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(server).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+
+	// Seed an existing package to remove/update
+	fullReq := &pb.SendPackageInventoryRequest{
+		InventoryType: models.CollectionTypeFull,
+		AllPackages: []*pb.Package{
+			{Name: "curl", Version: "7.88.0", PackageManager: "apt"},
+			{Name: "vim", Version: "8.2", PackageManager: "apt"},
+		},
+		TotalPackageCount: 2,
+	}
+	_, _, err := processPackageInventory(server.ID, fullReq)
+	require.NoError(t, err)
+
+	deltaReq := &pb.SendPackageInventoryRequest{
+		InventoryType:     models.CollectionTypeDelta,
+		AddedPackages:     []*pb.Package{{Name: "htop", Version: "3.2.0", PackageManager: "apt"}},
+		RemovedPackages:   []*pb.Package{{Name: "vim", Version: "8.2", PackageManager: "apt"}},
+		UpdatedPackages:   []*pb.Package{{Name: "curl", Version: "8.0.0", PackageManager: "apt"}},
+		TotalPackageCount: 2,
+	}
+	processed, changes, err := processPackageInventory(server.ID, deltaReq)
+	require.NoError(t, err)
+	assert.Equal(t, 2, processed) // TotalPackageCount
+	assert.Equal(t, 3, changes)   // 1 added + 1 removed + 1 updated
 }

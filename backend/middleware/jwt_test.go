@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 	"watchflare/backend/config"
@@ -14,15 +15,32 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testJWTSecret = "test-secret-key-must-be-32-chars!!"
+
 func setupTestConfig() {
 	config.AppConfig = &config.Config{
-		JWTSecret: "test-secret-key",
+		JWTSecret: testJWTSecret,
 	}
+}
+
+func testDSN() string {
+	get := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+	return "host=" + get("POSTGRES_HOST", "localhost") +
+		" port=" + get("POSTGRES_PORT", "5432") +
+		" user=" + get("POSTGRES_USER", "watchflare") +
+		" password=" + get("POSTGRES_PASSWORD", "watchflare_dev") +
+		" dbname=" + get("POSTGRES_TEST_DB", "watchflare_test") +
+		" sslmode=" + get("POSTGRES_SSLMODE", "disable")
 }
 
 func setupTestDB(t *testing.T) {
 	t.Helper()
-	if err := database.Connect(); err != nil {
+	if err := database.Connect(testDSN()); err != nil {
 		t.Skipf("skipping test: database unavailable: %v", err)
 	}
 }
@@ -31,7 +49,8 @@ func teardownTestDB() {
 	database.DB.Exec("DELETE FROM users")
 }
 
-func generateTestJWT(userID string, secret string, expired bool) string {
+func generateTestJWT(t *testing.T, userID string, secret string, expired bool) string {
+	t.Helper()
 	var exp time.Time
 	if expired {
 		exp = time.Now().Add(-time.Hour) // Expired 1 hour ago
@@ -45,7 +64,10 @@ func generateTestJWT(userID string, secret string, expired bool) string {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, _ := token.SignedString([]byte(secret))
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("failed to generate test JWT: %v", err)
+	}
 	return tokenString
 }
 
@@ -72,7 +94,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "Success - Valid JWT token",
 			setupRequest: func(req *http.Request) {
-				token := generateTestJWT("550e8400-e29b-41d4-a716-446655440001", config.AppConfig.JWTSecret, false)
+				token := generateTestJWT(t, "550e8400-e29b-41d4-a716-446655440001", config.AppConfig.JWTSecret, false)
 				req.AddCookie(&http.Cookie{
 					Name:  "jwt_token",
 					Value: token,
@@ -87,7 +109,7 @@ func TestAuthMiddleware(t *testing.T) {
 			name: "Fail - User not found in database",
 			setupRequest: func(req *http.Request) {
 				// Use a valid JWT but for a user that doesn't exist
-				token := generateTestJWT("00000000-0000-0000-0000-000000000000", config.AppConfig.JWTSecret, false)
+				token := generateTestJWT(t, "00000000-0000-0000-0000-000000000000", config.AppConfig.JWTSecret, false)
 				req.AddCookie(&http.Cookie{
 					Name:  "jwt_token",
 					Value: token,
@@ -111,7 +133,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "Fail - Expired JWT token",
 			setupRequest: func(req *http.Request) {
-				token := generateTestJWT("550e8400-e29b-41d4-a716-446655440001", config.AppConfig.JWTSecret, true)
+				token := generateTestJWT(t, "550e8400-e29b-41d4-a716-446655440001", config.AppConfig.JWTSecret, true)
 				req.AddCookie(&http.Cookie{
 					Name:  "jwt_token",
 					Value: token,
@@ -125,7 +147,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "Fail - Invalid JWT secret",
 			setupRequest: func(req *http.Request) {
-				token := generateTestJWT("550e8400-e29b-41d4-a716-446655440001", "wrong-secret", false)
+				token := generateTestJWT(t, "550e8400-e29b-41d4-a716-446655440001", "wrong-secret", false)
 				req.AddCookie(&http.Cookie{
 					Name:  "jwt_token",
 					Value: token,
@@ -199,7 +221,7 @@ func TestAuthMiddleware_UserIDInContext(t *testing.T) {
 		c.String(http.StatusOK, "ok")
 	})
 
-	token := generateTestJWT(testUserID, config.AppConfig.JWTSecret, false)
+	token := generateTestJWT(t, testUserID, config.AppConfig.JWTSecret, false)
 	req, _ := http.NewRequest("GET", "/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "jwt_token",

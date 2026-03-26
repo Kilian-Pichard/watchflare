@@ -28,7 +28,12 @@ func setupServerRouter() *gin.Engine {
 		serverGroup.GET("", ListServers)
 		serverGroup.GET("/:id", GetServer)
 		serverGroup.PUT("/:id/validate-ip", ValidateIP)
+		serverGroup.PUT("/:id/rename", RenameServer)
 		serverGroup.PUT("/:id/change-ip", UpdateConfiguredIP)
+		serverGroup.PUT("/:id/ignore-ip-mismatch", IgnoreIPMismatch)
+		serverGroup.PUT("/:id/dismiss-reactivation", DismissReactivation)
+		serverGroup.PUT("/:id/pause", PauseServer)
+		serverGroup.PUT("/:id/resume", ResumeServer)
 		serverGroup.POST("/:id/regenerate-token", RegenerateToken)
 		serverGroup.DELETE("/:id", DeleteServer)
 	}
@@ -84,11 +89,23 @@ func TestCreateAgent(t *testing.T) {
 
 				server := resp["server"].(map[string]interface{})
 				assert.Equal(t, "server01", server["name"])
-				assert.Equal(t, "pending", server["status"])
+				assert.Equal(t, models.StatusPending, server["status"])
 			},
 		},
 		{
-			name: "Fail - Missing required fields",
+			name: "Success - AllowAnyIP without configured_ip",
+			payload: map[string]interface{}{
+				"name":         "server02",
+				"allow_any_ip": true,
+			},
+			withCookie:     true,
+			expectedStatus: http.StatusCreated,
+			checkResponse: func(t *testing.T, resp map[string]interface{}) {
+				assert.NotNil(t, resp["server"])
+			},
+		},
+		{
+			name: "Fail - Missing configured_ip when allow_any_ip is false",
 			payload: map[string]interface{}{
 				"name": "server03",
 			},
@@ -166,7 +183,7 @@ func TestListServers(t *testing.T) {
 		srv := s.(map[string]interface{})
 		ids = append(ids, srv["id"].(string))
 		names = append(names, srv["name"].(string))
-		assert.Equal(t, "pending", srv["status"])
+		assert.Equal(t, models.StatusPending, srv["status"])
 	}
 	assert.Contains(t, ids, server1.ID)
 	assert.Contains(t, ids, server2.ID)
@@ -199,7 +216,7 @@ func TestGetServer(t *testing.T) {
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
 				serverData := resp["server"].(map[string]interface{})
 				assert.Equal(t, "server01", serverData["name"])
-				assert.Equal(t, "pending", serverData["status"])
+				assert.Equal(t, models.StatusPending, serverData["status"])
 			},
 		},
 		{
@@ -386,4 +403,152 @@ func TestUpdateConfiguredIP(t *testing.T) {
 	// Verify IP was updated
 	updatedServer, _ := services.GetServer(server.ID)
 	assert.Equal(t, "192.168.1.200", *updatedServer.ConfiguredIP)
+}
+
+func TestRenameServer(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupServerRouter()
+	cookie := createTestUser(t)
+
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
+
+	tests := []struct {
+		name           string
+		serverID       string
+		payload        map[string]string
+		expectedStatus int
+	}{
+		{
+			name:           "Success",
+			serverID:       server.ID,
+			payload:        map[string]string{"new_name": "renamed-server"},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Fail - Name too short",
+			serverID:       server.ID,
+			payload:        map[string]string{"new_name": "x"},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Fail - Server not found",
+			serverID:       "00000000-0000-0000-0000-000000000000",
+			payload:        map[string]string{"new_name": "renamed"},
+			expectedStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(tt.payload)
+			req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%s/rename", tt.serverID), bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(cookie)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			assert.Equal(t, tt.expectedStatus, w.Code)
+		})
+	}
+}
+
+func TestPauseResumeServer(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupServerRouter()
+	cookie := createTestUser(t)
+
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
+
+	// Cannot pause a pending server.
+	req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%s/pause", server.ID), nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Set to online so pause works.
+	database.DB.Model(&models.Server{}).Where("id = ?", server.ID).Update("status", models.StatusOnline)
+
+	req, _ = http.NewRequest("PUT", fmt.Sprintf("/servers/%s/pause", server.ID), nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Already paused.
+	req, _ = http.NewRequest("PUT", fmt.Sprintf("/servers/%s/pause", server.ID), nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Resume.
+	req, _ = http.NewRequest("PUT", fmt.Sprintf("/servers/%s/resume", server.ID), nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Cannot resume a non-paused server.
+	req, _ = http.NewRequest("PUT", fmt.Sprintf("/servers/%s/resume", server.ID), nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Pause/resume server not found → 404.
+	req, _ = http.NewRequest("PUT", "/servers/00000000-0000-0000-0000-000000000000/pause", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestIgnoreIPMismatch(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupServerRouter()
+	cookie := createTestUser(t)
+
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
+
+	req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%s/ignore-ip-mismatch", server.ID), nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Not found.
+	req, _ = http.NewRequest("PUT", "/servers/00000000-0000-0000-0000-000000000000/ignore-ip-mismatch", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestDismissReactivation(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupServerRouter()
+	cookie := createTestUser(t)
+
+	server, _, _, _ := services.CreateAgent("server01", "192.168.1.100", false)
+
+	req, _ := http.NewRequest("PUT", fmt.Sprintf("/servers/%s/dismiss-reactivation", server.ID), nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Not found.
+	req, _ = http.NewRequest("PUT", "/servers/00000000-0000-0000-0000-000000000000/dismiss-reactivation", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }

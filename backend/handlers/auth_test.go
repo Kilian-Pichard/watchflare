@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"watchflare/backend/config"
 	"watchflare/backend/database"
@@ -15,12 +16,27 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func testDSN() string {
+	get := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+	return "host=" + get("POSTGRES_HOST", "localhost") +
+		" port=" + get("POSTGRES_PORT", "5432") +
+		" user=" + get("POSTGRES_USER", "watchflare") +
+		" password=" + get("POSTGRES_PASSWORD", "watchflare_dev") +
+		" dbname=" + get("POSTGRES_TEST_DB", "watchflare_test") +
+		" sslmode=" + get("POSTGRES_SSLMODE", "disable")
+}
+
 func setupTestDB(t *testing.T) {
 	t.Helper()
 	config.AppConfig = &config.Config{
-		JWTSecret: "test-secret-key",
+		JWTSecret: "test-secret-key-must-be-32-chars!!",
 	}
-	if err := database.Connect(); err != nil {
+	if err := database.Connect(testDSN()); err != nil {
 		t.Skipf("skipping test: database unavailable: %v", err)
 	}
 }
@@ -39,6 +55,7 @@ func setupRouter() *gin.Engine {
 	// Auth routes (public)
 	authGroup := router.Group("/auth")
 	{
+		authGroup.GET("/setup-required", SetupRequired)
 		authGroup.POST("/register", Register)
 		authGroup.POST("/login", Login)
 		authGroup.POST("/logout", Logout)
@@ -48,10 +65,31 @@ func setupRouter() *gin.Engine {
 	protectedGroup := router.Group("/auth")
 	protectedGroup.Use(middleware.AuthMiddleware())
 	{
+		protectedGroup.GET("/user", GetCurrentUser)
 		protectedGroup.PUT("/change-password", ChangePassword)
+		protectedGroup.PUT("/change-email", ChangeEmail)
+		protectedGroup.PUT("/change-username", ChangeUsername)
+		protectedGroup.PUT("/preferences", UpdatePreferences)
 	}
 
 	return router
+}
+
+// loginAndGetCookie registers a user (or reuses existing), logs in, and returns the jwt_token cookie.
+func loginAndGetCookie(t *testing.T, router *gin.Engine, email, password string) *http.Cookie {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "jwt_token" {
+			return c
+		}
+	}
+	t.Fatal("jwt_token cookie not found after login")
+	return nil
 }
 
 // TestRegister tests user registration
@@ -368,6 +406,205 @@ func TestChangePassword(t *testing.T) {
 			var response map[string]interface{}
 			json.Unmarshal(w.Body.Bytes(), &response)
 			tt.checkResponse(t, response)
+		})
+	}
+}
+
+func TestSetupRequired(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupRouter()
+
+	// No users → setup required.
+	req, _ := http.NewRequest("GET", "/auth/setup-required", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, true, resp["setup_required"])
+
+	// Create a user → setup no longer required.
+	u := &models.User{Email: "admin@test.com"}
+	u.HashPassword("password123")
+	database.DB.Create(u)
+
+	req, _ = http.NewRequest("GET", "/auth/setup-required", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, false, resp["setup_required"])
+}
+
+func TestGetCurrentUser(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupRouter()
+
+	u := &models.User{Email: "me@test.com"}
+	u.HashPassword("password123")
+	database.DB.Create(u)
+	cookie := loginAndGetCookie(t, router, "me@test.com", "password123")
+
+	// Authenticated → returns user.
+	req, _ := http.NewRequest("GET", "/auth/user", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NotNil(t, resp["user"])
+
+	// Unauthenticated → 401.
+	req, _ = http.NewRequest("GET", "/auth/user", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestChangeEmail(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupRouter()
+
+	u := &models.User{Email: "original@test.com"}
+	u.HashPassword("password123")
+	database.DB.Create(u)
+	cookie := loginAndGetCookie(t, router, "original@test.com", "password123")
+
+	// Success.
+	body, _ := json.Marshal(map[string]string{"new_email": "updated@test.com"})
+	req, _ := http.NewRequest("PUT", "/auth/change-email", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Duplicate email — create a second user then try to steal its email.
+	u2 := &models.User{Email: "taken@test.com"}
+	u2.HashPassword("password123")
+	database.DB.Create(u2)
+
+	body, _ = json.Marshal(map[string]string{"new_email": "taken@test.com"})
+	req, _ = http.NewRequest("PUT", "/auth/change-email", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	// Unauthenticated → 401.
+	body, _ = json.Marshal(map[string]string{"new_email": "x@test.com"})
+	req, _ = http.NewRequest("PUT", "/auth/change-email", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestChangeUsername(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupRouter()
+
+	u := &models.User{Email: "user@test.com"}
+	u.HashPassword("password123")
+	database.DB.Create(u)
+	cookie := loginAndGetCookie(t, router, "user@test.com", "password123")
+
+	// Success.
+	body, _ := json.Marshal(map[string]string{"username": "newname"})
+	req, _ := http.NewRequest("PUT", "/auth/change-username", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NotNil(t, resp["user"])
+
+	// Unauthenticated → 401.
+	req, _ = http.NewRequest("PUT", "/auth/change-username", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestUpdatePreferences(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	router := setupRouter()
+
+	u := &models.User{Email: "prefs@test.com"}
+	u.HashPassword("password123")
+	database.DB.Create(u)
+	cookie := loginAndGetCookie(t, router, "prefs@test.com", "password123")
+
+	tests := []struct {
+		name           string
+		payload        map[string]interface{}
+		withCookie     bool
+		expectedStatus int
+	}{
+		{
+			name:           "Success - Valid preferences",
+			payload:        map[string]interface{}{"default_time_range": "7d", "theme": "dark"},
+			withCookie:     true,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Fail - Invalid time range",
+			payload:        map[string]interface{}{"default_time_range": "999y"},
+			withCookie:     true,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Fail - Invalid theme",
+			payload:        map[string]interface{}{"theme": "rainbow"},
+			withCookie:     true,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Fail - Invalid temperature unit",
+			payload:        map[string]interface{}{"temperature_unit": "kelvin"},
+			withCookie:     true,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Fail - Gauge warning out of range",
+			payload:        map[string]interface{}{"gauge_warning_threshold": 0},
+			withCookie:     true,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Fail - Unauthenticated",
+			payload:        map[string]interface{}{"theme": "dark"},
+			withCookie:     false,
+			expectedStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(tt.payload)
+			req, _ := http.NewRequest("PUT", "/auth/preferences", bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			if tt.withCookie {
+				req.AddCookie(cookie)
+			}
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
 }
