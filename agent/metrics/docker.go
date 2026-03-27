@@ -83,7 +83,7 @@ func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, nil
 	}
 

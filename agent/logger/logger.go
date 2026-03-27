@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -98,7 +99,7 @@ func writeAttr(buf *bytes.Buffer, a slog.Attr) {
 	}
 	if needsQuote {
 		buf.WriteByte('"')
-		buf.WriteString(v)
+		buf.WriteString(strings.ReplaceAll(v, `"`, `\"`))
 		buf.WriteByte('"')
 	} else {
 		buf.WriteString(v)

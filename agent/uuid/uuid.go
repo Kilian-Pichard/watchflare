@@ -55,7 +55,7 @@ func Save(uuid string) error {
 	}
 
 	// Write UUID to file
-	if err := os.WriteFile(path, []byte(uuid+"\n"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(uuid+"\n"), 0640); err != nil {
 		return fmt.Errorf("failed to write UUID file: %w", err)
 	}
 

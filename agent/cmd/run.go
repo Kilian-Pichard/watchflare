@@ -24,6 +24,11 @@ import (
 	pb "watchflare/shared/proto/agent/v1"
 )
 
+const (
+	inventoryTypeFull  = "full"
+	inventoryTypeDelta = "delta"
+)
+
 // Run starts the agent in normal operation mode
 func Run() {
 	slog.Info("Watchflare Agent starting", "version", AgentVersion)
@@ -300,15 +305,15 @@ func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg 
 
 	var inventoryType string
 	if isFirstRun {
-		inventoryType = "full"
+		inventoryType = inventoryTypeFull
 		slog.Info("first run: sending full inventory", "count", len(allPackages))
 	} else {
-		inventoryType = "delta"
+		inventoryType = inventoryTypeDelta
 		slog.Info("package changes detected", "added", len(added), "removed", len(removed), "updated", len(updated))
 	}
 
 	var addedProto, removedProto, updatedProto, allProto []*pb.Package
-	if inventoryType == "full" {
+	if inventoryType == inventoryTypeFull {
 		allProto = convertPackagesToProto(allPackages)
 	} else {
 		addedProto = convertPackagesToProto(added)

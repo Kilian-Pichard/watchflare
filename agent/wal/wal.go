@@ -36,7 +36,7 @@ func New(path string, maxSizeMB int) (*WAL, error) {
 
 	// Open file with O_APPEND | O_CREATE | O_RDWR
 	// No O_APPEND for header updates (we use explicit Seek)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0640)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open WAL: %w", err)
 	}
@@ -234,7 +234,7 @@ func (w *WAL) Truncate() error {
 
 	// STEP 2: Create temporary file (atomic rename pattern)
 	tmpPath := w.path + ".tmp"
-	tmpFile, err := os.Create(tmpPath)
+	tmpFile, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
 	if err != nil {
 		return fmt.Errorf("failed to create temp WAL: %w", err)
 	}
@@ -289,7 +289,7 @@ func (w *WAL) Truncate() error {
 	// If crash after rename → new WAL already in place
 	if err := os.Rename(tmpPath, w.path); err != nil {
 		// Try to reopen old file on rename failure (with O_CREATE in case it was removed)
-		newFile, reopenErr := os.OpenFile(w.path, os.O_CREATE|os.O_RDWR, 0644)
+		newFile, reopenErr := os.OpenFile(w.path, os.O_CREATE|os.O_RDWR, 0640)
 		if reopenErr == nil {
 			w.file = newFile
 		}
@@ -297,7 +297,7 @@ func (w *WAL) Truncate() error {
 	}
 
 	// STEP 8: Reopen the new WAL file
-	w.file, err = os.OpenFile(w.path, os.O_RDWR, 0644)
+	w.file, err = os.OpenFile(w.path, os.O_RDWR, 0640)
 	if err != nil {
 		return fmt.Errorf("failed to reopen WAL after truncate: %w", err)
 	}

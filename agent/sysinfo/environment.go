@@ -96,21 +96,6 @@ func isRunningInContainer() bool {
 		}
 	}
 
-	// Method 3: Check if PID 1 is not init/systemd (common in containers)
-	if data, err := os.ReadFile("/proc/1/cmdline"); err == nil {
-		cmdline := string(data)
-		// In containers, PID 1 is often not init/systemd
-		if !strings.Contains(cmdline, "init") &&
-			!strings.Contains(cmdline, "systemd") {
-			// Additional check: look for container-specific processes
-			if strings.Contains(cmdline, "bash") ||
-				strings.Contains(cmdline, "sh") ||
-				strings.Contains(cmdline, "container") {
-				return true
-			}
-		}
-	}
-
 	return false
 }
 

@@ -2,6 +2,7 @@ package packages
 
 import (
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -54,28 +55,21 @@ func CollectAll() ([]*Package, error) {
 	return allPackages, nil
 }
 
-// TruncateDescription truncates description to max 100 characters
+// TruncateDescription truncates description to max 100 runes
 func TruncateDescription(desc string) string {
-	if len(desc) <= 100 {
+	runes := []rune(desc)
+	if len(runes) <= 100 {
 		return desc
 	}
-	return desc[:97] + "..."
+	return string(runes[:97]) + "..."
 }
 
-// splitLines splits a string by newlines
+// splitLines splits a string by newlines, stripping carriage returns
 func splitLines(s string) []string {
-	lines := []string{}
-	current := ""
-	for _, c := range s {
-		if c == '\n' {
-			lines = append(lines, current)
-			current = ""
-		} else if c != '\r' {
-			current += string(c)
-		}
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.TrimRight(s, "\n")
+	if s == "" {
+		return []string{}
 	}
-	if current != "" {
-		lines = append(lines, current)
-	}
-	return lines
+	return strings.Split(s, "\n")
 }

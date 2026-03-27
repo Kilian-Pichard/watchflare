@@ -48,8 +48,7 @@ func (s *PackageState) Save(path string) error {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
 
-	// Marshal to JSON with indentation
-	data, err := json.MarshalIndent(s, "", "  ")
+	data, err := json.Marshal(s)
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}

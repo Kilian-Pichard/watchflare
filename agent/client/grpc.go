@@ -55,13 +55,9 @@ func New(host, port, caCertFile, serverName string) (*Client, error) {
 	creds := credentials.NewTLS(tlsConfig)
 	opts = append(opts, grpc.WithTransportCredentials(creds))
 
-	// Connect with timeout to avoid blocking indefinitely
-	dialCtx, dialCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer dialCancel()
-
-	conn, err := grpc.DialContext(dialCtx, addr, append(opts, grpc.WithBlock())...)
+	conn, err := grpc.NewClient(addr, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
+		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
 
 	return &Client{
@@ -89,13 +85,9 @@ func NewForRegistration(host, port string) (*Client, error) {
 	creds := credentials.NewTLS(tlsConfig)
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
 
-	// Connect with timeout to avoid blocking indefinitely
-	dialCtx, dialCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer dialCancel()
-
-	conn, err := grpc.DialContext(dialCtx, addr, append(opts, grpc.WithBlock())...)
+	conn, err := grpc.NewClient(addr, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
+		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
 
 	return &Client{

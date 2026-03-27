@@ -1,4 +1,4 @@
-// +build linux
+//go:build linux
 
 package install
 
@@ -223,5 +223,5 @@ func (s *LinuxService) hasSystemd() bool {
 
 	// Check if systemd is running
 	cmd := exec.Command("systemctl", "is-system-running")
-	return cmd.Run() == nil || cmd.ProcessState != nil
+	return cmd.Run() == nil
 }

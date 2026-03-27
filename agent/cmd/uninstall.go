@@ -12,7 +12,7 @@ func Uninstall() {
 	fmt.Println("=== Watchflare Agent Uninstallation ===")
 	fmt.Println()
 
-	fmt.Println("[1/5] Checking permissions...")
+	fmt.Println("[1/6] Checking permissions...")
 	if err := install.CheckRoot(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -25,7 +25,7 @@ func Uninstall() {
 		os.Exit(1)
 	}
 
-	fmt.Println("\n[2/5] Removing service...")
+	fmt.Println("\n[2/6] Removing service...")
 	if svcMgr.IsInstalled() {
 		if err := svcMgr.Uninstall(); err != nil {
 			fmt.Printf("Warning: %v\n", err)
@@ -34,7 +34,7 @@ func Uninstall() {
 		fmt.Println("  → Service not installed")
 	}
 
-	fmt.Println("\n[3/5] Removing binary...")
+	fmt.Println("\n[3/6] Removing binary...")
 	if err := install.RemoveFiles(); err != nil {
 		fmt.Printf("Warning: %v\n", err)
 	}

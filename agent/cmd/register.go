@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"watchflare-agent/client"
@@ -122,7 +123,7 @@ func Register() bool {
 	}
 
 	// Save CA certificate to disk
-	caCertPath := config.GetConfigDir() + "/ca.pem"
+	caCertPath := filepath.Join(config.GetConfigDir(), "ca.pem")
 	slog.Info("saving CA certificate", "path", caCertPath)
 	if err := client.SaveCACertificate(regResp.CACert, caCertPath); err != nil {
 		fmt.Fprintf(os.Stderr, "error: failed to save CA certificate: %v\n", err)

@@ -7,10 +7,9 @@ import (
 
 // containerNetState tracks previous network counters for a single container
 type containerNetState struct {
-	prevRxBytes   uint64
-	prevTxBytes   uint64
-	prevTime      time.Time
-	initialized   bool
+	prevRxBytes uint64
+	prevTxBytes uint64
+	prevTime    time.Time
 }
 
 // DeltaTracker maintains previous counter values for rate calculations
@@ -118,16 +117,7 @@ func (dt *DeltaTracker) ComputeContainerNetworkRate(containerID string, rxBytes,
 			prevRxBytes: rxBytes,
 			prevTxBytes: txBytes,
 			prevTime:    now,
-			initialized: true,
 		}
-		return 0, 0
-	}
-
-	if !state.initialized {
-		state.prevRxBytes = rxBytes
-		state.prevTxBytes = txBytes
-		state.prevTime = now
-		state.initialized = true
 		return 0, 0
 	}
 

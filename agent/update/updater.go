@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -36,20 +37,21 @@ const (
 // SIGKILL to any process replacing a binary currently memory-mapped by a
 // running process (the agent service). By running Phase 2 from /tmp, the
 // service binary can be freely replaced.
-func logStep(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "[update] "+format+"\n", args...)
+func logStep(msg string, args ...any) {
+	slog.Info(msg, args...)
 }
 
 func ApplyUpdate(info *UpdateInfo) error {
-	logStep("phase 1 — start (pid %d, exe: %s)", os.Getpid(), func() string { s, _ := os.Executable(); return s }())
+	exe, _ := os.Executable()
+	logStep("update phase 1 start", "pid", os.Getpid(), "exe", exe)
 
-	logStep("downloading tarball: %s", info.TarballURL)
+	logStep("downloading tarball", "url", info.TarballURL)
 	tmpTarball, err := downloadToTemp(info.TarballURL, "watchflare-agent-*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("failed to download update: %w", err)
 	}
 	defer os.Remove(tmpTarball)
-	logStep("download complete: %s", tmpTarball)
+	logStep("download complete", "path", tmpTarball)
 
 	logStep("verifying checksum")
 	if err := verifyChecksum(tmpTarball, info.TarballName, info.ChecksumsURL); err != nil {
@@ -62,9 +64,8 @@ func ApplyUpdate(info *UpdateInfo) error {
 	if err != nil {
 		return fmt.Errorf("failed to extract binary: %w", err)
 	}
-	logStep("extracted to: %s", tmpBinary)
+	logStep("binary extracted", "path", tmpBinary)
 
-	logStep("copying self to /tmp")
 	self, err := os.Executable()
 	if err != nil {
 		os.Remove(tmpBinary)
@@ -76,7 +77,7 @@ func ApplyUpdate(info *UpdateInfo) error {
 		os.Remove(tmpBinary)
 		return fmt.Errorf("failed to copy updater to temp: %w", err)
 	}
-	logStep("temp updater: %s", tmpUpdater)
+	logStep("updater copied to temp", "path", tmpUpdater)
 
 	args := []string{
 		filepath.Base(self),
@@ -85,7 +86,7 @@ func ApplyUpdate(info *UpdateInfo) error {
 		UpdaterFlag + tmpUpdater,
 		VersionFlag + info.LatestVersion,
 	}
-	logStep("syscall.Exec → %s %v", tmpUpdater, args)
+	logStep("re-executing from temp", "path", tmpUpdater)
 	if err := syscall.Exec(tmpUpdater, args, os.Environ()); err != nil {
 		os.Remove(tmpBinary)
 		os.Remove(tmpUpdater)
@@ -98,7 +99,8 @@ func ApplyUpdate(info *UpdateInfo) error {
 // Stops the service, atomically replaces the binary, starts the service,
 // then cleans up temp files.
 func ApplyExtracted(extractedBinaryPath, updaterPath string) error {
-	logStep("phase 2 — start (pid %d, exe: %s)", os.Getpid(), func() string { s, _ := os.Executable(); return s }())
+	exe, _ := os.Executable()
+	logStep("update phase 2 start", "pid", os.Getpid(), "exe", exe)
 	defer os.Remove(extractedBinaryPath)
 	defer os.Remove(updaterPath)
 
@@ -109,25 +111,27 @@ func ApplyExtracted(extractedBinaryPath, updaterPath string) error {
 	logStep("service stopped")
 
 	stagingPath := binaryInstallPath + ".new"
-	logStep("copying %s → %s", extractedBinaryPath, stagingPath)
+	logStep("staging binary", "src", extractedBinaryPath, "dst", stagingPath)
 	if err := copyFile(extractedBinaryPath, stagingPath, 0755); err != nil {
 		os.Remove(stagingPath)
 		startService()
 		return fmt.Errorf("failed to stage binary (are you root?): %w", err)
 	}
-	logStep("copy done")
 
-	logStep("renaming %s → %s", stagingPath, binaryInstallPath)
+	logStep("replacing binary", "src", stagingPath, "dst", binaryInstallPath)
 	if err := os.Rename(stagingPath, binaryInstallPath); err != nil {
 		os.Remove(stagingPath)
 		startService()
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
-	logStep("rename done")
 
 	logStep("starting service")
 	err := startService()
-	logStep("service started (err=%v)", err)
+	if err != nil {
+		logStep("failed to start service", "error", err)
+	} else {
+		logStep("service started")
+	}
 	return err
 }
 
