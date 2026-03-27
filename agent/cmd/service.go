@@ -36,7 +36,7 @@ func Status() {
 
 	fmt.Println()
 	fmt.Println("Paths:")
-	fmt.Printf("  Binary:        %s/watchflare-agent\n", install.InstallDir)
+	fmt.Printf("  Binary:        %s/%s\n", install.InstallDir, install.BinaryName)
 	fmt.Printf("  Configuration: %s/\n", install.ConfigDir)
 	fmt.Printf("  Data:          %s/\n", install.DataDir)
 	fmt.Printf("  Logs:          %s\n", install.LogPath)

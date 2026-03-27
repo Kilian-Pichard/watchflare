@@ -18,6 +18,7 @@ const (
 	DataDir    = "/var/lib/watchflare"
 	LogPath    = "/var/log/watchflare-agent.log"
 	BinaryName = "watchflare-agent"
+	UserName   = "watchflare"
 )
 
 // ServiceManager defines the interface for OS-specific service management
@@ -94,7 +95,7 @@ func getGroupID(groupname string) (int, error) {
 
 // CreateUser creates the watchflare system user
 func CreateUser() error {
-	username := "watchflare"
+	username := UserName
 
 	// Check if user already exists
 	if _, err := user.Lookup(username); err == nil {
@@ -214,12 +215,12 @@ func createUserMacOS(username string) error {
 
 // CreateDirectories creates all necessary directories with proper permissions
 func CreateDirectories() error {
-	username := "watchflare"
+	username := UserName
 	var groupname string
 
 	switch runtime.GOOS {
 	case "linux":
-		groupname = "watchflare"
+		groupname = UserName
 	case "darwin":
 		groupname = "staff"
 	default:
@@ -342,12 +343,12 @@ func InstallBinary(sourcePath string) error {
 
 // CreateLogFile creates the log file with proper permissions
 func CreateLogFile() error {
-	username := "watchflare"
+	username := UserName
 	var groupname string
 
 	switch runtime.GOOS {
 	case "linux":
-		groupname = "watchflare"
+		groupname = UserName
 	case "darwin":
 		groupname = "staff"
 	}
@@ -416,7 +417,7 @@ func RemoveDirectories(removeData, removeConfig bool) error {
 
 // RemoveUser removes the watchflare system user
 func RemoveUser() error {
-	username := "watchflare"
+	username := UserName
 
 	switch runtime.GOOS {
 	case "linux":

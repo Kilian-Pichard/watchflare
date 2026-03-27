@@ -59,7 +59,7 @@ func Uninstall() {
 	}
 
 	fmt.Println("\n[6/6] System user...")
-	removeUser := install.AskConfirmation("Remove system user 'watchflare'?")
+	removeUser := install.AskConfirmation(fmt.Sprintf("Remove system user '%s'?", install.UserName))
 
 	if removeUser {
 		if err := install.RemoveUser(); err != nil {
@@ -80,7 +80,7 @@ func Uninstall() {
 		fmt.Printf("Note: Log file preserved at %s\n", install.LogPath)
 	}
 	if !removeUser {
-		fmt.Println("Note: System user 'watchflare' preserved")
+		fmt.Printf("Note: System user '%s' preserved\n", install.UserName)
 	}
 
 	fmt.Println()

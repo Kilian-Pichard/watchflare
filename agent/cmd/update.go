@@ -108,9 +108,15 @@ func isInstalledViaBrew() bool {
 	if err != nil {
 		return false
 	}
-	if strings.Contains(self, "/homebrew/") || strings.Contains(self, "/Cellar/") {
+	if isBrewPath(self) {
 		return true
 	}
 	cmd := exec.Command("brew", "list", "--formula", "watchflare-agent")
 	return cmd.Run() == nil
+}
+
+// isBrewPath returns true if the executable path indicates a Homebrew-managed binary.
+// Covers Apple Silicon (/opt/homebrew/) and Intel (/usr/local/Cellar/).
+func isBrewPath(path string) bool {
+	return strings.Contains(path, "/homebrew/") || strings.Contains(path, "/Cellar/")
 }
