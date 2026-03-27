@@ -39,7 +39,7 @@ func Status() {
 	fmt.Printf("  Binary:        %s/watchflare-agent\n", install.InstallDir)
 	fmt.Printf("  Configuration: %s/\n", install.ConfigDir)
 	fmt.Printf("  Data:          %s/\n", install.DataDir)
-	fmt.Println("  Logs:          /var/log/watchflare-agent.log")
+	fmt.Printf("  Logs:          %s\n", install.LogPath)
 }
 
 // StartService starts the agent service

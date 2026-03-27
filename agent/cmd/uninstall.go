@@ -40,8 +40,8 @@ func Uninstall() {
 	}
 
 	fmt.Println("\n[4/6] Data and configuration...")
-	removeData := install.AskConfirmation("Remove data directory (/var/lib/watchflare)?")
-	removeConfig := install.AskConfirmation("Remove configuration directory (/etc/watchflare)?")
+	removeData := install.AskConfirmation(fmt.Sprintf("Remove data directory (%s)?", install.DataDir))
+	removeConfig := install.AskConfirmation(fmt.Sprintf("Remove configuration directory (%s)?", install.ConfigDir))
 
 	if removeData || removeConfig {
 		if err := install.RemoveDirectories(removeData, removeConfig); err != nil {
@@ -50,7 +50,7 @@ func Uninstall() {
 	}
 
 	fmt.Println("\n[5/6] Log files...")
-	removeLogs := install.AskConfirmation("Remove log file (/var/log/watchflare-agent.log)?")
+	removeLogs := install.AskConfirmation(fmt.Sprintf("Remove log file (%s)?", install.LogPath))
 
 	if removeLogs {
 		if err := install.RemoveLogFile(); err != nil {
@@ -71,13 +71,13 @@ func Uninstall() {
 	fmt.Println()
 
 	if !removeData {
-		fmt.Println("Note: Data directory preserved at /var/lib/watchflare")
+		fmt.Printf("Note: Data directory preserved at %s\n", install.DataDir)
 	}
 	if !removeConfig {
-		fmt.Println("Note: Configuration preserved at /etc/watchflare")
+		fmt.Printf("Note: Configuration preserved at %s\n", install.ConfigDir)
 	}
 	if !removeLogs {
-		fmt.Println("Note: Log file preserved at /var/log/watchflare-agent.log")
+		fmt.Printf("Note: Log file preserved at %s\n", install.LogPath)
 	}
 	if !removeUser {
 		fmt.Println("Note: System user 'watchflare' preserved")

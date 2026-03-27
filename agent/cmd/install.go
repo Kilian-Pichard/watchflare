@@ -40,7 +40,7 @@ func Install() {
 			if err := svcMgr.Stop(); err != nil {
 				fmt.Printf("Warning: failed to stop service: %v\n", err)
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Second)
 		}
 	}
 
@@ -112,7 +112,7 @@ func Install() {
 		}
 	} else {
 		fmt.Println("  ⚠ No configuration file found")
-		fmt.Printf("  → To register now, run:\n")
+		fmt.Println("  → To register now, run:")
 		fmt.Printf("     sudo %s/watchflare-agent register --token=YOUR_TOKEN --host=YOUR_HOST\n", install.InstallDir)
 	}
 
