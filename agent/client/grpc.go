@@ -21,15 +21,12 @@ import (
 type Client struct {
 	conn   *grpc.ClientConn
 	client pb.AgentServiceClient
-	host   string
-	port   string
 }
 
 // New creates a new gRPC client with strict TLS verification
 // Requires a valid CA certificate file for TLS verification
 func New(host, port, caCertFile, serverName string) (*Client, error) {
 	addr := fmt.Sprintf("%s:%s", host, port)
-	var opts []grpc.DialOption
 
 	// Load CA certificate (mandatory for TLS)
 	caCert, err := os.ReadFile(caCertFile)
@@ -51,11 +48,8 @@ func New(host, port, caCertFile, serverName string) (*Client, error) {
 		MaxVersion: tls.VersionTLS13,
 	}
 
-	// Create TLS credentials
 	creds := credentials.NewTLS(tlsConfig)
-	opts = append(opts, grpc.WithTransportCredentials(creds))
-
-	conn, err := grpc.NewClient(addr, opts...)
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
@@ -63,8 +57,6 @@ func New(host, port, caCertFile, serverName string) (*Client, error) {
 	return &Client{
 		conn:   conn,
 		client: pb.NewAgentServiceClient(conn),
-		host:   host,
-		port:   port,
 	}, nil
 }
 
@@ -83,9 +75,7 @@ func NewForRegistration(host, port string) (*Client, error) {
 	}
 
 	creds := credentials.NewTLS(tlsConfig)
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
-
-	conn, err := grpc.NewClient(addr, opts...)
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
@@ -93,14 +83,30 @@ func NewForRegistration(host, port string) (*Client, error) {
 	return &Client{
 		conn:   conn,
 		client: pb.NewAgentServiceClient(conn),
-		host:   host,
-		port:   port,
 	}, nil
 }
 
 // Close closes the gRPC connection
 func (c *Client) Close() error {
 	return c.conn.Close()
+}
+
+// RegisterRequest contains all parameters needed to register the agent
+type RegisterRequest struct {
+	Token             string
+	Hostname          string
+	IPv4              string
+	IPv6              string
+	Platform          string
+	PlatformVersion   string
+	PlatformFamily    string
+	Architecture      string
+	Kernel            string
+	EnvironmentType   string
+	Hypervisor        string
+	ContainerRuntime  string
+	ExistingUUID      string
+	AgentVersion      string
 }
 
 // RegistrationResponse contains the result of a successful registration
@@ -114,30 +120,29 @@ type RegistrationResponse struct {
 
 // Register attempts to register the agent with the backend
 // Returns registration credentials and TLS information
-func (c *Client) Register(token, hostname, ipv4, ipv6, platform, platformVersion, platformFamily, architecture, kernel, environmentType, hypervisor, containerRuntime, existingUUID, agentVersion string) (*RegistrationResponse, error) {
+func (c *Client) Register(r RegisterRequest) (*RegistrationResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	req := &pb.RegisterServerRequest{
-		RegistrationToken:   token,
-		Hostname:            hostname,
-		IpAddressV4:         ipv4,
-		IpAddressV6:         ipv6,
-		Platform:            platform,
-		PlatformVersion:     platformVersion,
-		PlatformFamily:      platformFamily,
-		Architecture:        architecture,
-		Kernel:              kernel,
-		Timestamp:           time.Now().Unix(), // Add timestamp for anti-replay
-		EnvironmentType:     environmentType,
-		Hypervisor:          hypervisor,
-		ContainerRuntime:    containerRuntime,
-		ExistingAgentUuid:   existingUUID, // For re-registration
-		AgentVersion:        agentVersion,
-	}
-
 	// Note: Registration uses token-based auth, not HMAC
 	// HMAC is only used after successful registration
+	req := &pb.RegisterServerRequest{
+		RegistrationToken: r.Token,
+		Hostname:          r.Hostname,
+		IpAddressV4:       r.IPv4,
+		IpAddressV6:       r.IPv6,
+		Platform:          r.Platform,
+		PlatformVersion:   r.PlatformVersion,
+		PlatformFamily:    r.PlatformFamily,
+		Architecture:      r.Architecture,
+		Kernel:            r.Kernel,
+		Timestamp:         time.Now().Unix(), // Anti-replay
+		EnvironmentType:   r.EnvironmentType,
+		Hypervisor:        r.Hypervisor,
+		ContainerRuntime:  r.ContainerRuntime,
+		ExistingAgentUuid: r.ExistingUUID,
+		AgentVersion:      r.AgentVersion,
+	}
 
 	resp, err := c.client.RegisterServer(ctx, req)
 	if err != nil {
@@ -283,42 +288,6 @@ func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.
 
 	if !resp.Success {
 		return fmt.Errorf("metrics rejected: %s", resp.Message)
-	}
-
-	return nil
-}
-
-// ReportDroppedMetrics reports metrics that were dropped after max retries
-func (c *Client) ReportDroppedMetrics(agentID, agentKey string, count int32, firstDroppedAt, lastDroppedAt int64, reason string) error {
-	timestamp := time.Now().Unix()
-
-	req := &pb.ReportDroppedMetricsRequest{
-		AgentId:        agentID,
-		AgentKey:       agentKey,
-		Timestamp:      timestamp,
-		Count:          count,
-		FirstDroppedAt: firstDroppedAt,
-		LastDroppedAt:  lastDroppedAt,
-		Reason:         reason,
-	}
-
-	// Attach HMAC authentication metadata
-	ctx := context.Background()
-	ctx, err := security.AttachAuthMetadata(ctx, agentID, agentKey, timestamp, req)
-	if err != nil {
-		return fmt.Errorf("failed to attach auth metadata: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	resp, err := c.client.ReportDroppedMetrics(ctx, req)
-	if err != nil {
-		return fmt.Errorf("report dropped metrics failed: %w", err)
-	}
-
-	if !resp.Success {
-		return fmt.Errorf("dropped metrics report rejected: %s", resp.Message)
 	}
 
 	return nil

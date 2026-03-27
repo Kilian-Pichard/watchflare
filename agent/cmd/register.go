@@ -101,22 +101,22 @@ func Register() bool {
 
 	// Register with backend
 	slog.Info("registering agent")
-	regResp, err := grpcClient.Register(
-		token,
-		info.Hostname,
-		info.IPv4Address,
-		info.IPv6Address,
-		info.Platform,
-		info.PlatformVersion,
-		info.PlatformFamily,
-		info.Architecture,
-		info.Kernel,
-		string(env.Type),
-		env.Hypervisor,
-		env.ContainerRuntime,
-		existingUUID,
-		AgentVersion,
-	)
+	regResp, err := grpcClient.Register(client.RegisterRequest{
+		Token:            token,
+		Hostname:         info.Hostname,
+		IPv4:             info.IPv4Address,
+		IPv6:             info.IPv6Address,
+		Platform:         info.Platform,
+		PlatformVersion:  info.PlatformVersion,
+		PlatformFamily:   info.PlatformFamily,
+		Architecture:     info.Architecture,
+		Kernel:           info.Kernel,
+		EnvironmentType:  string(env.Type),
+		Hypervisor:       env.Hypervisor,
+		ContainerRuntime: env.ContainerRuntime,
+		ExistingUUID:     existingUUID,
+		AgentVersion:     AgentVersion,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: registration failed: %v\n", err)
 		os.Exit(1)
