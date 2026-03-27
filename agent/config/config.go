@@ -17,7 +17,8 @@ const (
 	DefaultDataDir   = "/var/lib/watchflare"
 
 	// File names
-	ConfigFile = "agent.conf"
+	ConfigFile     = "agent.conf"
+	DefaultLogFile = "/var/log/watchflare-agent.log" // matches install.LogPath
 )
 
 // GetConfigDir returns the configuration directory
@@ -56,6 +57,9 @@ type Config struct {
 	WALEnabled   *bool  `toml:"wal_enabled"`     // Enable WAL persistence (default: true)
 	WALPath      string `toml:"wal_path"`        // WAL file path
 	WALMaxSizeMB int    `toml:"wal_max_size_mb"` // Max WAL size before FIFO truncate
+
+	// Log file path (optional — empty means stdout, captured by service manager)
+	LogFile string `toml:"log_file"`
 
 	// Docker metrics (opt-in: requires Docker socket access)
 	DockerMetrics *bool `toml:"docker_metrics"` // Enable Docker container metrics (default: false)

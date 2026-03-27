@@ -16,6 +16,7 @@ const (
 	InstallDir = "/usr/local/bin"
 	ConfigDir  = "/etc/watchflare"
 	DataDir    = "/var/lib/watchflare"
+	LogPath    = "/var/log/watchflare-agent.log"
 	BinaryName = "watchflare-agent"
 )
 
@@ -341,7 +342,6 @@ func InstallBinary(sourcePath string) error {
 
 // CreateLogFile creates the log file with proper permissions
 func CreateLogFile() error {
-	logPath := "/var/log/watchflare-agent.log"
 	username := "watchflare"
 	var groupname string
 
@@ -364,22 +364,22 @@ func CreateLogFile() error {
 	}
 
 	// Create or touch the log file
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
 	file.Close()
 
 	// Set ownership
-	if err := os.Chown(logPath, uid, gid); err != nil {
+	if err := os.Chown(LogPath, uid, gid); err != nil {
 		return fmt.Errorf("failed to set ownership: %w", err)
 	}
 
-	if err := os.Chmod(logPath, 0644); err != nil {
+	if err := os.Chmod(LogPath, 0644); err != nil {
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 
-	fmt.Printf("  → Created log file %s\n", logPath)
+	fmt.Printf("  → Created log file %s\n", LogPath)
 	return nil
 }
 
@@ -446,13 +446,11 @@ func RemoveUser() error {
 
 // RemoveLogFile removes the agent log file
 func RemoveLogFile() error {
-	logPath := "/var/log/watchflare-agent.log"
-
-	if err := os.Remove(logPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(LogPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove log file: %w", err)
 	}
 
-	fmt.Printf("  → Removed %s\n", logPath)
+	fmt.Printf("  → Removed %s\n", LogPath)
 	return nil
 }
 

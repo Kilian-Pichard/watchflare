@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -116,6 +117,24 @@ func Init() {
 	}
 	h := newHandler(os.Stdout, level)
 	slog.SetDefault(slog.New(h))
+}
+
+// InitWithFile redirects the global slog logger to write to path instead of stdout.
+// The file is opened in append mode and created if it does not exist.
+// This is called after loading config when log_file is set.
+func InitWithFile(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file %s: %w", path, err)
+	}
+
+	level := slog.LevelInfo
+	if os.Getenv("WATCHFLARE_DEBUG") != "" {
+		level = slog.LevelDebug
+	}
+	h := newHandler(f, level)
+	slog.SetDefault(slog.New(h))
+	return nil
 }
 
 // Fatal logs at ERROR level then exits with code 1.

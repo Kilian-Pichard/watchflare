@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"watchflare-agent/client"
 	"watchflare-agent/config"
@@ -22,36 +23,12 @@ func Register() bool {
 	fmt.Println("Watchflare Agent Registration")
 	fmt.Println("==============================")
 
-	// Parse command line arguments (supports both --flag=value and --flag value)
-	var token, host, port string
-	for i := 2; i < len(os.Args); i++ {
-		arg := os.Args[i]
-		switch {
-		case len(arg) > 8 && arg[:8] == "--token=":
-			token = arg[8:]
-		case arg == "--token" && i+1 < len(os.Args):
-			i++
-			token = os.Args[i]
-		case len(arg) > 7 && arg[:7] == "--host=":
-			host = arg[7:]
-		case arg == "--host" && i+1 < len(os.Args):
-			i++
-			host = os.Args[i]
-		case len(arg) > 7 && arg[:7] == "--port=":
-			port = arg[7:]
-		case arg == "--port" && i+1 < len(os.Args):
-			i++
-			port = os.Args[i]
-		}
-	}
+	token, host, port := parseRegisterArgs(os.Args[2:])
 
-	// Validate required arguments
 	if token == "" {
 		fmt.Fprintln(os.Stderr, "error: --token is required\nUsage: watchflare-agent register --token=TOKEN [--host=HOST] [--port=PORT]")
 		os.Exit(1)
 	}
-
-	// Set defaults
 	if host == "" {
 		host = "localhost"
 	}
@@ -59,12 +36,39 @@ func Register() bool {
 		port = "50051"
 	}
 
-	// Collect system information
+	reactivated, err := runRegistration(token, host, port)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println()
+	fmt.Println("✅ Registration successful!")
+	if reactivated {
+		fmt.Println("⚠️  NOTICE: This agent was merged with an existing agent in the system")
+		fmt.Println("   Reason: Agent UUID was found on disk (/var/lib/watchflare/agent.uuid)")
+		fmt.Println("   This is the same physical server reconnecting, so the existing agent was reactivated")
+		fmt.Println("   If you intended to create a NEW agent, uninstall with data cleanup first")
+	}
+
+	if isInstalledViaBrew() {
+		fmt.Println("\nYou can now start the agent with: brew services start watchflare-agent")
+	} else if runtime.GOOS == "linux" {
+		fmt.Println("\nYou can now start the agent with: sudo systemctl enable --now watchflare-agent")
+	} else {
+		fmt.Println("\nYou can now start the agent with: ./watchflare-agent")
+	}
+
+	return reactivated
+}
+
+// runRegistration performs agent registration with the backend.
+// Called by Register() (standalone command) and Install() (inline during installation).
+func runRegistration(token, host, port string) (bool, error) {
 	slog.Info("collecting system information")
 	info, err := sysinfo.Collect()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: failed to collect system info: %v\n", err)
-		os.Exit(1)
+		return false, fmt.Errorf("failed to collect system info: %w", err)
 	}
 
 	slog.Info("system info",
@@ -76,20 +80,16 @@ func Register() bool {
 		slog.Info("IPv6 detected", "ipv6", info.IPv6Address)
 	}
 
-	// Connect to backend with permissive TLS for bootstrap
 	slog.Info("connecting to backend", "host", host, "port", port)
 	grpcClient, err := client.NewForRegistration(host, port)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: failed to connect to backend: %v\n", err)
-		os.Exit(1)
+		return false, fmt.Errorf("failed to connect to backend: %w", err)
 	}
 	defer grpcClient.Close()
 
-	// Detect environment type
 	env := sysinfo.DetectEnvironment()
 	slog.Info("environment detected", "type", env.String())
 
-	// Check for existing UUID (for re-registration)
 	existingUUID, err := uuid.Load()
 	if err != nil {
 		slog.Warn("failed to load existing UUID", "error", err)
@@ -99,7 +99,6 @@ func Register() bool {
 		slog.Info("found existing agent UUID, will reactivate if still valid", "agent_id", existingUUID)
 	}
 
-	// Register with backend
 	slog.Info("registering agent")
 	regResp, err := grpcClient.Register(client.RegisterRequest{
 		Token:            token,
@@ -118,19 +117,15 @@ func Register() bool {
 		AgentVersion:     AgentVersion,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: registration failed: %v\n", err)
-		os.Exit(1)
+		return false, fmt.Errorf("registration failed: %w", err)
 	}
 
-	// Save CA certificate to disk
 	caCertPath := filepath.Join(config.GetConfigDir(), "ca.pem")
 	slog.Info("saving CA certificate", "path", caCertPath)
 	if err := client.SaveCACertificate(regResp.CACert, caCertPath); err != nil {
-		fmt.Fprintf(os.Stderr, "error: failed to save CA certificate: %v\n", err)
-		os.Exit(1)
+		return false, fmt.Errorf("failed to save CA certificate: %w", err)
 	}
 
-	// Create configuration
 	cfg := &config.Config{
 		ServerHost: host,
 		ServerPort: port,
@@ -138,43 +133,51 @@ func Register() bool {
 		AgentKey:   regResp.AgentKey,
 		CACertFile: caCertPath,
 		ServerName: regResp.ServerName,
+		LogFile:    config.DefaultLogFile,
 	}
 	cfg.SetDefaults()
 
-	// Save configuration
 	slog.Info("saving configuration")
 	if err := config.Save(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "error: failed to save config: %v\n", err)
-		os.Exit(1)
+		return false, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// Save agent UUID for future re-registrations
 	slog.Info("saving agent UUID")
 	if err := uuid.Save(regResp.AgentID); err != nil {
 		slog.Warn("failed to save UUID", "error", err)
-		// Not fatal - agent will work, but will create new UUID on next registration
+		// Not fatal — agent will work, but will create new UUID on next registration
 	}
 
-	fmt.Println()
-	fmt.Println("✅ Registration successful!")
-	if regResp.Reactivated {
-		fmt.Println("⚠️  NOTICE: This agent was merged with an existing agent in the system")
-		fmt.Println("   Reason: Agent UUID was found on disk (/var/lib/watchflare/agent.uuid)")
-		fmt.Println("   This is the same physical server reconnecting, so the existing agent was reactivated")
-		fmt.Println("   If you intended to create a NEW agent, uninstall with data cleanup first")
-	}
 	slog.Info("agent registered",
 		"agent_id", regResp.AgentID,
-		"config", config.GetConfigDir()+"/"+config.ConfigFile,
+		"config", filepath.Join(config.GetConfigDir(), config.ConfigFile),
 		"tls_server", regResp.ServerName)
 
-	if isInstalledViaBrew() {
-		fmt.Println("\nYou can now start the agent with: brew services start watchflare-agent")
-	} else if runtime.GOOS == "linux" {
-		fmt.Println("\nYou can now start the agent with: sudo systemctl enable --now watchflare-agent")
-	} else {
-		fmt.Println("\nYou can now start the agent with: ./watchflare-agent")
-	}
+	return regResp.Reactivated, nil
+}
 
-	return regResp.Reactivated
+// parseRegisterArgs parses --token, --host, --port from a slice of arguments.
+// Supports both --flag=value and --flag value forms.
+func parseRegisterArgs(args []string) (token, host, port string) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case strings.HasPrefix(arg, "--token="):
+			token = strings.TrimPrefix(arg, "--token=")
+		case arg == "--token" && i+1 < len(args):
+			i++
+			token = args[i]
+		case strings.HasPrefix(arg, "--host="):
+			host = strings.TrimPrefix(arg, "--host=")
+		case arg == "--host" && i+1 < len(args):
+			i++
+			host = args[i]
+		case strings.HasPrefix(arg, "--port="):
+			port = strings.TrimPrefix(arg, "--port=")
+		case arg == "--port" && i+1 < len(args):
+			i++
+			port = args[i]
+		}
+	}
+	return
 }

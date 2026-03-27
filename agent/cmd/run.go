@@ -39,6 +39,13 @@ func Run() {
 		logger.Fatal("configuration error", "error", err)
 	}
 
+	// Redirect logs to file if configured
+	if cfg.LogFile != "" {
+		if err := logger.InitWithFile(cfg.LogFile); err != nil {
+			logger.Fatal("failed to open log file", "error", err)
+		}
+	}
+
 	// Ensure directories exist
 	if err := config.EnsureDirectories(); err != nil {
 		logger.Fatal("failed to create directories", "error", err)

@@ -25,7 +25,7 @@ func NewMacOSService() *MacOSService {
 // Install installs the launchd service
 func (s *MacOSService) Install() error {
 	// Create plist content
-	plistContent := `<?xml version="1.0" encoding="UTF-8"?>
+	plistContent := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -53,10 +53,10 @@ func (s *MacOSService) Install() error {
 	</dict>
 
 	<key>StandardOutPath</key>
-	<string>/var/log/watchflare-agent.log</string>
+	<string>%s</string>
 
 	<key>StandardErrorPath</key>
-	<string>/var/log/watchflare-agent.log</string>
+	<string>%s</string>
 
 	<key>EnvironmentVariables</key>
 	<dict>
@@ -72,7 +72,7 @@ func (s *MacOSService) Install() error {
 	<integer>5</integer>
 </dict>
 </plist>
-`
+`, LogPath, LogPath)
 
 	// Write plist file
 	if err := os.WriteFile(plistPath, []byte(plistContent), 0644); err != nil {
@@ -181,10 +181,9 @@ func (s *MacOSService) Restart() error {
 
 // ShowLogs displays and follows the service logs
 func (s *MacOSService) ShowLogs() error {
-	logPath := "/var/log/watchflare-agent.log"
-	fmt.Printf("Following logs from %s (Ctrl+C to exit)...\n\n", logPath)
+	fmt.Printf("Following logs from %s (Ctrl+C to exit)...\n\n", LogPath)
 
-	cmd := exec.Command("tail", "-f", logPath)
+	cmd := exec.Command("tail", "-f", LogPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

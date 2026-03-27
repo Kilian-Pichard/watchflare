@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"watchflare-agent/config"
 	"watchflare-agent/install"
 )
 
@@ -23,27 +25,7 @@ func Install() {
 	fmt.Println("  → Running as root")
 
 	// Parse command line arguments (supports both --flag=value and --flag value)
-	var token, host, port string
-	for i := 2; i < len(os.Args); i++ {
-		arg := os.Args[i]
-		switch {
-		case len(arg) > 8 && arg[:8] == "--token=":
-			token = arg[8:]
-		case arg == "--token" && i+1 < len(os.Args):
-			i++
-			token = os.Args[i]
-		case len(arg) > 7 && arg[:7] == "--host=":
-			host = arg[7:]
-		case arg == "--host" && i+1 < len(os.Args):
-			i++
-			host = os.Args[i]
-		case len(arg) > 7 && arg[:7] == "--port=":
-			port = arg[7:]
-		case arg == "--port" && i+1 < len(os.Args):
-			i++
-			port = os.Args[i]
-		}
-	}
+	token, host, port := parseRegisterArgs(os.Args[2:])
 
 	svcMgr, err := install.GetServiceManager()
 	if err != nil {
@@ -101,7 +83,7 @@ func Install() {
 	fmt.Println("\n[6/7] Agent registration...")
 	needsRegistration := true
 
-	configPath := install.ConfigDir + "/agent.conf"
+	configPath := filepath.Join(install.ConfigDir, config.ConfigFile)
 	if _, err := os.Stat(configPath); err == nil {
 		fmt.Println("  → Configuration file already exists")
 		needsRegistration = false
@@ -115,20 +97,14 @@ func Install() {
 			port = "50051"
 		}
 
-		oldArgs := os.Args
-		os.Args = []string{
-			os.Args[0],
-			"register",
-			"--token=" + token,
-			"--host=" + host,
-			"--port=" + port,
+		reactivated, err := runRegistration(token, host, port)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: registration failed: %v\n", err)
+			os.Exit(1)
 		}
-
-		wasReactivated := Register()
-		os.Args = oldArgs
 		needsRegistration = false
 
-		if wasReactivated {
+		if reactivated {
 			fmt.Println("  → Registration successful (existing agent reactivated)")
 			fmt.Println("  ⚠️  NOTICE: Agent UUID was found on disk - merged with existing agent")
 		} else {
@@ -158,8 +134,8 @@ func Install() {
 
 			fmt.Print("  → Checking agent health...")
 			time.Sleep(8 * time.Second)
-			logContent, err := os.ReadFile("/var/log/watchflare-agent.log")
-			if err == nil && strings.Contains(string(logContent), "clock out of sync with backend") {
+			logContent, err := os.ReadFile(install.LogPath)
+			if err == nil && hasClockSyncError(string(logContent)) {
 				fmt.Println(" ⚠")
 				fmt.Println()
 				fmt.Println("  ⚠ WARNING: Clock synchronization error detected!")
@@ -170,7 +146,7 @@ func Install() {
 			}
 		} else {
 			fmt.Println("  → Service failed to start")
-			fmt.Println("  → Check logs: tail -f /var/log/watchflare-agent.log")
+			fmt.Printf("  → Check logs: tail -f %s\n", install.LogPath)
 		}
 	} else {
 		fmt.Println("  → Skipped (needs registration first)")
@@ -182,7 +158,7 @@ func Install() {
 	fmt.Printf("  Binary:        %s/watchflare-agent\n", install.InstallDir)
 	fmt.Printf("  Configuration: %s/\n", install.ConfigDir)
 	fmt.Printf("  Data:          %s/\n", install.DataDir)
-	fmt.Println("  Logs:          /var/log/watchflare-agent.log")
+	fmt.Printf("  Logs:          %s\n", install.LogPath)
 	fmt.Println()
 
 	if needsRegistration {
@@ -210,16 +186,22 @@ func Install() {
 			fmt.Println("  Status:  sudo launchctl print system/io.watchflare.agent")
 			fmt.Println("  Stop:    sudo launchctl bootout system/io.watchflare.agent")
 			fmt.Println("  Start:   sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist")
-			fmt.Println("  Logs:    tail -f /var/log/watchflare-agent.log")
+			fmt.Printf("  Logs:    tail -f %s\n", install.LogPath)
 		} else {
 			fmt.Println("  Status:  sudo systemctl status watchflare-agent")
 			fmt.Println("  Stop:    sudo systemctl stop watchflare-agent")
 			fmt.Println("  Start:   sudo systemctl start watchflare-agent")
 			fmt.Println("  Restart: sudo systemctl restart watchflare-agent")
-			fmt.Println("  Logs:    tail -f /var/log/watchflare-agent.log")
+			fmt.Printf("  Logs:    tail -f %s\n", install.LogPath)
 		}
 		fmt.Println()
 	}
 
 	fmt.Println("Installation successful!")
+}
+
+// hasClockSyncError returns true if the log content indicates a clock
+// synchronization error between the agent and the backend.
+func hasClockSyncError(logContent string) bool {
+	return strings.Contains(logContent, "clock out of sync with backend")
 }

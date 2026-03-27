@@ -29,7 +29,7 @@ func (s *LinuxService) Install() error {
 	}
 
 	// Create service file content
-	serviceContent := `[Unit]
+	serviceContent := fmt.Sprintf(`[Unit]
 Description=Watchflare Monitoring Agent
 Documentation=https://watchflare.io
 After=network-online.target
@@ -59,8 +59,8 @@ ProtectHome=true
 ReadWritePaths=/var/lib/watchflare /var/log
 
 # Logging
-StandardOutput=append:/var/log/watchflare-agent.log
-StandardError=append:/var/log/watchflare-agent.log
+StandardOutput=append:%s
+StandardError=append:%s
 SyslogIdentifier=watchflare-agent
 
 # Resource limits (optional)
@@ -68,7 +68,7 @@ LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-`
+`, LogPath, LogPath)
 
 	// Write service file
 	if err := os.WriteFile(systemdServiceFile, []byte(serviceContent), 0644); err != nil {
