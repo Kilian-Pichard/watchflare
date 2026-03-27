@@ -121,11 +121,11 @@ agent_key   = "test-key"
 		t.Errorf("AgentKey: got %q, want %q", cfg.AgentKey, "test-key")
 	}
 	// Verify SetDefaults() was applied
-	if cfg.HeartbeatInterval != 5 {
-		t.Errorf("HeartbeatInterval: got %d, want 5 (default)", cfg.HeartbeatInterval)
+	if cfg.HeartbeatInterval != config.DefaultHeartbeatInterval {
+		t.Errorf("HeartbeatInterval: got %d, want %d (default)", cfg.HeartbeatInterval, config.DefaultHeartbeatInterval)
 	}
-	if cfg.MetricsInterval != 30 {
-		t.Errorf("MetricsInterval: got %d, want 30 (default)", cfg.MetricsInterval)
+	if cfg.MetricsInterval != config.DefaultMetricsInterval {
+		t.Errorf("MetricsInterval: got %d, want %d (default)", cfg.MetricsInterval, config.DefaultMetricsInterval)
 	}
 }
 

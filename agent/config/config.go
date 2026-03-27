@@ -19,6 +19,13 @@ const (
 	// File names
 	ConfigFile     = "agent.conf"
 	DefaultLogFile = "/var/log/watchflare-agent.log" // matches install.LogPath
+
+	// Default intervals (seconds)
+	DefaultHeartbeatInterval = 5
+	DefaultMetricsInterval   = 30
+
+	// Default WAL settings
+	DefaultWALMaxSizeMB = 10
 )
 
 // GetConfigDir returns the configuration directory
@@ -46,8 +53,8 @@ type Config struct {
 	AgentID    string `toml:"agent_id"`
 	AgentKey   string `toml:"agent_key"`
 
-	HeartbeatInterval int `toml:"heartbeat_interval"` // in seconds, default 5
-	MetricsInterval   int `toml:"metrics_interval"`   // in seconds, default 30
+	HeartbeatInterval int `toml:"heartbeat_interval"` // seconds
+	MetricsInterval   int `toml:"metrics_interval"`   // seconds
 
 	// TLS Configuration
 	CACertFile string `toml:"ca_cert_file"` // Path to CA certificate for TLS
@@ -68,10 +75,10 @@ type Config struct {
 // SetDefaults sets default values for optional configuration fields
 func (c *Config) SetDefaults() {
 	if c.HeartbeatInterval == 0 {
-		c.HeartbeatInterval = 5
+		c.HeartbeatInterval = DefaultHeartbeatInterval
 	}
 	if c.MetricsInterval == 0 {
-		c.MetricsInterval = 30
+		c.MetricsInterval = DefaultMetricsInterval
 	}
 
 	// WAL defaults
@@ -83,7 +90,7 @@ func (c *Config) SetDefaults() {
 		c.WALPath = filepath.Join(GetDataDir(), "metrics.wal")
 	}
 	if c.WALMaxSizeMB == 0 {
-		c.WALMaxSizeMB = 10
+		c.WALMaxSizeMB = DefaultWALMaxSizeMB
 	}
 
 	// Docker metrics default: disabled
@@ -123,11 +130,14 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
-	defer file.Close()
 
-	encoder := toml.NewEncoder(file)
-	if err := encoder.Encode(cfg); err != nil {
+	if err := toml.NewEncoder(file).Encode(cfg); err != nil {
+		file.Close()
 		return fmt.Errorf("failed to encode config: %w", err)
+	}
+
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	// Set proper ownership when running as root (installation/registration)
