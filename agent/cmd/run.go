@@ -359,10 +359,10 @@ func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg 
 }
 
 // convertPackagesToProto converts agent Package structs to protobuf Package structs
-func convertPackagesToProto(packages []*packages.Package) []*pb.Package {
-	protoPackages := make([]*pb.Package, len(packages))
+func convertPackagesToProto(pkgs []*packages.Package) []*pb.Package {
+	protoPackages := make([]*pb.Package, len(pkgs))
 
-	for i, pkg := range packages {
+	for i, pkg := range pkgs {
 		var installedAt int64
 		if !pkg.InstalledAt.IsZero() {
 			installedAt = pkg.InstalledAt.Unix()
