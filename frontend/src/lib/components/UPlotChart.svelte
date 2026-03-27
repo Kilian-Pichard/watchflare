@@ -621,7 +621,7 @@
         mounted = true;
         createChart();
 
-        function onResize() {
+        const resizeObserver = new ResizeObserver(() => {
             if (!chart || !container) return;
             const width = container.clientWidth;
             const height = container.clientHeight;
@@ -634,8 +634,8 @@
                 lastHeight = height;
                 chart.setSize({ width, height });
             }
-        }
-        window.addEventListener("resize", onResize);
+        });
+        resizeObserver.observe(container);
 
         // Recreate chart on theme change (colors are baked into canvas)
         const themeObserver = new MutationObserver(() => {
@@ -647,7 +647,7 @@
         });
 
         return () => {
-            window.removeEventListener("resize", onResize);
+            resizeObserver.disconnect();
             themeObserver.disconnect();
         };
     });
