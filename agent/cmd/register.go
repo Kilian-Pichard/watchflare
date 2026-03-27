@@ -18,8 +18,7 @@ import (
 var AgentVersion = "dev"
 
 // Register handles agent registration with the backend
-// Returns true if the agent was reactivated (UUID reused), false if new registration
-func Register() bool {
+func Register() {
 	fmt.Println("Watchflare Agent Registration")
 	fmt.Println("==============================")
 
@@ -46,7 +45,7 @@ func Register() bool {
 	fmt.Println("✅ Registration successful!")
 	if reactivated {
 		fmt.Println("⚠️  NOTICE: This agent was merged with an existing agent in the system")
-		fmt.Println("   Reason: Agent UUID was found on disk (/var/lib/watchflare/agent.uuid)")
+		fmt.Printf("   Reason: Agent UUID was found on disk (%s)\n", uuid.GetUUIDPath())
 		fmt.Println("   This is the same physical server reconnecting, so the existing agent was reactivated")
 		fmt.Println("   If you intended to create a NEW agent, uninstall with data cleanup first")
 	}
@@ -58,8 +57,6 @@ func Register() bool {
 	} else {
 		fmt.Println("\nYou can now start the agent with: ./watchflare-agent")
 	}
-
-	return reactivated
 }
 
 // runRegistration performs agent registration with the backend.

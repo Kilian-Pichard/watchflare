@@ -17,6 +17,7 @@ func main() {
 
 		switch subcommand {
 		case "install":
+			cmd.AgentVersion = Version
 			cmd.Install()
 			return
 
@@ -26,7 +27,7 @@ func main() {
 
 		case "register":
 			cmd.AgentVersion = Version
-			_ = cmd.Register() // Ignore return value when called directly
+			cmd.Register()
 			return
 
 		case "status":
