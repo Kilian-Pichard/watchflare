@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 const (
 	systemdServiceFile = "/etc/systemd/system/watchflare-agent.service"
-	serviceName        = "watchflare-agent"
+	serviceName        = BinaryName
 )
 
 // LinuxService implements ServiceManager for Linux (systemd)
@@ -37,38 +38,38 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=watchflare
-Group=watchflare
+User=%s
+Group=%s
 
 # Binary
-ExecStart=/usr/local/bin/watchflare-agent
+ExecStart=%s/%s
 
 # Restart policy
 Restart=always
 RestartSec=5s
 
 # Environment variables
-Environment="WATCHFLARE_CONFIG_DIR=/etc/watchflare"
-Environment="WATCHFLARE_DATA_DIR=/var/lib/watchflare"
+Environment="WATCHFLARE_CONFIG_DIR=%s"
+Environment="WATCHFLARE_DATA_DIR=%s"
 
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/watchflare /var/log
+ReadWritePaths=%s %s
 
 # Logging
 StandardOutput=append:%s
 StandardError=append:%s
-SyslogIdentifier=watchflare-agent
+SyslogIdentifier=%s
 
 # Resource limits (optional)
 LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-`, LogPath, LogPath)
+`, UserName, UserName, InstallDir, BinaryName, ConfigDir, DataDir, DataDir, LogPath, LogPath, LogPath, BinaryName)
 
 	// Write service file
 	if err := os.WriteFile(systemdServiceFile, []byte(serviceContent), 0644); err != nil {
@@ -105,7 +106,7 @@ func (s *LinuxService) Uninstall() error {
 		}
 	}
 
-	// Disable service
+	// Disable service — error intentionally ignored (may not have been enabled)
 	exec.Command("systemctl", "disable", serviceName).Run()
 
 	// Remove service file
@@ -190,7 +191,6 @@ func (s *LinuxService) Restart() error {
 		return fmt.Errorf("systemd not available")
 	}
 
-	fmt.Println("Restarting service...")
 	cmd := exec.Command("systemctl", "restart", serviceName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to restart service: %w", err)
@@ -206,7 +206,7 @@ func (s *LinuxService) ShowLogs() error {
 		return fmt.Errorf("systemd not available")
 	}
 
-	fmt.Println("Following logs (Ctrl+C to exit)...\n")
+	fmt.Println("Following logs (Ctrl+C to exit)...")
 
 	cmd := exec.Command("journalctl", "-u", serviceName, "-f", "--no-pager")
 	cmd.Stdout = os.Stdout
@@ -214,14 +214,16 @@ func (s *LinuxService) ShowLogs() error {
 	return cmd.Run()
 }
 
-// hasSystemd checks if systemd is available
+// hasSystemd checks if systemd is available.
+// Accepts both "running" and "degraded" states — a degraded system (some units
+// failed) still supports service management commands.
 func (s *LinuxService) hasSystemd() bool {
-	// Check if systemctl command exists
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		return false
 	}
 
-	// Check if systemd is running
 	cmd := exec.Command("systemctl", "is-system-running")
-	return cmd.Run() == nil
+	output, _ := cmd.Output()
+	state := strings.TrimSpace(string(output))
+	return state == "running" || state == "degraded"
 }

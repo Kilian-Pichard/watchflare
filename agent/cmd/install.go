@@ -14,6 +14,18 @@ import (
 
 // Install handles agent installation
 func Install() {
+	if runtime.GOOS == "darwin" {
+		fmt.Println("On macOS, the agent is installed and managed via Homebrew:")
+		fmt.Println()
+		fmt.Println("  brew tap Kilian-Pichard/watchflare")
+		fmt.Println("  brew install watchflare-agent")
+		fmt.Println("  brew services start watchflare-agent")
+		fmt.Println()
+		fmt.Println("After installation, register the agent:")
+		fmt.Println("  watchflare-agent register --token=YOUR_TOKEN --host=YOUR_HOST")
+		return
+	}
+
 	fmt.Println("=== Watchflare Agent Installation ===")
 	fmt.Println()
 
@@ -167,12 +179,8 @@ func Install() {
 		fmt.Printf("     sudo %s/watchflare-agent register --token=YOUR_TOKEN --host=YOUR_HOST\n", install.InstallDir)
 		fmt.Println()
 		fmt.Println("  2. Start the service:")
-		if runtime.GOOS == "darwin" {
-			fmt.Println("     sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist")
-		} else {
-			fmt.Println("     sudo systemctl enable watchflare-agent")
-			fmt.Println("     sudo systemctl start watchflare-agent")
-		}
+		fmt.Println("     sudo systemctl enable watchflare-agent")
+		fmt.Println("     sudo systemctl start watchflare-agent")
 		fmt.Println()
 	} else {
 		if token != "" {
@@ -182,18 +190,11 @@ func Install() {
 		}
 
 		fmt.Println("Service management:")
-		if runtime.GOOS == "darwin" {
-			fmt.Println("  Status:  sudo launchctl print system/io.watchflare.agent")
-			fmt.Println("  Stop:    sudo launchctl bootout system/io.watchflare.agent")
-			fmt.Println("  Start:   sudo launchctl bootstrap system /Library/LaunchDaemons/io.watchflare.agent.plist")
-			fmt.Printf("  Logs:    tail -f %s\n", install.LogPath)
-		} else {
-			fmt.Println("  Status:  sudo systemctl status watchflare-agent")
-			fmt.Println("  Stop:    sudo systemctl stop watchflare-agent")
-			fmt.Println("  Start:   sudo systemctl start watchflare-agent")
-			fmt.Println("  Restart: sudo systemctl restart watchflare-agent")
-			fmt.Printf("  Logs:    tail -f %s\n", install.LogPath)
-		}
+		fmt.Println("  Status:  sudo systemctl status watchflare-agent")
+		fmt.Println("  Stop:    sudo systemctl stop watchflare-agent")
+		fmt.Println("  Start:   sudo systemctl start watchflare-agent")
+		fmt.Println("  Restart: sudo systemctl restart watchflare-agent")
+		fmt.Printf("  Logs:    tail -f %s\n", install.LogPath)
 		fmt.Println()
 	}
 
