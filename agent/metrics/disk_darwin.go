@@ -22,7 +22,11 @@ func getDiskUsage() (total uint64, used uint64, err error) {
 	if execErr == nil {
 		var info diskutilInfo
 		if _, plistErr := plist.Unmarshal(out, &info); plistErr == nil && info.FilesystemType == "apfs" && info.APFSContainerSize > 0 {
-			return info.APFSContainerSize, info.APFSContainerSize - info.APFSContainerFree, nil
+			used := uint64(0)
+			if info.APFSContainerSize >= info.APFSContainerFree {
+				used = info.APFSContainerSize - info.APFSContainerFree
+			}
+			return info.APFSContainerSize, used, nil
 		}
 	}
 

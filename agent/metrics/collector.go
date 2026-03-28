@@ -12,11 +12,10 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 )
 
-// Initialize initializes the metrics collector
-// This is necessary on macOS where cpu.Percent() needs an initial baseline
+// Initialize warms up the CPU metrics collector.
+// cpu.Percent() requires an initial measurement to compute the delta on the next call;
+// without this, the first real measurement returns 0%.
 func Initialize() {
-	// Call cpu.Percent once to initialize internal state
-	// This prevents getting 0% on first real measurement
 	_, err := cpu.Percent(time.Second, false)
 	if err != nil {
 		slog.Warn("failed to initialize CPU metrics", "error", err)
@@ -89,8 +88,10 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 			slog.Debug("failed to collect memory metrics", "error", err)
 		} else {
 			metrics.MemoryTotalBytes = memStats.Total
-			metrics.MemoryUsedBytes = memStats.Total - memStats.Available
 			metrics.MemoryAvailableBytes = memStats.Available
+			if memStats.Total >= memStats.Available {
+				metrics.MemoryUsedBytes = memStats.Total - memStats.Available
+			}
 		}
 	}
 
@@ -155,20 +156,22 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// Docker container metrics
 	if config.CollectDockerCPU || config.CollectDockerMemory || config.CollectDockerNetwork {
 		containerMetrics, containerErr := CollectContainerMetrics(deltaTracker)
-		dockerErrorMu.Lock()
-		if containerErr != nil {
-			if !dockerErrorLogged {
-				slog.Warn("failed to collect container metrics", "error", containerErr)
-				dockerErrorLogged = true
+		func() {
+			dockerErrorMu.Lock()
+			defer dockerErrorMu.Unlock()
+			if containerErr != nil {
+				if !dockerErrorLogged {
+					slog.Warn("failed to collect container metrics", "error", containerErr)
+					dockerErrorLogged = true
+				}
+			} else if containerMetrics != nil {
+				if dockerErrorLogged {
+					slog.Info("container metrics collection recovered after previous error")
+					dockerErrorLogged = false
+				}
+				metrics.ContainerMetrics = containerMetrics
 			}
-		} else if containerMetrics != nil {
-			if dockerErrorLogged {
-				slog.Info("container metrics collection recovered after previous error")
-				dockerErrorLogged = false
-			}
-			metrics.ContainerMetrics = containerMetrics
-		}
-		dockerErrorMu.Unlock()
+		}()
 	}
 
 	// System uptime

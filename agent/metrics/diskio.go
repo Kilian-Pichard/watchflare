@@ -39,5 +39,13 @@ func isRealDisk(name string) bool {
 	if strings.HasPrefix(name, "ram") {
 		return false
 	}
+	// Skip compressed swap (zram, common on Raspberry Pi / Ubuntu)
+	if strings.HasPrefix(name, "zram") {
+		return false
+	}
+	// Skip optical drives
+	if strings.HasPrefix(name, "sr") {
+		return false
+	}
 	return true
 }
