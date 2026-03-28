@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 	"watchflare-agent/sysinfo"
 
@@ -57,8 +58,12 @@ type SystemMetrics struct {
 // Package-level delta tracker for rate-based metrics (disk I/O, network)
 var deltaTracker = NewDeltaTracker()
 
-// Track whether we've already logged a Docker permission error
-var dockerErrorLogged bool
+// dockerErrorLogged suppresses repeated Docker error logs after the first failure.
+// Protected by dockerErrorMu.
+var (
+	dockerErrorLogged bool
+	dockerErrorMu     sync.Mutex
+)
 
 // Collect gathers system metrics based on environment configuration
 // config parameter determines which metrics to collect (e.g., containers don't collect disk)
@@ -150,6 +155,7 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 	// Docker container metrics
 	if config.CollectDockerCPU || config.CollectDockerMemory || config.CollectDockerNetwork {
 		containerMetrics, containerErr := CollectContainerMetrics(deltaTracker)
+		dockerErrorMu.Lock()
 		if containerErr != nil {
 			if !dockerErrorLogged {
 				slog.Warn("failed to collect container metrics", "error", containerErr)
@@ -162,6 +168,7 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 			}
 			metrics.ContainerMetrics = containerMetrics
 		}
+		dockerErrorMu.Unlock()
 	}
 
 	// System uptime

@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -74,17 +75,15 @@ var dockerClient = &http.Client{
 
 // CollectContainerMetrics collects metrics for all running Docker containers
 func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
-	httpClient := dockerClient
-
 	// List running containers
-	resp, err := httpClient.Get("http://localhost/" + dockerAPIVersion + "/containers/json")
+	resp, err := dockerClient.Get("http://localhost/" + dockerAPIVersion + "/containers/json")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil
+		return nil, fmt.Errorf("docker API returned status %d", resp.StatusCode)
 	}
 
 	var containers []dockerContainer
@@ -103,7 +102,7 @@ func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
 			continue
 		}
 
-		stats, err := getContainerStats(httpClient, c.ID)
+		stats, err := getContainerStats(dockerClient, c.ID)
 		if err != nil {
 			slog.Warn("failed to get stats for container", "container_id", truncateID(c.ID), "error", err)
 			continue
@@ -166,7 +165,8 @@ func getContainerStats(client *http.Client, containerID string) (*dockerStatsRes
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	// Limit response size to prevent excessive memory use from unexpectedly large payloads
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MB
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +181,12 @@ func getContainerStats(client *http.Client, containerID string) (*dockerStatsRes
 
 // computeCPUPercent calculates CPU usage percentage from Docker stats
 func computeCPUPercent(stats *dockerStatsResponse) float64 {
+	// Guard against uint64 underflow (e.g. container restart resets counters)
+	if stats.CPUStats.CPUUsage.TotalUsage < stats.PreCPUStats.CPUUsage.TotalUsage ||
+		stats.CPUStats.SystemCPUUsage < stats.PreCPUStats.SystemCPUUsage {
+		return 0
+	}
+
 	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
 	systemDelta := float64(stats.CPUStats.SystemCPUUsage - stats.PreCPUStats.SystemCPUUsage)
 
