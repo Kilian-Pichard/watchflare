@@ -8,6 +8,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// timestampErrorMsg is the exact message returned by the backend gRPC interceptor
+// when the agent clock is more than 5 minutes out of sync.
+const timestampErrorMsg = "Timestamp outside acceptable window"
+
 // IsTimestampError checks if an error is a timestamp synchronization issue.
 // The backend returns codes.InvalidArgument with a specific message when the
 // agent clock is more than 5 minutes out of sync.
@@ -20,7 +24,7 @@ func IsTimestampError(err error) bool {
 		return false
 	}
 	return st.Code() == codes.InvalidArgument &&
-		strings.Contains(st.Message(), "Timestamp outside acceptable window")
+		strings.Contains(st.Message(), timestampErrorMsg)
 }
 
 // FormatError formats an error with helpful context
