@@ -75,6 +75,8 @@ func (h *handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 }
 
+// WithGroup is intentionally a no-op: the agent logger does not support
+// group prefixing. Groups are silently ignored to keep output flat.
 func (h *handler) WithGroup(_ string) slog.Handler {
 	return &handler{
 		w:     h.w,
@@ -107,33 +109,31 @@ func writeAttr(buf *bytes.Buffer, a slog.Attr) {
 	}
 }
 
+// logLevel returns INFO by default, DEBUG when WATCHFLARE_DEBUG is set.
+func logLevel() slog.Level {
+	if os.Getenv("WATCHFLARE_DEBUG") != "" {
+		return slog.LevelDebug
+	}
+	return slog.LevelInfo
+}
+
 // Init initialises the global slog logger with the clean text handler.
 // Must be called once at startup before any log call.
 // If the WATCHFLARE_DEBUG environment variable is set, DEBUG level is enabled.
 func Init() {
-	level := slog.LevelInfo
-	if os.Getenv("WATCHFLARE_DEBUG") != "" {
-		level = slog.LevelDebug
-	}
-	h := newHandler(os.Stdout, level)
-	slog.SetDefault(slog.New(h))
+	slog.SetDefault(slog.New(newHandler(os.Stdout, logLevel())))
 }
 
 // InitWithFile redirects the global slog logger to write to path instead of stdout.
 // The file is opened in append mode and created if it does not exist.
 // This is called after loading config when log_file is set.
+// The file handle is intentionally kept open for the lifetime of the process.
 func InitWithFile(path string) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file %s: %w", path, err)
 	}
-
-	level := slog.LevelInfo
-	if os.Getenv("WATCHFLARE_DEBUG") != "" {
-		level = slog.LevelDebug
-	}
-	h := newHandler(f, level)
-	slog.SetDefault(slog.New(h))
+	slog.SetDefault(slog.New(newHandler(f, logLevel())))
 	return nil
 }
 
