@@ -2,14 +2,20 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
+const zypperTimeout = 60 * time.Second
+
 // ZypperCollector collects packages from zypper (openSUSE)
-type ZypperCollector struct{}
+type ZypperCollector struct {
+	zypperPath string
+}
 
 // Name returns the collector name
 func (z *ZypperCollector) Name() string {
@@ -18,48 +24,46 @@ func (z *ZypperCollector) Name() string {
 
 // IsAvailable checks if zypper is available
 func (z *ZypperCollector) IsAvailable() bool {
-	_, err := exec.LookPath("zypper")
-	return err == nil
+	path, err := exec.LookPath("zypper")
+	if err != nil {
+		return false
+	}
+	z.zypperPath = path
+	return true
 }
 
-// Collect gathers all installed packages from zypper
+// Collect gathers all installed packages from zypper.
+// Uses "zypper --no-refresh search --installed-only --details".
+// Output format: S | Name | Type | Version | Arch | Repository
 func (z *ZypperCollector) Collect() ([]*Package, error) {
-	// Run zypper search with installed packages
-	// --installed-only: only installed packages
-	// --details: show detailed information
-	cmd := exec.Command("zypper", "--no-refresh", "search", "--installed-only", "--details")
+	ctx, cancel := context.WithTimeout(context.Background(), zypperTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, z.zypperPath, "--no-refresh", "search", "--installed-only", "--details")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("zypper search failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
-	// Skip header lines
 	headerPassed := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
-
-		// Skip until we find the separator line (----+----+...)
 		if !headerPassed {
 			if strings.Contains(line, "---+---") {
 				headerPassed = true
 			}
 			continue
 		}
-
-		// Parse package line
-		pkg := z.parsePackageLine(line)
-		if pkg != nil {
+		if pkg := parseZypperLine(line); pkg != nil {
 			packages = append(packages, pkg)
 		}
 	}
-
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading zypper output: %w", err)
 	}
@@ -67,12 +71,10 @@ func (z *ZypperCollector) Collect() ([]*Package, error) {
 	return packages, nil
 }
 
-// parsePackageLine parses a single line of zypper output
-func (z *ZypperCollector) parsePackageLine(line string) *Package {
-	// Zypper --details output format (separated by |):
-	// S | Name | Type | Version | Arch | Repository
-	// i | package-name | package | 1.2.3-1 | x86_64 | repo-name
-
+// parseZypperLine parses a single data line of "zypper search --details" output.
+// Format: "i | name | package | version | arch | repo"
+// Only "package" type entries with status "i" (installed) are returned.
+func parseZypperLine(line string) *Package {
 	parts := strings.Split(line, "|")
 	if len(parts) < 6 {
 		return nil
@@ -85,13 +87,7 @@ func (z *ZypperCollector) parsePackageLine(line string) *Package {
 	arch := strings.TrimSpace(parts[4])
 	repo := strings.TrimSpace(parts[5])
 
-	// Only include installed packages (status 'i')
-	if status != "i" {
-		return nil
-	}
-
-	// Filter to only include actual packages (not patches, patterns, etc.)
-	if pkgType != "package" {
+	if status != "i" || pkgType != "package" {
 		return nil
 	}
 
@@ -101,8 +97,5 @@ func (z *ZypperCollector) parsePackageLine(line string) *Package {
 		Architecture:   arch,
 		PackageManager: "zypper",
 		Source:         repo,
-		InstalledAt:    time.Time{}, // Not easily available
-		PackageSize:    0,            // Would need rpm -qi for each package
-		Description:    "",           // Would need rpm -qi for description
 	}
 }

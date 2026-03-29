@@ -2,7 +2,6 @@ package packages
 
 import (
 	"log/slog"
-	"strings"
 	"time"
 )
 
@@ -31,8 +30,9 @@ type Collector interface {
 	Collect() ([]*Package, error)
 }
 
-// CollectAll discovers and runs all available collectors using the registry
-// Returns combined list of packages from all package managers
+// CollectAll discovers and runs all available collectors using the registry.
+// Returns combined list of packages from all package managers.
+// Individual collector failures are logged and skipped; the error return is always nil.
 func CollectAll() ([]*Package, error) {
 	// Create registry and get available collectors
 	registry := NewRegistry()
@@ -64,12 +64,3 @@ func TruncateDescription(desc string) string {
 	return string(runes[:97]) + "..."
 }
 
-// splitLines splits a string by newlines, stripping carriage returns
-func splitLines(s string) []string {
-	s = strings.ReplaceAll(s, "\r", "")
-	s = strings.TrimRight(s, "\n")
-	if s == "" {
-		return []string{}
-	}
-	return strings.Split(s, "\n")
-}

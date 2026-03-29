@@ -2,6 +2,8 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -9,8 +11,12 @@ import (
 	"time"
 )
 
+const dpkgTimeout = 60 * time.Second
+
 // DpkgCollector collects packages from dpkg (Debian/Ubuntu)
-type DpkgCollector struct{}
+type DpkgCollector struct {
+	dpkgPath string
+}
 
 // Name returns the collector name
 func (d *DpkgCollector) Name() string {
@@ -19,15 +25,21 @@ func (d *DpkgCollector) Name() string {
 
 // IsAvailable checks if dpkg-query is available
 func (d *DpkgCollector) IsAvailable() bool {
-	_, err := exec.LookPath("dpkg-query")
-	return err == nil
+	dpkgPath, err := exec.LookPath("dpkg-query")
+	if err != nil {
+		return false
+	}
+	d.dpkgPath = dpkgPath
+	return true
 }
 
 // Collect gathers all installed packages from dpkg
 func (d *DpkgCollector) Collect() ([]*Package, error) {
-	// Run dpkg-query to get package information
+	ctx, cancel := context.WithTimeout(context.Background(), dpkgTimeout)
+	defer cancel()
+
 	// Format: Package|Version|Architecture|Installed-Size|Status|Description
-	cmd := exec.Command("dpkg-query", "-W",
+	cmd := exec.CommandContext(ctx, d.dpkgPath, "-W",
 		"-f=${Package}|${Version}|${Architecture}|${Installed-Size}|${db:Status-Abbrev}|${Description}\n")
 
 	output, err := cmd.Output()
@@ -36,47 +48,12 @@ func (d *DpkgCollector) Collect() ([]*Package, error) {
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
+		if pkg := parseDpkgLine(scanner.Text()); pkg != nil {
+			packages = append(packages, pkg)
 		}
-
-		fields := strings.Split(line, "|")
-		if len(fields) < 6 {
-			continue
-		}
-
-		name := fields[0]
-		version := fields[1]
-		arch := fields[2]
-		sizeStr := fields[3]
-		status := strings.TrimSpace(fields[4])
-		description := fields[5]
-
-		// Only include installed packages (status: "ii " = installed ok installed)
-		if !strings.HasPrefix(status, "ii") {
-			continue
-		}
-
-		// Parse size (dpkg reports in KB, convert to bytes)
-		size := parseInt64(sizeStr) * 1024
-
-		// Truncate description to 100 chars
-		description = TruncateDescription(description)
-
-		packages = append(packages, &Package{
-			Name:           name,
-			Version:        version,
-			Architecture:   arch,
-			PackageManager: "dpkg",
-			Source:         "", // dpkg doesn't easily provide repo info
-			InstalledAt:    time.Time{}, // dpkg doesn't track installation date
-			PackageSize:    size,
-			Description:    description,
-		})
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -84,6 +61,34 @@ func (d *DpkgCollector) Collect() ([]*Package, error) {
 	}
 
 	return packages, nil
+}
+
+// parseDpkgLine parses a single line of dpkg-query output.
+// Format: "name|version|arch|size_kb|status|description"
+// Returns nil for empty lines, lines with too few fields, or non-installed packages.
+func parseDpkgLine(line string) *Package {
+	if line == "" {
+		return nil
+	}
+
+	fields := strings.Split(line, "|")
+	if len(fields) < 6 {
+		return nil
+	}
+
+	status := strings.TrimSpace(fields[4])
+	if !strings.HasPrefix(status, "ii") {
+		return nil
+	}
+
+	return &Package{
+		Name:           fields[0],
+		Version:        fields[1],
+		Architecture:   fields[2],
+		PackageManager: "dpkg",
+		PackageSize:    parseInt64(fields[3]) * 1024,
+		Description:    TruncateDescription(fields[5]),
+	}
 }
 
 // parseInt64 safely parses a string to int64, returning 0 on error

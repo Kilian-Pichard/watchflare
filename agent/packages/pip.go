@@ -1,11 +1,14 @@
 package packages
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"time"
 )
+
+const pipTimeout = 30 * time.Second
 
 // PipCollector collects installed pip packages (cross-platform)
 type PipCollector struct {
@@ -19,7 +22,6 @@ func (p *PipCollector) Name() string {
 
 // IsAvailable checks if pip is available
 func (p *PipCollector) IsAvailable() bool {
-	// Try pip3 first (more common on modern systems)
 	for _, pipCmd := range []string{"pip3", "pip"} {
 		pipPath, err := exec.LookPath(pipCmd)
 		if err == nil {
@@ -27,7 +29,6 @@ func (p *PipCollector) IsAvailable() bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -37,34 +38,35 @@ type pipPackage struct {
 	Version string `json:"version"`
 }
 
-// Collect gathers all installed pip packages
+// Collect gathers all installed pip packages.
+// Uses "pip list --format=json".
 func (p *PipCollector) Collect() ([]*Package, error) {
-	// Run pip list --format=json
-	// Use Output() instead of CombinedOutput() to avoid stderr warnings
-	cmd := exec.Command(p.pipPath, "list", "--format=json")
+	ctx, cancel := context.WithTimeout(context.Background(), pipTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, p.pipPath, "list", "--format=json")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("pip list failed: %w", err)
 	}
 
-	// Parse JSON response
+	return parsePipOutput(output)
+}
+
+// parsePipOutput parses the JSON output of "pip list --format=json".
+func parsePipOutput(output []byte) ([]*Package, error) {
 	var pipPackages []pipPackage
 	if err := json.Unmarshal(output, &pipPackages); err != nil {
 		return nil, fmt.Errorf("failed to parse pip JSON: %w", err)
 	}
 
-	var packages []*Package
-
+	packages := make([]*Package, 0, len(pipPackages))
 	for _, pkg := range pipPackages {
 		packages = append(packages, &Package{
 			Name:           pkg.Name,
 			Version:        pkg.Version,
-			Architecture:   "",        // pip is platform-independent
 			PackageManager: "pip",
-			Source:         "pypi.org", // Default PyPI registry
-			InstalledAt:    time.Time{}, // pip doesn't easily provide install date
-			PackageSize:    0,            // Would require scanning site-packages
-			Description:    "",           // Would require additional pip show call per package
+			Source:         "pypi.org",
 		})
 	}
 

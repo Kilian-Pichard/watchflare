@@ -1,15 +1,20 @@
 package packages
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"howett.net/plist"
 )
+
+const macosAppsTimeout = 5 * time.Second
 
 // MacOSAppsCollector collects all installed macOS applications
 type MacOSAppsCollector struct{}
@@ -26,25 +31,23 @@ func (m *MacOSAppsCollector) IsAvailable() bool {
 
 // appInfo represents app metadata from Info.plist
 type appInfo struct {
-	CFBundleName            string `plist:"CFBundleName"`
-	CFBundleDisplayName     string `plist:"CFBundleDisplayName"`
+	CFBundleName               string `plist:"CFBundleName"`
+	CFBundleDisplayName        string `plist:"CFBundleDisplayName"`
 	CFBundleShortVersionString string `plist:"CFBundleShortVersionString"`
-	CFBundleVersion         string `plist:"CFBundleVersion"`
-	CFBundleIdentifier      string `plist:"CFBundleIdentifier"`
+	CFBundleVersion            string `plist:"CFBundleVersion"`
+	CFBundleIdentifier         string `plist:"CFBundleIdentifier"`
 }
 
 // Collect gathers all installed macOS applications
 func (m *MacOSAppsCollector) Collect() ([]*Package, error) {
 	var allApps []*Package
 
-	// Collect from /Applications
 	systemApps, err := m.collectFromDirectory("/Applications")
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect system apps: %w", err)
 	}
 	allApps = append(allApps, systemApps...)
 
-	// Collect from ~/Applications (user apps)
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		userApps, err := m.collectFromDirectory(filepath.Join(homeDir, "Applications"))
@@ -58,19 +61,16 @@ func (m *MacOSAppsCollector) Collect() ([]*Package, error) {
 
 // collectFromDirectory scans a directory for .app bundles
 func (m *MacOSAppsCollector) collectFromDirectory(dir string) ([]*Package, error) {
-	// Check if directory exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return []*Package{}, nil
 	}
 
-	var apps []*Package
-
-	// List all .app bundles in directory
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
 	}
 
+	var apps []*Package
 	for _, entry := range entries {
 		if !entry.IsDir() || !strings.HasSuffix(entry.Name(), ".app") {
 			continue
@@ -79,10 +79,8 @@ func (m *MacOSAppsCollector) collectFromDirectory(dir string) ([]*Package, error
 		appPath := filepath.Join(dir, entry.Name())
 		pkg, err := m.getAppInfo(appPath)
 		if err != nil {
-			// Skip apps that fail to parse
 			continue
 		}
-
 		apps = append(apps, pkg)
 	}
 
@@ -91,7 +89,6 @@ func (m *MacOSAppsCollector) collectFromDirectory(dir string) ([]*Package, error
 
 // getAppInfo extracts metadata from an .app bundle
 func (m *MacOSAppsCollector) getAppInfo(appPath string) (*Package, error) {
-	// Read Info.plist
 	plistPath := filepath.Join(appPath, "Contents", "Info.plist")
 	plistData, err := os.ReadFile(plistPath)
 	if err != nil {
@@ -99,108 +96,97 @@ func (m *MacOSAppsCollector) getAppInfo(appPath string) (*Package, error) {
 	}
 
 	var info appInfo
-	decoder := plist.NewDecoder(strings.NewReader(string(plistData)))
-	if err := decoder.Decode(&info); err != nil {
+	if err := plist.NewDecoder(bytes.NewReader(plistData)).Decode(&info); err != nil {
 		return nil, fmt.Errorf("failed to parse plist: %w", err)
 	}
 
-	// Determine app name (prefer display name, fallback to bundle name)
-	appName := info.CFBundleDisplayName
-	if appName == "" {
-		appName = info.CFBundleName
-	}
-	if appName == "" {
-		// Use filename without .app
-		appName = strings.TrimSuffix(filepath.Base(appPath), ".app")
-	}
+	appName := appNameFromInfo(info, appPath)
+	version := appVersionFromInfo(info)
 
-	// Determine version
-	version := info.CFBundleShortVersionString
-	if version == "" {
-		version = info.CFBundleVersion
-	}
-	if version == "" {
-		version = "unknown"
-	}
-
-	// Detect source (App Store vs Manual)
-	source := m.detectSource(appPath)
-
-	// Get install date (modification time of .app bundle)
 	var installedAt time.Time
 	if stat, err := os.Stat(appPath); err == nil {
 		installedAt = stat.ModTime()
 	}
 
-	// Calculate approximate size
-	size := m.calculateSize(appPath)
-
 	return &Package{
 		Name:           appName,
 		Version:        version,
-		Architecture:   "",           // Could detect Universal/ARM/Intel later
 		PackageManager: "macos-apps",
-		Source:         source,
+		Source:         detectMacOSSource(appPath),
 		InstalledAt:    installedAt,
-		PackageSize:    size,
-		Description:    info.CFBundleIdentifier, // Store bundle ID as description for now
+		PackageSize:    calculateMacOSAppSize(appPath),
+		Description:    info.CFBundleIdentifier,
 	}, nil
 }
 
-// detectSource determines if app is from App Store or installed manually
-func (m *MacOSAppsCollector) detectSource(appPath string) string {
-	// Check for _MASReceipt (Mac App Store receipt)
+// appNameFromInfo determines the display name from plist info, falling back to the filename.
+func appNameFromInfo(info appInfo, appPath string) string {
+	if info.CFBundleDisplayName != "" {
+		return info.CFBundleDisplayName
+	}
+	if info.CFBundleName != "" {
+		return info.CFBundleName
+	}
+	return strings.TrimSuffix(filepath.Base(appPath), ".app")
+}
+
+// appVersionFromInfo determines the version from plist info.
+func appVersionFromInfo(info appInfo) string {
+	if info.CFBundleShortVersionString != "" {
+		return info.CFBundleShortVersionString
+	}
+	if info.CFBundleVersion != "" {
+		return info.CFBundleVersion
+	}
+	return "unknown"
+}
+
+// macOSSystemApps is the list of known Apple-bundled applications.
+var macOSSystemApps = []string{
+	"Safari.app", "Mail.app", "Calendar.app", "Contacts.app",
+	"Notes.app", "Photos.app", "Music.app", "TV.app",
+	"Podcasts.app", "Messages.app", "FaceTime.app",
+	"Maps.app", "Books.app", "News.app", "Stocks.app",
+	"Home.app", "Voice Memos.app", "Reminders.app",
+	"Clock.app", "Weather.app", "Translate.app",
+	"App Store.app", "System Settings.app", "Time Machine.app",
+	"QuickTime Player.app", "Preview.app", "TextEdit.app",
+	"Font Book.app", "Image Capture.app", "Dictionary.app",
+}
+
+// detectMacOSSource determines whether an app came from the App Store, is a
+// system app, or was installed manually.
+func detectMacOSSource(appPath string) string {
 	receiptPath := filepath.Join(appPath, "Contents", "_MASReceipt", "receipt")
 	if _, err := os.Stat(receiptPath); err == nil {
 		return "app-store"
 	}
-
-	// Check if it's in /Applications/Utilities (system utilities)
 	if strings.Contains(appPath, "/Applications/Utilities") {
 		return "system"
 	}
-
-	// Check if it's a known system app
-	appName := filepath.Base(appPath)
-	systemApps := []string{
-		"Safari.app", "Mail.app", "Calendar.app", "Contacts.app",
-		"Notes.app", "Photos.app", "Music.app", "TV.app",
-		"Podcasts.app", "Messages.app", "FaceTime.app",
-		"Maps.app", "Books.app", "News.app", "Stocks.app",
-		"Home.app", "Voice Memos.app", "Reminders.app",
-		"Clock.app", "Weather.app", "Translate.app",
-		"App Store.app", "System Settings.app", "Time Machine.app",
-		"QuickTime Player.app", "Preview.app", "TextEdit.app",
-		"Font Book.app", "Image Capture.app", "Dictionary.app",
+	if slices.Contains(macOSSystemApps, filepath.Base(appPath)) {
+		return "system"
 	}
-
-	for _, sysApp := range systemApps {
-		if appName == sysApp {
-			return "system"
-		}
-	}
-
 	return "manual"
 }
 
-// calculateSize estimates the size of an app bundle
-func (m *MacOSAppsCollector) calculateSize(appPath string) int64 {
-	var totalSize int64
+// calculateMacOSAppSize estimates the size of an app bundle using du.
+func calculateMacOSAppSize(appPath string) int64 {
+	ctx, cancel := context.WithTimeout(context.Background(), macosAppsTimeout)
+	defer cancel()
 
-	// Use du command for accurate size
-	cmd := exec.Command("du", "-sk", appPath)
+	cmd := exec.CommandContext(ctx, "/usr/bin/du", "-sk", appPath)
 	output, err := cmd.Output()
 	if err != nil {
 		return 0
 	}
 
-	// Parse output (format: "12345\t/path/to/app")
 	parts := strings.Fields(string(output))
-	if len(parts) > 0 {
-		var sizeKB int64
-		fmt.Sscanf(parts[0], "%d", &sizeKB)
-		totalSize = sizeKB * 1024 // Convert to bytes
+	if len(parts) == 0 {
+		return 0
 	}
 
-	return totalSize
+	var sizeKB int64
+	fmt.Sscanf(parts[0], "%d", &sizeKB)
+	return sizeKB * 1024
 }

@@ -1,11 +1,14 @@
 package packages
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"time"
 )
+
+const composerTimeout = 30 * time.Second
 
 // ComposerCollector collects globally installed Composer packages (cross-platform)
 type ComposerCollector struct {
@@ -42,37 +45,37 @@ type composerGlobalOutput struct {
 
 // Collect gathers all globally installed Composer packages
 func (c *ComposerCollector) Collect() ([]*Package, error) {
-	// Run composer global show --format=json
-	cmd := exec.Command(c.composerPath, "global", "show", "--format=json")
+	ctx, cancel := context.WithTimeout(context.Background(), composerTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, c.composerPath, "global", "show", "--format=json")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// If no global packages are installed, composer might return an error
+		// Composer exits non-zero when no global packages are installed
 		if len(output) == 0 {
 			return []*Package{}, nil
 		}
+		return nil, fmt.Errorf("composer global show failed: %w (output: %s)", err, string(output))
 	}
 
-	// Parse JSON response
+	return parseComposerJSON(output)
+}
+
+// parseComposerJSON parses the JSON output of "composer global show --format=json".
+func parseComposerJSON(output []byte) ([]*Package, error) {
 	var globalOutput composerGlobalOutput
 	if err := json.Unmarshal(output, &globalOutput); err != nil {
 		return nil, fmt.Errorf("failed to parse composer JSON: %w", err)
 	}
 
-	var packages []*Package
-
+	packages := make([]*Package, 0, len(globalOutput.Installed))
 	for _, pkg := range globalOutput.Installed {
-		// Truncate description to 100 chars
-		description := TruncateDescription(pkg.Description)
-
 		packages = append(packages, &Package{
 			Name:           pkg.Name,
 			Version:        pkg.Version,
-			Architecture:   "",             // composer is platform-independent
 			PackageManager: "composer",
-			Source:         "packagist.org", // Default Composer registry
-			InstalledAt:    time.Time{},    // composer doesn't easily provide install date
-			PackageSize:    0,               // Would require scanning vendor directory
-			Description:    description,
+			Source:         "packagist.org",
+			Description:    TruncateDescription(pkg.Description),
 		})
 	}
 

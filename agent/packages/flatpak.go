@@ -2,14 +2,20 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
+const flatpakTimeout = 30 * time.Second
+
 // FlatpakCollector collects Flatpak packages (cross-distribution)
-type FlatpakCollector struct{}
+type FlatpakCollector struct {
+	flatpakPath string
+}
 
 // Name returns the collector name
 func (f *FlatpakCollector) Name() string {
@@ -18,84 +24,87 @@ func (f *FlatpakCollector) Name() string {
 
 // IsAvailable checks if flatpak is available
 func (f *FlatpakCollector) IsAvailable() bool {
-	_, err := exec.LookPath("flatpak")
-	return err == nil
+	flatpakPath, err := exec.LookPath("flatpak")
+	if err != nil {
+		return false
+	}
+	f.flatpakPath = flatpakPath
+	return true
 }
 
-// Collect gathers all installed flatpak packages
+// Collect gathers all installed flatpak applications.
+// Parses tab-separated output of:
+//
+//	flatpak list --app --columns=name,application,version,branch,origin,arch
 func (f *FlatpakCollector) Collect() ([]*Package, error) {
-	// Run flatpak list with detailed output
-	// Format: Name\tApplication ID\tVersion\tBranch\tInstallation\tArch
-	cmd := exec.Command("flatpak", "list", "--app", "--columns=name,application,version,branch,origin,arch")
+	ctx, cancel := context.WithTimeout(context.Background(), flatpakTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, f.flatpakPath, "list", "--app",
+		"--columns=name,application,version,branch,origin,arch")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("flatpak list failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
+		if pkg := parseFlatpakLine(scanner.Text()); pkg != nil {
+			packages = append(packages, pkg)
 		}
-
-		// Parse tab-separated output
-		fields := strings.Split(line, "\t")
-		if len(fields) < 2 {
-			continue
-		}
-
-		name := strings.TrimSpace(fields[0])
-		appID := ""
-		version := ""
-		branch := ""
-		origin := ""
-		arch := ""
-
-		if len(fields) >= 2 {
-			appID = strings.TrimSpace(fields[1])
-		}
-		if len(fields) >= 3 {
-			version = strings.TrimSpace(fields[2])
-		}
-		if len(fields) >= 4 {
-			branch = strings.TrimSpace(fields[3])
-		}
-		if len(fields) >= 5 {
-			origin = strings.TrimSpace(fields[4])
-		}
-		if len(fields) >= 6 {
-			arch = strings.TrimSpace(fields[5])
-		}
-
-		// Use app ID as name if no friendly name
-		if name == "" {
-			name = appID
-		}
-
-		// If no version, use branch
-		if version == "" {
-			version = branch
-		}
-
-		packages = append(packages, &Package{
-			Name:           name,
-			Version:        version,
-			Architecture:   arch,
-			PackageManager: "flatpak",
-			Source:         origin, // Remote repository
-			InstalledAt:    time.Time{}, // Not easily available
-			PackageSize:    0,          // Would need flatpak info for each package
-			Description:    appID,      // Store full app ID as description
-		})
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading flatpak output: %w", err)
+		return nil, fmt.Errorf("failed to read flatpak output: %w", err)
 	}
 
 	return packages, nil
+}
+
+// parseFlatpakLine parses a single tab-separated line of flatpak list output.
+// Columns: name, application ID, version, branch, origin, arch
+func parseFlatpakLine(line string) *Package {
+	if line == "" {
+		return nil
+	}
+
+	fields := strings.Split(line, "\t")
+	if len(fields) < 2 {
+		return nil
+	}
+
+	tabField := func(i int) string {
+		if i < len(fields) {
+			return strings.TrimSpace(fields[i])
+		}
+		return ""
+	}
+
+	name := tabField(0)
+	appID := tabField(1)
+	version := tabField(2)
+	branch := tabField(3)
+	origin := tabField(4)
+	arch := tabField(5)
+
+	if name == "" {
+		name = appID
+	}
+	if name == "" {
+		return nil
+	}
+	if version == "" {
+		version = branch
+	}
+
+	return &Package{
+		Name:           name,
+		Version:        version,
+		Architecture:   arch,
+		PackageManager: "flatpak",
+		Source:         origin,
+		Description:    appID,
+	}
 }

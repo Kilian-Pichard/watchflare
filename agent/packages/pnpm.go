@@ -2,14 +2,20 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
+const pnpmTimeout = 30 * time.Second
+
 // PnpmCollector collects globally installed pnpm packages
-type PnpmCollector struct{}
+type PnpmCollector struct {
+	pnpmPath string
+}
 
 // Name returns the collector name
 func (p *PnpmCollector) Name() string {
@@ -18,40 +24,33 @@ func (p *PnpmCollector) Name() string {
 
 // IsAvailable checks if pnpm is available
 func (p *PnpmCollector) IsAvailable() bool {
-	_, err := exec.LookPath("pnpm")
-	return err == nil
+	path, err := exec.LookPath("pnpm")
+	if err != nil {
+		return false
+	}
+	p.pnpmPath = path
+	return true
 }
 
-// Collect gathers all globally installed pnpm packages
+// Collect gathers all globally installed pnpm packages.
+// Uses "pnpm list -g --depth 0".
 func (p *PnpmCollector) Collect() ([]*Package, error) {
-	// Run pnpm list -g --depth 0 to get global packages
-	cmd := exec.Command("pnpm", "list", "-g", "--depth", "0")
+	ctx, cancel := context.WithTimeout(context.Background(), pnpmTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, p.pnpmPath, "list", "-g", "--depth", "0")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("pnpm list failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-
-	// Skip header lines until we find packages
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		// Parse pnpm list output
-		// Format varies, but typically:
-		// package-name 1.2.3
-		// or with tree symbols
-		pkg := p.parsePackageLine(line)
-		if pkg != nil {
+		if pkg := parsePnpmLine(scanner.Text()); pkg != nil {
 			packages = append(packages, pkg)
 		}
 	}
-
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading pnpm output: %w", err)
 	}
@@ -59,9 +58,10 @@ func (p *PnpmCollector) Collect() ([]*Package, error) {
 	return packages, nil
 }
 
-// parsePackageLine parses a single line of pnpm list output
-func (p *PnpmCollector) parsePackageLine(line string) *Package {
-	// Remove tree characters (├──, └──, │, etc.)
+// parsePnpmLine parses a single line of "pnpm list -g --depth 0" output.
+// Handles tree-decorated lines (├──, └──) and formats: "name version", "@scope/name version", "name@version".
+func parsePnpmLine(line string) *Package {
+	// Remove tree decoration characters
 	line = strings.TrimLeft(line, " ├─└│")
 	line = strings.TrimSpace(line)
 
@@ -69,36 +69,40 @@ func (p *PnpmCollector) parsePackageLine(line string) *Package {
 		return nil
 	}
 
-	// Skip dependency lines (contain "dependencies:" or other headers)
-	if strings.Contains(line, ":") && !strings.Contains(line, " ") {
+	// Skip header/section lines (e.g. "dependencies:", "Legend:", paths)
+	if strings.HasSuffix(line, ":") || strings.HasPrefix(line, "/") {
+		return nil
+	}
+	if strings.HasPrefix(line, "Legend:") {
 		return nil
 	}
 
-	// Parse format: "package-name version" or "package-name@version"
 	var name, version string
 
-	if strings.Contains(line, "@") && !strings.HasPrefix(line, "@") {
-		// Format: package@version
-		parts := strings.Split(line, "@")
-		if len(parts) >= 2 {
-			name = parts[0]
-			version = strings.Fields(parts[1])[0] // Take first field after @
-		}
-	} else if strings.HasPrefix(line, "@") {
-		// Scoped package: @scope/package version
+	if strings.HasPrefix(line, "@") {
+		// Scoped package: @scope/name version
 		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			name = fields[0]
-			version = fields[1]
+		if len(fields) < 2 {
+			return nil
+		}
+		name = fields[0]
+		version = fields[1]
+	} else if idx := strings.Index(line, "@"); idx > 0 {
+		// name@version format
+		name = line[:idx]
+		rest := strings.Fields(line[idx+1:])
+		if len(rest) > 0 {
+			version = rest[0]
 		}
 	} else {
-		// Format: package version
+		// name version format
 		fields := strings.Fields(line)
+		if len(fields) < 1 {
+			return nil
+		}
+		name = fields[0]
 		if len(fields) >= 2 {
-			name = fields[0]
 			version = fields[1]
-		} else if len(fields) == 1 {
-			name = fields[0]
 		}
 	}
 
@@ -106,19 +110,10 @@ func (p *PnpmCollector) parsePackageLine(line string) *Package {
 		return nil
 	}
 
-	// Filter out non-package lines
-	if strings.HasPrefix(name, "Legend:") || strings.HasPrefix(name, "dependencies") {
-		return nil
-	}
-
 	return &Package{
 		Name:           name,
 		Version:        version,
-		Architecture:   "",
 		PackageManager: "pnpm-global",
-		Source:         "pnpm",
-		InstalledAt:    time.Time{},
-		PackageSize:    0,
-		Description:    "Globally installed pnpm package",
+		Source:         "npmjs.com",
 	}
 }

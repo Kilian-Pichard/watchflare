@@ -2,6 +2,8 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,8 +12,15 @@ import (
 	"time"
 )
 
-// PoetryCollector collects globally installed Poetry environments and packages
-type PoetryCollector struct{}
+const (
+	poetryConfigTimeout = 10 * time.Second
+	poetryPipTimeout    = 30 * time.Second
+)
+
+// PoetryCollector collects packages from Poetry virtual environments
+type PoetryCollector struct {
+	poetryPath string
+}
 
 // Name returns the collector name
 func (p *PoetryCollector) Name() string {
@@ -20,106 +29,98 @@ func (p *PoetryCollector) Name() string {
 
 // IsAvailable checks if poetry is available
 func (p *PoetryCollector) IsAvailable() bool {
-	_, err := exec.LookPath("poetry")
-	return err == nil
+	path, err := exec.LookPath("poetry")
+	if err != nil {
+		return false
+	}
+	p.poetryPath = path
+	return true
 }
 
-// Collect gathers Poetry virtual environments and their packages
+// Collect gathers packages from all Poetry virtual environments.
 func (p *PoetryCollector) Collect() ([]*Package, error) {
-	var packages []*Package
+	ctx, cancel := context.WithTimeout(context.Background(), poetryConfigTimeout)
+	defer cancel()
 
-	// Poetry stores virtual envs in a cache directory
-	// Get Poetry cache dir
-	cmd := exec.Command("poetry", "config", "cache-dir")
+	cmd := exec.CommandContext(ctx, p.poetryPath, "config", "cache-dir")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get poetry cache dir: %w", err)
 	}
 
-	cacheDir := strings.TrimSpace(string(output))
-	virtualenvsDir := filepath.Join(cacheDir, "virtualenvs")
-
-	// Check if virtualenvs directory exists
+	virtualenvsDir := filepath.Join(strings.TrimSpace(string(output)), "virtualenvs")
 	if _, err := os.Stat(virtualenvsDir); os.IsNotExist(err) {
-		return packages, nil // No virtualenvs, return empty list
+		return nil, nil
 	}
 
-	// List all virtualenvs
 	entries, err := os.ReadDir(virtualenvsDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read virtualenvs dir: %w", err)
 	}
 
-	// For each virtualenv, list packages
+	var packages []*Package
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-
 		envName := entry.Name()
 		envPath := filepath.Join(virtualenvsDir, envName)
-
-		// Try to list packages in this virtualenv
-		envPackages, err := p.listVirtualenvPackages(envPath, envName)
+		envPackages, err := listVirtualenvPackages(envPath, envName)
 		if err != nil {
-			continue // Skip this env on error
+			continue
 		}
-
 		packages = append(packages, envPackages...)
 	}
 
 	return packages, nil
 }
 
-// listVirtualenvPackages lists packages in a Poetry virtualenv
-func (p *PoetryCollector) listVirtualenvPackages(envPath, envName string) ([]*Package, error) {
-	// Find the pip in this virtualenv
-	// Poetry virtualenvs have structure: env-name-py3.x/bin/pip (Linux/macOS)
+// listVirtualenvPackages lists packages in a Poetry virtualenv using pip freeze.
+func listVirtualenvPackages(envPath, envName string) ([]*Package, error) {
 	pipPath := filepath.Join(envPath, "bin", "pip")
 	if _, err := os.Stat(pipPath); os.IsNotExist(err) {
-		// Try Windows path
 		pipPath = filepath.Join(envPath, "Scripts", "pip.exe")
 		if _, err := os.Stat(pipPath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("pip not found in virtualenv")
 		}
 	}
 
-	// Run pip list
-	cmd := exec.Command(pipPath, "list", "--format=freeze")
+	ctx, cancel := context.WithTimeout(context.Background(), poetryPipTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, pipPath, "list", "--format=freeze")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("pip list failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
+		name, version, ok := parsePipFreezeLine(scanner.Text())
+		if !ok {
 			continue
 		}
-
-		// Parse pip freeze format: package==version
-		parts := strings.Split(line, "==")
-		if len(parts) != 2 {
-			continue
-		}
-
-		name := parts[0]
-		version := parts[1]
-
 		packages = append(packages, &Package{
 			Name:           name,
 			Version:        version,
-			Architecture:   "",
 			PackageManager: "poetry",
-			Source:         envName, // Use virtualenv name as source
-			InstalledAt:    time.Time{},
-			PackageSize:    0,
+			Source:         envName,
 			Description:    fmt.Sprintf("Poetry virtualenv: %s", envName),
 		})
 	}
 
 	return packages, nil
+}
+
+// parsePipFreezeLine parses a "pip list --format=freeze" line: "package==version".
+func parsePipFreezeLine(line string) (name, version string, ok bool) {
+	if line == "" {
+		return
+	}
+	parts := strings.SplitN(line, "==", 2)
+	if len(parts) != 2 {
+		return
+	}
+	return parts[0], parts[1], true
 }

@@ -31,7 +31,6 @@ func (a *AppImageCollector) Collect() ([]*Package, error) {
 		"~/bin",
 		"/opt",
 		"/usr/local/bin",
-		"~/Downloads", // Many users keep AppImages in Downloads
 	}
 
 	for _, searchPath := range searchPaths {
@@ -82,7 +81,7 @@ func (a *AppImageCollector) findAppImages(dir string) ([]*Package, error) {
 		}
 
 		// Check if file is an AppImage
-		if a.isAppImage(path, info) {
+		if a.isAppImage(path) {
 			pkg := a.createPackageFromAppImage(path, info)
 			if pkg != nil {
 				packages = append(packages, pkg)
@@ -95,22 +94,9 @@ func (a *AppImageCollector) findAppImages(dir string) ([]*Package, error) {
 	return packages, err
 }
 
-// isAppImage checks if a file is an AppImage
-func (a *AppImageCollector) isAppImage(path string, info os.FileInfo) bool {
-	// Check file extension
-	if strings.HasSuffix(strings.ToLower(path), ".appimage") {
-		return true
-	}
-
-	// Check if executable and starts with AppImage magic bytes
-	// AppImages are ELF executables with specific magic
-	if info.Mode()&0111 != 0 { // Is executable
-		// Could read first bytes to check for ELF + AppImage magic
-		// For now, just check extension
-		return false
-	}
-
-	return false
+// isAppImage checks if a file is an AppImage based on its extension.
+func (a *AppImageCollector) isAppImage(path string) bool {
+	return strings.HasSuffix(strings.ToLower(path), ".appimage")
 }
 
 // createPackageFromAppImage creates a Package from an AppImage file
@@ -129,24 +115,50 @@ func (a *AppImageCollector) createPackageFromAppImage(path string, info os.FileI
 		Version:        version,
 		Architecture:   a.detectArch(filename),
 		PackageManager: "appimage",
-		Source:         filepath.Dir(path), // Store the directory
-		InstalledAt:    info.ModTime(),     // Use file modification time
+		Source:         path,           // full path to the AppImage file
+		InstalledAt:    info.ModTime(), // file modification time as install proxy
 		PackageSize:    info.Size(),
-		Description:    path, // Store full path
 	}
 }
 
-// parseAppImageName extracts name and version from AppImage filename
+// knownArchSuffixes lists all arch suffixes (with separator) to strip before parsing.
+// Each entry is in lowercase; checked case-insensitively against the filename.
+var knownArchSuffixes = []string{
+	"-x86_64", "_x86_64",
+	"-amd64", "_amd64",
+	"-aarch64", "_aarch64",
+	"-arm64", "_arm64",
+	"-i686", "_i686",
+	"-i386", "_i386",
+	"-armhf", "_armhf",
+	"-armv7l", "_armv7l",
+	"-armv7", "_armv7",
+}
+
+// parseAppImageName extracts name and version from AppImage filename.
+// It strips the .AppImage extension and any arch suffix before splitting.
 func (a *AppImageCollector) parseAppImageName(filename string) (string, string) {
-	// Remove .AppImage extension
-	name := strings.TrimSuffix(filename, ".AppImage")
-	name = strings.TrimSuffix(name, ".appimage")
+	// Remove .AppImage extension (case-insensitive)
+	lower := strings.ToLower(filename)
+	name := filename
+	if strings.HasSuffix(lower, ".appimage") {
+		name = filename[:len(filename)-len(".appimage")]
+	}
 
-	// Common patterns:
-	// - Name-version-arch
-	// - Name-version
-	// - Name_version
+	// Strip known arch suffixes before splitting, to avoid splitting "x86_64" into ["x86","64"].
+	nameLower := strings.ToLower(name)
+	for _, suffix := range knownArchSuffixes {
+		if strings.HasSuffix(nameLower, suffix) {
+			name = name[:len(name)-len(suffix)]
+			break
+		}
+	}
 
+	if name == "" {
+		return filename, ""
+	}
+
+	// Split on separators (-/_) and locate the version component (first digit-leading part from end).
 	parts := strings.FieldsFunc(name, func(r rune) bool {
 		return r == '-' || r == '_'
 	})
@@ -155,41 +167,16 @@ func (a *AppImageCollector) parseAppImageName(filename string) (string, string) 
 		return name, ""
 	}
 
-	// Last part might be architecture
-	lastPart := parts[len(parts)-1]
-	if a.isArchString(lastPart) {
-		parts = parts[:len(parts)-1]
-	}
-
-	if len(parts) == 0 {
-		return name, ""
-	}
-
-	// Second-to-last part might be version
-	for i := len(parts) - 1; i > 0; i-- {
-		part := parts[i]
-		// Check if this looks like a version (starts with digit)
-		if len(part) > 0 && part[0] >= '0' && part[0] <= '9' {
-			appName := strings.Join(parts[:i], "-")
-			version := strings.Join(parts[i:], "-")
-			return appName, version
+	// Scan forward from index 1 to find where the version starts
+	// (the first part that begins with a digit).
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) > 0 && parts[i][0] >= '0' && parts[i][0] <= '9' {
+			return strings.Join(parts[:i], "-"), strings.Join(parts[i:], "-")
 		}
 	}
 
 	// No version found
 	return name, ""
-}
-
-// isArchString checks if a string looks like an architecture
-func (a *AppImageCollector) isArchString(s string) bool {
-	archStrings := []string{"x86_64", "i686", "amd64", "arm64", "aarch64", "armhf"}
-	s = strings.ToLower(s)
-	for _, arch := range archStrings {
-		if s == arch {
-			return true
-		}
-	}
-	return false
 }
 
 // detectArch tries to detect architecture from filename

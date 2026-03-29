@@ -2,6 +2,8 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -9,8 +11,12 @@ import (
 	"time"
 )
 
+const pacmanTimeout = 60 * time.Second
+
 // PacmanCollector collects packages from pacman (Arch Linux)
-type PacmanCollector struct{}
+type PacmanCollector struct {
+	pacmanPath string
+}
 
 // Name returns the collector name
 func (p *PacmanCollector) Name() string {
@@ -19,126 +25,93 @@ func (p *PacmanCollector) Name() string {
 
 // IsAvailable checks if pacman is available
 func (p *PacmanCollector) IsAvailable() bool {
-	_, err := exec.LookPath("pacman")
-	return err == nil
+	path, err := exec.LookPath("pacman")
+	if err != nil {
+		return false
+	}
+	p.pacmanPath = path
+	return true
 }
 
-// Collect gathers all installed packages from pacman
+// Collect gathers all installed packages from pacman.
+// Uses "pacman -Qi" to fetch all package details in a single invocation.
 func (p *PacmanCollector) Collect() ([]*Package, error) {
-	// Run pacman -Q to get all installed packages
-	cmd := exec.Command("pacman", "-Q")
+	ctx, cancel := context.WithTimeout(context.Background(), pacmanTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, p.pacmanPath, "-Qi")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pacman -Q failed: %w", err)
+		return nil, fmt.Errorf("pacman -Qi failed: %w", err)
 	}
 
+	return parsePacmanOutput(output), nil
+}
+
+// parsePacmanOutput parses the output of "pacman -Qi" (all packages).
+// Blocks are separated by blank lines; each block describes one package.
+func parsePacmanOutput(output []byte) []*Package {
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+
+	block := make(map[string]string)
+	flush := func() {
+		if len(block) == 0 {
+			return
+		}
+		if pkg := pacmanBlockToPackage(block); pkg != nil {
+			packages = append(packages, pkg)
+		}
+		block = make(map[string]string)
+	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
+			flush()
 			continue
 		}
-
-		// Format: "package-name version"
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
 			continue
 		}
-
-		name := fields[0]
-		version := fields[1]
-
-		// Get detailed info for this package
-		info := p.getPackageInfo(name)
-
-		installDate := time.Time{}
-		if info.InstallDate != nil {
-			installDate = *info.InstallDate
-		}
-
-		packages = append(packages, &Package{
-			Name:           name,
-			Version:        version,
-			Architecture:   info.Architecture,
-			PackageManager: "pacman",
-			Source:         info.Repository,
-			InstalledAt:    installDate,
-			PackageSize:    info.InstalledSize,
-			Description:    info.Description,
-		})
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		block[key] = val
 	}
+	flush()
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading pacman output: %w", err)
-	}
-
-	return packages, nil
+	return packages
 }
 
-// packageInfo holds detailed package information
-type packageInfo struct {
-	Architecture  string
-	Repository    string
-	InstallDate   *time.Time
-	InstalledSize int64
-	Description   string
-}
-
-// getPackageInfo retrieves detailed information for a package
-func (p *PacmanCollector) getPackageInfo(name string) packageInfo {
-	info := packageInfo{}
-
-	// Run pacman -Qi to get detailed info
-	cmd := exec.Command("pacman", "-Qi", name)
-	output, err := cmd.Output()
-	if err != nil {
-		return info
+// pacmanBlockToPackage converts a parsed key-value block into a Package.
+func pacmanBlockToPackage(block map[string]string) *Package {
+	name := block["Name"]
+	version := block["Version"]
+	if name == "" || version == "" {
+		return nil
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "Architecture") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				info.Architecture = strings.TrimSpace(parts[1])
-			}
-		} else if strings.HasPrefix(line, "Repository") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				info.Repository = strings.TrimSpace(parts[1])
-			}
-		} else if strings.HasPrefix(line, "Install Date") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				dateStr := strings.TrimSpace(parts[1])
-				// Try to parse the date (format: "Mon 02 Jan 2006 03:04:05 PM MST")
-				if t, err := time.Parse("Mon 02 Jan 2006 03:04:05 PM MST", dateStr); err == nil {
-					info.InstallDate = &t
-				}
-			}
-		} else if strings.HasPrefix(line, "Installed Size") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				sizeStr := strings.TrimSpace(parts[1])
-				// Parse size (e.g., "1.23 MiB" or "456.78 KiB")
-				info.InstalledSize = parsePacmanSize(sizeStr)
-			}
-		} else if strings.HasPrefix(line, "Description") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				info.Description = strings.TrimSpace(parts[1])
-			}
+	var installedAt time.Time
+	if dateStr := block["Install Date"]; dateStr != "" {
+		if t, err := time.Parse("Mon 02 Jan 2006 03:04:05 PM MST", dateStr); err == nil {
+			installedAt = t
 		}
 	}
 
-	return info
+	return &Package{
+		Name:           name,
+		Version:        version,
+		Architecture:   block["Architecture"],
+		PackageManager: "pacman",
+		Source:         block["Repository"],
+		InstalledAt:    installedAt,
+		PackageSize:    parsePacmanSize(block["Installed Size"]),
+		Description:    TruncateDescription(block["Description"]),
+	}
 }
 
-// parsePacmanSize converts pacman size strings to bytes
+// parsePacmanSize converts pacman size strings to bytes (e.g. "1.23 MiB").
 func parsePacmanSize(sizeStr string) int64 {
 	parts := strings.Fields(sizeStr)
 	if len(parts) != 2 {
@@ -150,18 +123,18 @@ func parsePacmanSize(sizeStr string) int64 {
 		return 0
 	}
 
-	unit := strings.ToLower(parts[1])
-	multiplier := int64(1)
-
-	switch unit {
+	var multiplier int64
+	switch strings.ToLower(parts[1]) {
+	case "b":
+		multiplier = 1
 	case "kib":
 		multiplier = 1024
 	case "mib":
 		multiplier = 1024 * 1024
 	case "gib":
 		multiplier = 1024 * 1024 * 1024
-	case "b":
-		multiplier = 1
+	default:
+		return 0
 	}
 
 	return int64(value * float64(multiplier))

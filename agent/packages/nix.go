@@ -2,117 +2,109 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
+const nixTimeout = 30 * time.Second
+
 // NixCollector collects packages from Nix package manager (NixOS and multi-distro)
-type NixCollector struct{}
+type NixCollector struct {
+	nixEnvPath string
+}
 
 // Name returns the collector name
 func (n *NixCollector) Name() string {
 	return "nix"
 }
 
-// IsAvailable checks if nix is available
+// IsAvailable checks if nix-env is available
 func (n *NixCollector) IsAvailable() bool {
-	_, err := exec.LookPath("nix-env")
-	return err == nil
+	nixEnvPath, err := exec.LookPath("nix-env")
+	if err != nil {
+		return false
+	}
+	n.nixEnvPath = nixEnvPath
+	return true
 }
 
-// Collect gathers all installed Nix packages
+// Collect gathers all installed Nix packages.
+// Parses "nix-env --query --installed --out-path" output:
+//
+//	firefox-121.0  /nix/store/abc123-firefox-121.0
 func (n *NixCollector) Collect() ([]*Package, error) {
-	// Run nix-env to list installed packages
-	// --query: query mode
-	// --installed: only installed packages
-	// --out-path: show store path
-	cmd := exec.Command("nix-env", "--query", "--installed", "--out-path")
+	ctx, cancel := context.WithTimeout(context.Background(), nixTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, n.nixEnvPath, "--query", "--installed", "--out-path")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("nix-env query failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		// Parse nix-env output
-		// Format: "package-name-version  /nix/store/hash-package-name-version"
-		pkg := n.parsePackageLine(line)
-		if pkg != nil {
+		if pkg := parseNixLine(scanner.Text()); pkg != nil {
 			packages = append(packages, pkg)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading nix-env output: %w", err)
+		return nil, fmt.Errorf("failed to read nix-env output: %w", err)
 	}
 
 	return packages, nil
 }
 
-// parsePackageLine parses a single line of nix-env output
-func (n *NixCollector) parsePackageLine(line string) *Package {
-	// Format: "package-name-version  /nix/store/hash-package-name-version"
+// parseNixLine parses a single line of nix-env --query --installed --out-path output.
+// Format: "name-version  /nix/store/hash-name-version"
+func parseNixLine(line string) *Package {
 	fields := strings.Fields(line)
-	if len(fields) < 1 {
+	if len(fields) == 0 {
 		return nil
 	}
 
-	fullName := fields[0]
+	name, version := splitNixNameVersion(fields[0])
+	if name == "" {
+		return nil
+	}
+
 	storePath := ""
 	if len(fields) >= 2 {
 		storePath = fields[1]
 	}
 
-	// Split name and version
-	// Nix packages are typically: name-version
-	name, version := n.splitNameVersion(fullName)
-	if name == "" {
-		return nil
-	}
-
 	return &Package{
 		Name:           name,
 		Version:        version,
-		Architecture:   "",          // Nix is architecture-independent in naming
 		PackageManager: "nix",
-		Source:         "nix-store", // Could extract channel info if needed
-		InstalledAt:    time.Time{}, // Not easily available
-		PackageSize:    0,            // Would need du on store path
-		Description:    storePath,    // Store the nix store path
+		Source:         "nix-store",
+		Description:    storePath,
 	}
 }
 
-// splitNameVersion splits a Nix package string into name and version
-func (n *NixCollector) splitNameVersion(fullName string) (string, string) {
-	// Nix packages follow pattern: name-version
-	// Version typically starts with a digit
-	// Example: "firefox-121.0" -> name="firefox", version="121.0"
-
+// splitNixNameVersion splits a Nix package string "name-version" into its parts.
+// Version is identified as the suffix starting from the last component that
+// begins with a digit.
+// e.g., "firefox-121.0" → ("firefox", "121.0")
+// e.g., "lib32-glibc-2.38" → ("lib32-glibc", "2.38")
+func splitNixNameVersion(fullName string) (string, string) {
 	parts := strings.Split(fullName, "-")
 	if len(parts) < 2 {
 		return fullName, ""
 	}
 
-	// Find where version starts (first part that starts with a digit)
 	for i := len(parts) - 1; i >= 0; i-- {
 		if len(parts[i]) > 0 && parts[i][0] >= '0' && parts[i][0] <= '9' {
-			// Found version start
-			name := strings.Join(parts[:i], "-")
-			version := strings.Join(parts[i:], "-")
-			return name, version
+			return strings.Join(parts[:i], "-"), strings.Join(parts[i:], "-")
 		}
 	}
 
-	// Couldn't determine version
 	return fullName, ""
 }

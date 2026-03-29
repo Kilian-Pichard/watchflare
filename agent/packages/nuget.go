@@ -2,14 +2,20 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-// NuGetCollector collects globally installed .NET tools (NuGet packages)
-type NuGetCollector struct{}
+const nugetTimeout = 30 * time.Second
+
+// NuGetCollector collects globally installed .NET tools
+type NuGetCollector struct {
+	dotnetPath string
+}
 
 // Name returns the collector name
 func (n *NuGetCollector) Name() string {
@@ -18,80 +24,75 @@ func (n *NuGetCollector) Name() string {
 
 // IsAvailable checks if dotnet is available
 func (n *NuGetCollector) IsAvailable() bool {
-	_, err := exec.LookPath("dotnet")
-	return err == nil
+	dotnetPath, err := exec.LookPath("dotnet")
+	if err != nil {
+		return false
+	}
+	n.dotnetPath = dotnetPath
+	return true
 }
 
-// Collect gathers all globally installed .NET tools
+// Collect gathers all globally installed .NET tools.
+// Parses "dotnet tool list -g" output:
+//
+//	Package Id        Version    Commands
+//	------------------------------------------
+//	dotnet-ef         7.0.0      dotnet-ef
 func (n *NuGetCollector) Collect() ([]*Package, error) {
-	// Run dotnet tool list -g to get global tools
-	cmd := exec.Command("dotnet", "tool", "list", "-g")
+	ctx, cancel := context.WithTimeout(context.Background(), nugetTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, n.dotnetPath, "tool", "list", "-g")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("dotnet tool list failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
-	// Skip header lines
 	headerPassed := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
-
-		// Skip header lines until we find the separator (---)
 		if !headerPassed {
 			if strings.Contains(line, "---") {
 				headerPassed = true
 			}
 			continue
 		}
-
-		// Parse package line
-		pkg := n.parsePackageLine(line)
-		if pkg != nil {
+		if pkg := parseNuGetLine(line); pkg != nil {
 			packages = append(packages, pkg)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading dotnet output: %w", err)
+		return nil, fmt.Errorf("failed to read dotnet output: %w", err)
 	}
 
 	return packages, nil
 }
 
-// parsePackageLine parses a single line of dotnet tool list output
-func (n *NuGetCollector) parsePackageLine(line string) *Package {
-	// Format: "Package Id      Version      Commands"
-	// Example: "dotnet-ef      7.0.0        dotnet-ef"
-
+// parseNuGetLine parses a single data line of dotnet tool list output.
+// Format: "package-id  version  commands"
+func parseNuGetLine(line string) *Package {
 	fields := strings.Fields(line)
 	if len(fields) < 2 {
 		return nil
 	}
 
-	name := fields[0]
-	version := fields[1]
-
-	// Commands are the rest of the fields (optional)
-	commands := ""
+	description := ""
 	if len(fields) > 2 {
-		commands = strings.Join(fields[2:], ", ")
+		description = strings.Join(fields[2:], ", ")
 	}
 
 	return &Package{
-		Name:           name,
-		Version:        version,
-		Architecture:   "",
+		Name:           fields[0],
+		Version:        fields[1],
 		PackageManager: "nuget-global",
-		Source:         "nuget.org", // Default NuGet source
-		InstalledAt:    time.Time{},
-		PackageSize:    0,
-		Description:    fmt.Sprintf("Commands: %s", commands),
+		Source:         "nuget.org",
+		Description:    description,
 	}
 }

@@ -2,16 +2,21 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 )
 
-// CondaCollector collects packages from conda environments
-// conda is the package manager for Anaconda/Miniconda (data science focused)
-type CondaCollector struct{}
+const condaTimeout = 30 * time.Second
+
+// CondaCollector collects packages from the conda base environment
+// (Anaconda/Miniconda, data science focused)
+type CondaCollector struct {
+	condaPath string
+}
 
 // Name returns the collector name
 func (c *CondaCollector) Name() string {
@@ -20,116 +25,64 @@ func (c *CondaCollector) Name() string {
 
 // IsAvailable checks if conda is available
 func (c *CondaCollector) IsAvailable() bool {
-	_, err := exec.LookPath("conda")
-	return err == nil
+	condaPath, err := exec.LookPath("conda")
+	if err != nil {
+		return false
+	}
+	c.condaPath = condaPath
+	return true
 }
 
-// Collect gathers all packages from conda base environment
+// Collect gathers all packages from the conda base environment.
+// Parses "conda list" output:
+//
+//	numpy   1.24.3   py311h08b1b3b_0   conda-forge
 func (c *CondaCollector) Collect() ([]*Package, error) {
-	// Get list of packages in base environment
-	// Using --json for easier parsing
-	cmd := exec.Command("conda", "list", "--json")
+	ctx, cancel := context.WithTimeout(context.Background(), condaTimeout)
+	defer cancel()
 
-	output, err := cmd.Output()
-	if err != nil {
-		// If JSON fails, try regular format
-		return c.collectRegularFormat()
-	}
-
-	// Try to parse as JSON first
-	packages, err := c.parseJSON(output)
-	if err != nil {
-		// Fallback to regular format
-		return c.collectRegularFormat()
-	}
-
-	return packages, nil
-}
-
-// parseJSON parses conda list JSON output
-func (c *CondaCollector) parseJSON(output []byte) ([]*Package, error) {
-	// conda list --json returns an array of objects
-	// [{"name": "pkg", "version": "1.0", "build": "...", "channel": "..."}]
-
-	// Simple JSON array parsing
-	jsonStr := string(output)
-	jsonStr = strings.TrimSpace(jsonStr)
-
-	if !strings.HasPrefix(jsonStr, "[") {
-		return nil, fmt.Errorf("not a JSON array")
-	}
-
-	// For simplicity, we'll parse manually
-	// This is a simplified approach - for production, use encoding/json
-	return c.collectRegularFormat()
-}
-
-// collectRegularFormat parses conda list regular output
-func (c *CondaCollector) collectRegularFormat() ([]*Package, error) {
-	cmd := exec.Command("conda", "list")
-
+	cmd := exec.CommandContext(ctx, c.condaPath, "list")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("conda list failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
-	// Skip header lines (starting with #)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if line == "" {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-
-		// Skip comments
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		// Parse package line
-		pkg := c.parsePackageLine(line)
-		if pkg != nil {
+		if pkg := parseCondaLine(line); pkg != nil {
 			packages = append(packages, pkg)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading conda output: %w", err)
+		return nil, fmt.Errorf("failed to read conda output: %w", err)
 	}
 
 	return packages, nil
 }
 
-// parsePackageLine parses a single line of conda list output
-func (c *CondaCollector) parsePackageLine(line string) *Package {
-	// Format: "name  version  build  channel"
-	// Example: "numpy  1.24.3  py311h08b1b3b_0  conda-forge"
-
+// parseCondaStyleLine parses a single line of conda/mamba list output.
+// Format: "name  version  build  channel"
+// pm is the PackageManager value to use ("conda" or "mamba").
+func parseCondaStyleLine(line, pm string) *Package {
 	fields := strings.Fields(line)
 	if len(fields) < 2 {
 		return nil
 	}
 
-	name := fields[0]
-	version := fields[1]
 	build := ""
 	channel := ""
-
 	if len(fields) >= 3 {
 		build = fields[2]
 	}
 	if len(fields) >= 4 {
 		channel = fields[3]
-	}
-
-	// Extract size if available (some formats include it)
-	var size int64
-	for i := 4; i < len(fields); i++ {
-		if strings.Contains(fields[i], "KB") || strings.Contains(fields[i], "MB") {
-			size = c.parseSize(fields[i])
-		}
 	}
 
 	description := fmt.Sprintf("Build: %s", build)
@@ -138,38 +91,13 @@ func (c *CondaCollector) parsePackageLine(line string) *Package {
 	}
 
 	return &Package{
-		Name:           name,
-		Version:        version,
-		Architecture:   "",
-		PackageManager: "conda",
+		Name:           fields[0],
+		Version:        fields[1],
+		PackageManager: pm,
 		Source:         channel,
-		InstalledAt:    time.Time{},
-		PackageSize:    size,
 		Description:    description,
 	}
 }
 
-// parseSize converts size strings like "1.2MB" or "345KB" to bytes
-func (c *CondaCollector) parseSize(sizeStr string) int64 {
-	sizeStr = strings.TrimSpace(sizeStr)
-	sizeStr = strings.ToUpper(sizeStr)
-
-	var multiplier int64 = 1
-	if strings.HasSuffix(sizeStr, "KB") {
-		multiplier = 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "KB")
-	} else if strings.HasSuffix(sizeStr, "MB") {
-		multiplier = 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "MB")
-	} else if strings.HasSuffix(sizeStr, "GB") {
-		multiplier = 1024 * 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "GB")
-	}
-
-	value, err := strconv.ParseFloat(strings.TrimSpace(sizeStr), 64)
-	if err != nil {
-		return 0
-	}
-
-	return int64(value * float64(multiplier))
-}
+// parseCondaLine parses a single line of conda list output.
+func parseCondaLine(line string) *Package { return parseCondaStyleLine(line, "conda") }

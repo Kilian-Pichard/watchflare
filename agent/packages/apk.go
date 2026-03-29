@@ -2,15 +2,20 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 )
 
+const apkTimeout = 60 * time.Second
+
 // ApkCollector collects packages from apk (Alpine Linux)
-type ApkCollector struct{}
+type ApkCollector struct {
+	apkPath string
+}
 
 // Name returns the collector name
 func (a *ApkCollector) Name() string {
@@ -19,37 +24,50 @@ func (a *ApkCollector) Name() string {
 
 // IsAvailable checks if apk is available
 func (a *ApkCollector) IsAvailable() bool {
-	_, err := exec.LookPath("apk")
-	return err == nil
+	path, err := exec.LookPath("apk")
+	if err != nil {
+		return false
+	}
+	a.apkPath = path
+	return true
 }
 
-// Collect gathers all installed packages from apk
+// Collect gathers all installed packages from apk.
+// Uses a single "apk info -vv" call which returns all metadata per package
+// in multi-line blocks separated by blank lines.
 func (a *ApkCollector) Collect() ([]*Package, error) {
-	// Run apk info to get installed packages
-	// -v for version, -d for description, -s for size
-	cmd := exec.Command("apk", "info", "-vv")
+	ctx, cancel := context.WithTimeout(context.Background(), apkTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, a.apkPath, "info", "-vv")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("apk info failed: %w", err)
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	var block []string
 
+	flush := func() {
+		if len(block) == 0 {
+			return
+		}
+		if pkg := parseApkBlock(block); pkg != nil {
+			packages = append(packages, pkg)
+		}
+		block = block[:0]
+	}
+
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
-			continue
-		}
-
-		// Parse package info
-		// Format: "package-name-version - description"
-		pkg := a.parsePackageLine(line)
-		if pkg != nil {
-			packages = append(packages, pkg)
+			flush()
+		} else {
+			block = append(block, line)
 		}
 	}
+	flush() // last block (no trailing blank line)
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading apk output: %w", err)
@@ -58,154 +76,110 @@ func (a *ApkCollector) Collect() ([]*Package, error) {
 	return packages, nil
 }
 
-// parsePackageLine parses a single line of apk info output
-func (a *ApkCollector) parsePackageLine(line string) *Package {
-	// Try to split by " - " to separate package info from description
-	parts := strings.SplitN(line, " - ", 2)
-	packagePart := parts[0]
-	description := ""
-	if len(parts) > 1 {
-		description = parts[1]
-	}
-
-	// Extract package name and version
-	// Format: "package-name-version-release"
-	// We need to find where the version starts (typically after the last alphabetic part of the name)
-	fields := strings.Fields(packagePart)
-	if len(fields) == 0 {
+// parseApkBlock parses a multi-line apk info -vv block for one package.
+//
+// Example block:
+//
+//	musl-1.2.4-r2 description:
+//	A C library designed for Linux
+//	musl-1.2.4-r2 webpage:
+//	https://musl.libc.org/
+//	musl-1.2.4-r2 installed size:
+//	624 KiB
+//	musl-1.2.4-r2 arch:
+//	x86_64
+func parseApkBlock(block []string) *Package {
+	if len(block) == 0 {
 		return nil
 	}
 
-	fullName := fields[0]
+	// First line identifies the package: "<name>-<version> description:" or similar
+	firstLine := block[0]
+	spaceIdx := strings.Index(firstLine, " ")
+	if spaceIdx < 0 {
+		return nil
+	}
+	fullName := firstLine[:spaceIdx]
 
-	// Parse name-version from apk package format
-	// Alpine packages are like: package-1.2.3-r0
-	name, version := a.splitNameVersion(fullName)
+	name, version := splitNameVersion(fullName)
 	if name == "" {
 		return nil
 	}
 
-	// Get detailed info if needed
-	info := a.getPackageDetails(name)
-
-	installDate := time.Time{}
-	if info.InstallDate != nil {
-		installDate = *info.InstallDate
-	}
-
-	return &Package{
+	pkg := &Package{
 		Name:           name,
 		Version:        version,
-		Architecture:   info.Architecture,
 		PackageManager: "apk",
-		Source:         info.Repository,
-		InstalledAt:    installDate,
-		PackageSize:    info.Size,
-		Description:    description,
 	}
+
+	// Parse key/value pairs: odd lines are keys, even lines are values
+	for i := 0; i+1 < len(block); i += 2 {
+		key := block[i]
+		value := strings.TrimSpace(block[i+1])
+
+		switch {
+		case strings.HasSuffix(key, " description:"):
+			pkg.Description = TruncateDescription(value)
+		case strings.HasSuffix(key, " installed size:"):
+			pkg.PackageSize = parseApkSize(value)
+		case strings.HasSuffix(key, " arch:"):
+			pkg.Architecture = value
+		case strings.HasSuffix(key, " provides:"):
+			// e.g. repository origin — skip, not directly available here
+		}
+	}
+
+	return pkg
 }
 
-// splitNameVersion splits an apk package string into name and version
-func (a *ApkCollector) splitNameVersion(fullName string) (string, string) {
-	// Alpine packages follow pattern: name-version-release
-	// Version typically starts with a digit
-	// Example: "alpine-base-3.18.4-r0" -> name="alpine-base", version="3.18.4-r0"
-
+// splitNameVersion splits an apk package string into name and version.
+// Alpine packages follow the pattern: <name>-<version>-r<release>
+// where the version always starts with a digit.
+// Example: "alpine-base-3.18.4-r0" → name="alpine-base", version="3.18.4-r0"
+func splitNameVersion(fullName string) (string, string) {
 	parts := strings.Split(fullName, "-")
 	if len(parts) < 2 {
 		return fullName, ""
 	}
 
-	// Find where version starts (first part that starts with a digit)
-	for i := len(parts) - 1; i >= 0; i-- {
+	// Walk forward: version starts at the first segment that begins with a digit
+	// AND is preceded by a non-digit segment (avoids splitting lib2to3-1.0 too early)
+	for i := 1; i < len(parts); i++ {
 		if len(parts[i]) > 0 && parts[i][0] >= '0' && parts[i][0] <= '9' {
-			// Found version start
-			name := strings.Join(parts[:i], "-")
-			version := strings.Join(parts[i:], "-")
-			return name, version
+			return strings.Join(parts[:i], "-"), strings.Join(parts[i:], "-")
 		}
 	}
 
-	// Couldn't determine version
 	return fullName, ""
 }
 
-type apkPackageDetails struct {
-	Architecture string
-	Repository   string
-	InstallDate  *time.Time
-	Size         int64
-}
-
-// getPackageDetails retrieves detailed information for a package
-func (a *ApkCollector) getPackageDetails(name string) apkPackageDetails {
-	details := apkPackageDetails{}
-
-	// Run apk info with specific package name
-	cmd := exec.Command("apk", "info", "-a", name)
-	output, err := cmd.Output()
-	if err != nil {
-		return details
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.HasPrefix(line, "architecture:") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				details.Architecture = strings.TrimSpace(parts[1])
-			}
-		} else if strings.HasPrefix(line, "installed size:") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				sizeStr := strings.TrimSpace(parts[1])
-				details.Size = parseApkSize(sizeStr)
-			}
-		}
-	}
-
-	return details
-}
-
-// parseApkSize converts apk size strings to bytes
+// parseApkSize converts apk size strings to bytes.
+// Input examples: "624 KiB", "1.2 MiB", "4096"
 func parseApkSize(sizeStr string) int64 {
-	// Remove any trailing whitespace and units
-	sizeStr = strings.TrimSpace(sizeStr)
-
-	// APK sizes are typically in bytes as plain numbers
-	// But may have units like "1.2 MiB"
-	parts := strings.Fields(sizeStr)
+	parts := strings.Fields(strings.TrimSpace(sizeStr))
 	if len(parts) == 0 {
 		return 0
 	}
 
-	value, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
-		// Try parsing as float with unit
-		if len(parts) >= 2 {
-			floatVal, err := strconv.ParseFloat(parts[0], 64)
-			if err != nil {
-				return 0
-			}
-
-			unit := strings.ToLower(parts[1])
-			multiplier := int64(1)
-
-			switch unit {
-			case "kib", "k":
-				multiplier = 1024
-			case "mib", "m":
-				multiplier = 1024 * 1024
-			case "gib", "g":
-				multiplier = 1024 * 1024 * 1024
-			}
-
-			return int64(floatVal * float64(multiplier))
-		}
+	// Try plain integer first (bytes)
+	var value float64
+	_, err := fmt.Sscanf(parts[0], "%f", &value)
+	if err != nil || value < 0 {
 		return 0
 	}
 
-	return value
+	if len(parts) == 1 {
+		return int64(value)
+	}
+
+	switch strings.ToLower(parts[1]) {
+	case "kib", "k":
+		return int64(value * 1024)
+	case "mib", "m":
+		return int64(value * 1024 * 1024)
+	case "gib", "g":
+		return int64(value * 1024 * 1024 * 1024)
+	}
+
+	return int64(value)
 }

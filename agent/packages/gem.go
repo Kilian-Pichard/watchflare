@@ -2,12 +2,19 @@ package packages
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 )
+
+const gemTimeout = 30 * time.Second
+
+// gemLineRegex matches "name (version1, version2, ...)" from gem list output.
+var gemLineRegex = regexp.MustCompile(`^(\S+)\s+\(([^)]+)\)`)
 
 // GemCollector collects installed Ruby gems (cross-platform)
 type GemCollector struct {
@@ -25,59 +32,30 @@ func (g *GemCollector) IsAvailable() bool {
 	if err != nil {
 		return false
 	}
-
 	g.gemPath = gemPath
 	return true
 }
 
-// Collect gathers all installed Ruby gems
+// Collect gathers all installed Ruby gems.
+// Parses "gem list --local" output:
+//
+//	bundler (2.4.10, 2.3.26)
 func (g *GemCollector) Collect() ([]*Package, error) {
-	// Run gem list --local
-	cmd := exec.Command(g.gemPath, "list", "--local")
+	ctx, cancel := context.WithTimeout(context.Background(), gemTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, g.gemPath, "list", "--local")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("gem list failed: %w (output: %s)", err, string(output))
 	}
 
 	var packages []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-
-	// Pattern: "package-name (version1, version2, ...)"
-	// Example: "bundler (2.4.10, 2.3.26)"
-	gemRegex := regexp.MustCompile(`^(\S+)\s+\(([^)]+)\)`)
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-
-		matches := gemRegex.FindStringSubmatch(line)
-		if len(matches) < 3 {
-			continue
-		}
-
-		packageName := matches[1]
-		versions := strings.Split(matches[2], ", ")
-
-		// If multiple versions are installed, create a package entry for each
-		// (though typically we'll just report the first/latest)
-		for _, version := range versions {
-			version = strings.TrimSpace(version)
-
-			packages = append(packages, &Package{
-				Name:           packageName,
-				Version:        version,
-				Architecture:   "",            // gem is platform-independent
-				PackageManager: "gem",
-				Source:         "rubygems.org", // Default RubyGems registry
-				InstalledAt:    time.Time{},   // Would require gem specification per package
-				PackageSize:    0,              // Would require scanning gem directory
-				Description:    "",             // Would require gem specification call
-			})
-
-			// Only report the first version (usually the latest)
-			break
+		if pkg := parseGemLine(scanner.Text()); pkg != nil {
+			packages = append(packages, pkg)
 		}
 	}
 
@@ -86,4 +64,28 @@ func (g *GemCollector) Collect() ([]*Package, error) {
 	}
 
 	return packages, nil
+}
+
+// parseGemLine parses a single line of gem list output.
+// Format: "name (version1, version2, ...)"
+// Reports only the first (latest) version when multiple are installed.
+func parseGemLine(line string) *Package {
+	if strings.TrimSpace(line) == "" {
+		return nil
+	}
+
+	matches := gemLineRegex.FindStringSubmatch(line)
+	if len(matches) < 3 {
+		return nil
+	}
+
+	name := matches[1]
+	version := strings.TrimSpace(strings.SplitN(matches[2], ",", 2)[0])
+
+	return &Package{
+		Name:           name,
+		Version:        version,
+		PackageManager: "gem",
+		Source:         "rubygems.org",
+	}
 }

@@ -1,14 +1,15 @@
 package packages
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 )
+
+const brewTimeout = 60 * time.Second
 
 // BrewCollector collects packages from Homebrew (macOS)
 type BrewCollector struct {
@@ -38,36 +39,22 @@ func (b *BrewCollector) IsAvailable() bool {
 	return false
 }
 
-// brewPackage represents the JSON structure from brew info --json
-type brewPackage struct {
-	Name        string       `json:"name"`
-	Versions    brewVersions `json:"versions"`
-	Description string       `json:"desc"`
-}
-
-// brewVersions represents the versions field in brew JSON
-type brewVersions struct {
-	Stable string      `json:"stable"`
-	Head   string      `json:"head"`
-	Bottle interface{} `json:"bottle"` // Can be bool or object
-}
-
-// Collect gathers all installed packages from Homebrew
+// Collect gathers all installed Homebrew formulae and casks in two calls.
 func (b *BrewCollector) Collect() ([]*Package, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), brewTimeout)
+	defer cancel()
+
 	var pkgs []*Package
 
-	// Collect formulae
-	formulae, err := b.collectFormulae()
+	formulae, err := b.collectFormulae(ctx)
 	if err != nil {
 		return nil, err
 	}
 	pkgs = append(pkgs, formulae...)
 
-	// Collect casks
-	casks, err := b.collectCasks()
+	casks, err := b.collectCasks(ctx)
 	if err != nil {
-		// Don't fail if cask collection fails, just log warning
-		// (casks might not be available on all systems)
+		// Casks are optional — don't fail the whole collection
 		return pkgs, nil
 	}
 	pkgs = append(pkgs, casks...)
@@ -75,135 +62,67 @@ func (b *BrewCollector) Collect() ([]*Package, error) {
 	return pkgs, nil
 }
 
-// collectFormulae collects installed Homebrew formulae
-func (b *BrewCollector) collectFormulae() ([]*Package, error) {
-	cmd := exec.Command(b.brewPath, "list", "--formula")
-	output, err := cmd.CombinedOutput()
+// collectFormulae fetches all installed formulae in a single brew call.
+func (b *BrewCollector) collectFormulae(ctx context.Context) ([]*Package, error) {
+	cmd := exec.CommandContext(ctx, b.brewPath, "info", "--json=v2", "--formula", "--installed")
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("brew list --formula failed: %w (output: %s)", err, string(output))
+		return nil, fmt.Errorf("brew info --formula --installed failed: %w", err)
 	}
-
-	var pkgs []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-
-	for scanner.Scan() {
-		packageName := strings.TrimSpace(scanner.Text())
-		if packageName == "" {
-			continue
-		}
-
-		// Get package info (version, description)
-		pkg, err := b.getPackageInfo(packageName, "formula")
-		if err != nil {
-			// Skip packages that fail to query
-			continue
-		}
-
-		pkgs = append(pkgs, pkg)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to parse brew formula output: %w", err)
-	}
-
-	return pkgs, nil
+	return parseBrewFormulaeJSON(output)
 }
 
-// collectCasks collects installed Homebrew casks
-func (b *BrewCollector) collectCasks() ([]*Package, error) {
-	cmd := exec.Command(b.brewPath, "list", "--cask")
-	output, err := cmd.CombinedOutput()
+// collectCasks fetches all installed casks in a single brew call.
+func (b *BrewCollector) collectCasks(ctx context.Context) ([]*Package, error) {
+	cmd := exec.CommandContext(ctx, b.brewPath, "info", "--json=v2", "--cask", "--installed")
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("brew list --cask failed: %w", err)
+		return nil, fmt.Errorf("brew info --cask --installed failed: %w", err)
 	}
-
-	var pkgs []*Package
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-
-	for scanner.Scan() {
-		caskName := strings.TrimSpace(scanner.Text())
-		if caskName == "" {
-			continue
-		}
-
-		// Get cask info (version, description)
-		pkg, err := b.getCaskInfo(caskName)
-		if err != nil {
-			// Skip casks that fail to query
-			continue
-		}
-
-		pkgs = append(pkgs, pkg)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to parse brew cask output: %w", err)
-	}
-
-	return pkgs, nil
+	return parseBrewCasksJSON(output)
 }
 
-// getPackageInfo retrieves detailed information for a single formula
-func (b *BrewCollector) getPackageInfo(name string, packageType string) (*Package, error) {
-	// Get JSON info for the package with --formula flag to avoid ambiguity
-	cmd := exec.Command(b.brewPath, "info", "--json=v2", "--formula", name)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("brew info --formula failed for %s: %w (output: %s)", name, err, string(output))
-	}
-
-	// Parse JSON response
+// parseBrewFormulaeJSON parses the JSON output of "brew info --json=v2 --formula --installed".
+func parseBrewFormulaeJSON(output []byte) ([]*Package, error) {
 	var response struct {
-		Formulae []brewPackage `json:"formulae"`
+		Formulae []struct {
+			Name     string `json:"name"`
+			Desc     string `json:"desc"`
+			Versions struct {
+				Stable string `json:"stable"`
+			} `json:"versions"`
+		} `json:"formulae"`
 	}
 
 	if err := json.Unmarshal(output, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse brew JSON: %w", err)
+		return nil, fmt.Errorf("failed to parse brew formula JSON: %w", err)
 	}
 
-	if len(response.Formulae) == 0 {
-		return nil, fmt.Errorf("no formula found for %s", name)
+	pkgs := make([]*Package, 0, len(response.Formulae))
+	for _, f := range response.Formulae {
+		version := f.Versions.Stable
+		if version == "" {
+			version = "unknown"
+		}
+		pkgs = append(pkgs, &Package{
+			Name:           f.Name,
+			Version:        version,
+			PackageManager: "brew-formula",
+			Source:         "homebrew/core",
+			Description:    TruncateDescription(f.Desc),
+		})
 	}
 
-	formula := response.Formulae[0]
-
-	// Get installed version (stable version)
-	version := formula.Versions.Stable
-	if version == "" {
-		version = "unknown"
-	}
-
-	// Truncate description to 100 chars
-	description := TruncateDescription(formula.Description)
-
-	return &Package{
-		Name:           formula.Name,
-		Version:        version,
-		Architecture:   "", // Homebrew doesn't provide arch in formula
-		PackageManager: "brew-formulae",
-		Source:         "homebrew/core", // Default tap
-		InstalledAt:    time.Time{},     // Homebrew doesn't easily provide install date
-		PackageSize:    0,                // Homebrew doesn't easily provide size
-		Description:    description,
-	}, nil
+	return pkgs, nil
 }
 
-// getCaskInfo retrieves detailed information for a single cask
-func (b *BrewCollector) getCaskInfo(name string) (*Package, error) {
-	// Get JSON info for the cask
-	cmd := exec.Command(b.brewPath, "info", "--json=v2", "--cask", name)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("brew info --cask failed for %s: %w", name, err)
-	}
-
-	// Parse JSON response for casks
+// parseBrewCasksJSON parses the JSON output of "brew info --json=v2 --cask --installed".
+func parseBrewCasksJSON(output []byte) ([]*Package, error) {
 	var response struct {
 		Casks []struct {
-			Token       string   `json:"token"`
-			Version     string   `json:"version"`
-			Description string   `json:"desc"`
-			Homepage    string   `json:"homepage"`
+			Token   string `json:"token"`
+			Version string `json:"version"`
+			Desc    string `json:"desc"`
 		} `json:"casks"`
 	}
 
@@ -211,23 +130,16 @@ func (b *BrewCollector) getCaskInfo(name string) (*Package, error) {
 		return nil, fmt.Errorf("failed to parse brew cask JSON: %w", err)
 	}
 
-	if len(response.Casks) == 0 {
-		return nil, fmt.Errorf("no cask found for %s", name)
+	pkgs := make([]*Package, 0, len(response.Casks))
+	for _, c := range response.Casks {
+		pkgs = append(pkgs, &Package{
+			Name:           c.Token,
+			Version:        c.Version,
+			PackageManager: "brew-cask",
+			Source:         "homebrew/cask",
+			Description:    TruncateDescription(c.Desc),
+		})
 	}
 
-	cask := response.Casks[0]
-
-	// Truncate description to 100 chars
-	description := TruncateDescription(cask.Description)
-
-	return &Package{
-		Name:           cask.Token,
-		Version:        cask.Version,
-		Architecture:   "", // Casks are typically multi-arch
-		PackageManager: "brew-casks",
-		Source:         "homebrew/cask", // Cask tap
-		InstalledAt:    time.Time{},
-		PackageSize:    0,
-		Description:    description,
-	}, nil
+	return pkgs, nil
 }

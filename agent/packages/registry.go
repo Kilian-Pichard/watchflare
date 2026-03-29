@@ -89,7 +89,7 @@ func (r *CollectorRegistry) registerLanguageCollectors() {
 
 // GetAvailableCollectors returns only collectors that are available on this system
 func (r *CollectorRegistry) GetAvailableCollectors() []Collector {
-	available := []Collector{}
+	available := make([]Collector, 0, len(r.collectors))
 	for _, c := range r.collectors {
 		if c.IsAvailable() {
 			available = append(available, c)
@@ -110,8 +110,9 @@ func (r *CollectorRegistry) GetCollectorByName(name string) Collector {
 
 // ListCollectorNames returns names of all available collectors
 func (r *CollectorRegistry) ListCollectorNames() []string {
-	names := []string{}
-	for _, c := range r.GetAvailableCollectors() {
+	available := r.GetAvailableCollectors()
+	names := make([]string, 0, len(available))
+	for _, c := range available {
 		names = append(names, c.Name())
 	}
 	return names

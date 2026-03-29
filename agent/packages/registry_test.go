@@ -50,6 +50,7 @@ func TestLinuxCollectorsRegistered(t *testing.T) {
 		"zypper",
 		"snap",
 		"flatpak",
+		"appimage",
 	}
 
 	// Check that all Linux collectors are registered

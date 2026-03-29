@@ -40,9 +40,11 @@ func LoadState(path string) (*PackageState, error) {
 	return &state, nil
 }
 
-// Save writes the package state to a JSON file
+// Save writes the package state to a JSON file.
+// PackageCount is automatically synced with len(Packages) before writing.
 func (s *PackageState) Save(path string) error {
-	// Ensure directory exists
+	s.PackageCount = len(s.Packages)
+
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
@@ -53,7 +55,6 @@ func (s *PackageState) Save(path string) error {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	// Write to file
 	if err := os.WriteFile(path, data, 0640); err != nil {
 		return fmt.Errorf("failed to write state file: %w", err)
 	}

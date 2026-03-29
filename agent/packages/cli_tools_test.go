@@ -7,7 +7,7 @@ import (
 func TestCLIToolsCollector_Name(t *testing.T) {
 	collector := &CLIToolsCollector{}
 	if collector.Name() != "cli-tools" {
-		t.Errorf("Expected name 'cli-tools', got '%s'", collector.Name())
+		t.Errorf("expected name 'cli-tools', got '%s'", collector.Name())
 	}
 }
 
@@ -26,32 +26,24 @@ func TestCLIToolsCollector_Collect(t *testing.T) {
 		t.Fatalf("Collect() returned error: %v", err)
 	}
 
-	// Should find at least some CLI tools on any system
-	if len(packages) == 0 {
-		t.Log("Warning: No CLI tools found (this might be expected in minimal environments)")
-	}
-
-	// Verify package structure
 	for _, pkg := range packages {
 		if pkg.Name == "" {
-			t.Error("Package name should not be empty")
+			t.Error("package name should not be empty")
 		}
 		if pkg.Version == "" {
-			t.Error("Package version should not be empty")
+			t.Error("package version should not be empty")
 		}
 		if pkg.PackageManager != "cli-tools" {
-			t.Errorf("Expected package_manager 'cli-tools', got '%s'", pkg.PackageManager)
+			t.Errorf("expected package_manager 'cli-tools', got '%s'", pkg.PackageManager)
 		}
-
-		t.Logf("Found: %s v%s (category: %s, path: %s)",
-			pkg.Name, pkg.Version, pkg.Source, pkg.Description)
+		t.Logf("found: %s v%s (category: %s, path: %s)", pkg.Name, pkg.Version, pkg.Source, pkg.Description)
 	}
 }
 
 func TestParseVersion(t *testing.T) {
 	collector := &CLIToolsCollector{}
 
-	testCases := []struct {
+	tests := []struct {
 		input    string
 		expected string
 	}{
@@ -63,14 +55,18 @@ func TestParseVersion(t *testing.T) {
 		{"kubectl version 1.28.3", "1.28.3"},
 		{"go version go1.21.4 darwin/arm64", "1.21.4"},
 		{"terraform v1.6.4", "1.6.4"},
-		{"helm version.BuildInfo{Version:\"v3.13.2\"", "3.13.2"},
+		{`helm version.BuildInfo{Version:"v3.13.2"`, "3.13.2"},
 		{"cargo 1.74.0", "1.74.0"},
+		// Edge cases
+		{"", ""},
+		{"no version here", ""},
+		{"only text without numbers", ""},
 	}
 
-	for _, tc := range testCases {
-		result := collector.parseVersion(tc.input)
-		if result != tc.expected {
-			t.Errorf("parseVersion(%q) = %q, expected %q", tc.input, result, tc.expected)
+	for _, tt := range tests {
+		result := collector.parseVersion(tt.input)
+		if result != tt.expected {
+			t.Errorf("parseVersion(%q) = %q, expected %q", tt.input, result, tt.expected)
 		}
 	}
 }

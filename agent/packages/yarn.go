@@ -1,14 +1,22 @@
 package packages
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
+const yarnTimeout = 30 * time.Second
+
 // YarnCollector collects globally installed Yarn packages
-type YarnCollector struct{}
+type YarnCollector struct {
+	yarnPath string
+}
 
 // Name returns the collector name
 func (y *YarnCollector) Name() string {
@@ -17,108 +25,79 @@ func (y *YarnCollector) Name() string {
 
 // IsAvailable checks if yarn is available
 func (y *YarnCollector) IsAvailable() bool {
-	_, err := exec.LookPath("yarn")
-	return err == nil
+	path, err := exec.LookPath("yarn")
+	if err != nil {
+		return false
+	}
+	y.yarnPath = path
+	return true
 }
 
-// Collect gathers all globally installed Yarn packages
+// Collect gathers all globally installed Yarn packages.
+// Uses "yarn global list --json" (NDJSON output).
 func (y *YarnCollector) Collect() ([]*Package, error) {
-	// Run yarn global list with JSON output
-	cmd := exec.Command("yarn", "global", "list", "--json")
+	ctx, cancel := context.WithTimeout(context.Background(), yarnTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, y.yarnPath, "global", "list", "--json")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("yarn global list failed: %w", err)
 	}
 
-	// Yarn outputs NDJSON (newline-delimited JSON)
-	// We need to parse each line as a separate JSON object
 	var packages []*Package
-	lines := splitLines(string(output))
-
-	for _, line := range lines {
-		if line == "" {
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
 			continue
 		}
-
 		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &data); err != nil {
+		if err := json.Unmarshal(line, &data); err != nil {
 			continue
 		}
-
-		// Look for "data" entries with package info
-		if data["type"] == "tree" {
-			if dataObj, ok := data["data"].(map[string]interface{}); ok {
-				if trees, ok := dataObj["trees"].([]interface{}); ok {
-					for _, tree := range trees {
-						if treeMap, ok := tree.(map[string]interface{}); ok {
-							pkg := y.parseTreeNode(treeMap)
-							if pkg != nil {
-								packages = append(packages, pkg)
-							}
-						}
-					}
+		if data["type"] != "tree" {
+			continue
+		}
+		dataObj, _ := data["data"].(map[string]interface{})
+		trees, _ := dataObj["trees"].([]interface{})
+		for _, tree := range trees {
+			if treeMap, ok := tree.(map[string]interface{}); ok {
+				if pkg := parseYarnTreeNode(treeMap); pkg != nil {
+					packages = append(packages, pkg)
 				}
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading yarn output: %w", err)
 	}
 
 	return packages, nil
 }
 
-// parseTreeNode parses a Yarn tree node into a Package
-func (y *YarnCollector) parseTreeNode(node map[string]interface{}) *Package {
-	nameStr, hasName := node["name"].(string)
-	if !hasName || nameStr == "" {
+// parseYarnTreeNode parses a Yarn tree node into a Package.
+func parseYarnTreeNode(node map[string]interface{}) *Package {
+	nameStr, _ := node["name"].(string)
+	if nameStr == "" {
 		return nil
 	}
-
-	// Yarn format: "package@version"
-	name, version := parseNameVersion(nameStr)
-
+	name, version := parseYarnNameVersion(nameStr)
 	return &Package{
 		Name:           name,
 		Version:        version,
-		Architecture:   "",
 		PackageManager: "yarn-global",
-		Source:         "yarn",
-		InstalledAt:    time.Time{},
-		PackageSize:    0,
-		Description:    "Globally installed Yarn package",
+		Source:         "npmjs.com",
 	}
 }
 
-// parseNameVersion splits "package@version" into name and version
-func parseNameVersion(nameVersion string) (string, string) {
-	// Handle scoped packages: "@scope/package@version"
-	if nameVersion[0] == '@' {
-		// Find the second @ which separates package from version
-		firstSlash := -1
-		for i, c := range nameVersion {
-			if c == '/' {
-				firstSlash = i
-				break
-			}
-		}
-		if firstSlash == -1 {
-			return nameVersion, ""
-		}
-
-		// Find @ after the slash
-		for i := firstSlash; i < len(nameVersion); i++ {
-			if nameVersion[i] == '@' {
-				return nameVersion[:i], nameVersion[i+1:]
-			}
-		}
-		return nameVersion, ""
+// parseYarnNameVersion splits a "package@version" string into name and version.
+// Handles scoped packages: "@scope/name@1.0.0" → ("@scope/name", "1.0.0").
+// Uses the last "@" as the separator (idx > 0 excludes the leading "@" of scoped names).
+func parseYarnNameVersion(nameVersion string) (string, string) {
+	idx := strings.LastIndex(nameVersion, "@")
+	if idx > 0 {
+		return nameVersion[:idx], nameVersion[idx+1:]
 	}
-
-	// Regular package: "package@version"
-	for i := len(nameVersion) - 1; i >= 0; i-- {
-		if nameVersion[i] == '@' {
-			return nameVersion[:i], nameVersion[i+1:]
-		}
-	}
-
 	return nameVersion, ""
 }

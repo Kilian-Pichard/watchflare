@@ -1,15 +1,21 @@
 package packages
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
-// PipxCollector collects globally installed pipx applications
-// pipx is used to install Python CLI applications in isolated environments
-type PipxCollector struct{}
+const pipxTimeout = 30 * time.Second
+
+// PipxCollector collects globally installed pipx applications.
+// pipx installs Python CLI applications in isolated virtual environments.
+type PipxCollector struct {
+	pipxPath string
+}
 
 // Name returns the collector name
 func (p *PipxCollector) Name() string {
@@ -18,36 +24,43 @@ func (p *PipxCollector) Name() string {
 
 // IsAvailable checks if pipx is available
 func (p *PipxCollector) IsAvailable() bool {
-	_, err := exec.LookPath("pipx")
-	return err == nil
+	path, err := exec.LookPath("pipx")
+	if err != nil {
+		return false
+	}
+	p.pipxPath = path
+	return true
 }
 
-// Collect gathers all installed pipx applications
+// Collect gathers all installed pipx applications.
+// Uses "pipx list --json".
 func (p *PipxCollector) Collect() ([]*Package, error) {
-	// Run pipx list with JSON output
-	cmd := exec.Command("pipx", "list", "--json")
+	ctx, cancel := context.WithTimeout(context.Background(), pipxTimeout)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, p.pipxPath, "list", "--json")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("pipx list failed: %w", err)
 	}
 
-	// Parse JSON output
+	return parsePipxOutput(output)
+}
+
+// parsePipxOutput parses the JSON output of "pipx list --json".
+// Structure: {"venvs": {"app-name": {...}, ...}}
+func parsePipxOutput(output []byte) ([]*Package, error) {
 	var data map[string]interface{}
 	if err := json.Unmarshal(output, &data); err != nil {
 		return nil, fmt.Errorf("failed to parse pipx output: %w", err)
 	}
 
-	var packages []*Package
-
-	// pipx JSON structure: {"venvs": {"app-name": {...}, ...}}
-	if venvs, ok := data["venvs"].(map[string]interface{}); ok {
-		for appName, venvData := range venvs {
-			if venvMap, ok := venvData.(map[string]interface{}); ok {
-				pkg := p.parseVenvData(appName, venvMap)
-				if pkg != nil {
-					packages = append(packages, pkg)
-				}
+	venvs, _ := data["venvs"].(map[string]interface{})
+	packages := make([]*Package, 0, len(venvs))
+	for appName, venvData := range venvs {
+		if venvMap, ok := venvData.(map[string]interface{}); ok {
+			if pkg := parsePipxVenv(appName, venvMap); pkg != nil {
+				packages = append(packages, pkg)
 			}
 		}
 	}
@@ -55,35 +68,22 @@ func (p *PipxCollector) Collect() ([]*Package, error) {
 	return packages, nil
 }
 
-// parseVenvData parses a pipx venv JSON object into a Package
-func (p *PipxCollector) parseVenvData(appName string, venvData map[string]interface{}) *Package {
-	// Extract metadata
-	metadata, hasMetadata := venvData["metadata"].(map[string]interface{})
-
+// parsePipxVenv parses a single pipx venv JSON block into a Package.
+func parsePipxVenv(appName string, venvData map[string]interface{}) *Package {
 	version := ""
 	pythonVersion := ""
 
-	if hasMetadata {
-		// Get main package info
+	if metadata, ok := venvData["metadata"].(map[string]interface{}); ok {
 		if mainPkg, ok := metadata["main_package"].(map[string]interface{}); ok {
-			if pkgVersion, ok := mainPkg["package_version"].(string); ok {
-				version = pkgVersion
-			}
+			version, _ = mainPkg["package_version"].(string)
 			if appName == "" {
-				if pkgName, ok := mainPkg["package"].(string); ok {
-					appName = pkgName
-				}
+				appName, _ = mainPkg["package"].(string)
 			}
 		}
-
-		// Get Python version
-		if pyVer, ok := metadata["python_version"].(string); ok {
-			pythonVersion = pyVer
-		}
+		pythonVersion, _ = metadata["python_version"].(string)
 	}
 
-	// Get installed apps/commands
-	commands := []string{}
+	var commands []string
 	if apps, ok := venvData["apps"].([]interface{}); ok {
 		for _, app := range apps {
 			if appStr, ok := app.(string); ok {
@@ -92,19 +92,18 @@ func (p *PipxCollector) parseVenvData(appName string, venvData map[string]interf
 		}
 	}
 
-	description := fmt.Sprintf("Python CLI app (Python %s)", pythonVersion)
+	var description string
 	if len(commands) > 0 {
-		description = fmt.Sprintf("Commands: %v (Python %s)", commands, pythonVersion)
+		description = fmt.Sprintf("Commands: %s (Python %s)", strings.Join(commands, ", "), pythonVersion)
+	} else {
+		description = fmt.Sprintf("Python CLI app (Python %s)", pythonVersion)
 	}
 
 	return &Package{
 		Name:           appName,
 		Version:        version,
-		Architecture:   "",
 		PackageManager: "pipx",
-		Source:         "pypi", // pipx installs from PyPI
-		InstalledAt:    time.Time{},
-		PackageSize:    0,
+		Source:         "pypi.org",
 		Description:    description,
 	}
 }

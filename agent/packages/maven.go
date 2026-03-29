@@ -9,8 +9,12 @@ import (
 	"time"
 )
 
+const mavenRepoPath = ".m2/repository"
+
 // MavenCollector collects packages from Maven local repository
-type MavenCollector struct{}
+type MavenCollector struct {
+	repoPath string
+}
 
 // Name returns the collector name
 func (m *MavenCollector) Name() string {
@@ -23,38 +27,28 @@ func (m *MavenCollector) IsAvailable() bool {
 	if err != nil {
 		return false
 	}
-
-	m2Dir := filepath.Join(homeDir, ".m2", "repository")
-	_, err = os.Stat(m2Dir)
-	return err == nil
+	repoPath := filepath.Join(homeDir, mavenRepoPath)
+	if _, err := os.Stat(repoPath); err != nil {
+		return false
+	}
+	m.repoPath = repoPath
+	return true
 }
 
-// Collect gathers all packages from Maven local repository
+// Collect gathers all packages from Maven local repository.
+// Walks ~/.m2/repository and parses each .pom file.
 func (m *MavenCollector) Collect() ([]*Package, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	m2Repo := filepath.Join(homeDir, ".m2", "repository")
-
 	var packages []*Package
 
-	// Walk through the repository directory
-	// Maven structure: groupId/artifactId/version/
-	err = filepath.Walk(m2Repo, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(m.repoPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Skip errors
+			return nil // skip unreadable entries
 		}
-
-		// Look for .pom files which indicate a Maven artifact
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".pom") {
-			pkg := m.parsePomFile(path, m2Repo)
-			if pkg != nil {
+			if pkg := parsePomFile(path); pkg != nil {
 				packages = append(packages, pkg)
 			}
 		}
-
 		return nil
 	})
 
@@ -65,99 +59,92 @@ func (m *MavenCollector) Collect() ([]*Package, error) {
 	return packages, nil
 }
 
-// MavenPom represents a Maven POM file structure
-type MavenPom struct {
+// mavenPom represents a Maven POM file structure
+type mavenPom struct {
 	XMLName    xml.Name `xml:"project"`
 	GroupId    string   `xml:"groupId"`
 	ArtifactId string   `xml:"artifactId"`
 	Version    string   `xml:"version"`
 	Name       string   `xml:"name"`
 	Parent     struct {
-		GroupId    string `xml:"groupId"`
-		ArtifactId string `xml:"artifactId"`
-		Version    string `xml:"version"`
+		GroupId string `xml:"groupId"`
+		Version string `xml:"version"`
 	} `xml:"parent"`
 }
 
-// parsePomFile parses a POM file and creates a Package
-func (m *MavenCollector) parsePomFile(pomPath, repoRoot string) *Package {
+// parsePomFile reads a .pom file from disk and returns a Package.
+func parsePomFile(pomPath string) *Package {
 	data, err := os.ReadFile(pomPath)
 	if err != nil {
 		return nil
 	}
 
-	var pom MavenPom
-	if err := xml.Unmarshal(data, &pom); err != nil {
+	groupID, artifactID, version, description, ok := parseMavenPomData(data)
+	if !ok {
 		return nil
 	}
 
-	// Use parent values if direct values are empty
-	groupId := pom.GroupId
-	if groupId == "" && pom.Parent.GroupId != "" {
-		groupId = pom.Parent.GroupId
-	}
-
-	version := pom.Version
-	if version == "" && pom.Parent.Version != "" {
-		version = pom.Parent.Version
-	}
-
-	if pom.ArtifactId == "" || groupId == "" || version == "" {
-		return nil
-	}
-
-	// Construct full name: groupId:artifactId
-	fullName := fmt.Sprintf("%s:%s", groupId, pom.ArtifactId)
-
-	// Get file info for timestamp
-	info, err := os.Stat(pomPath)
-	var modTime time.Time
-	if err == nil {
-		modTime = info.ModTime()
-	}
-
-	// Calculate directory size (all files for this artifact version)
-	artifactDir := filepath.Dir(pomPath)
-	dirSize := m.calculateDirSize(artifactDir)
-
-	description := pom.Name
-	if description == "" {
-		description = pom.ArtifactId
+	var installedAt time.Time
+	if info, err := os.Stat(pomPath); err == nil {
+		installedAt = info.ModTime()
 	}
 
 	return &Package{
-		Name:           fullName,
+		Name:           fmt.Sprintf("%s:%s", groupID, artifactID),
 		Version:        version,
-		Architecture:   "",
 		PackageManager: "maven",
-		Source:         groupId, // Use groupId as source
-		InstalledAt:    modTime,
-		PackageSize:    dirSize,
+		Source:         groupID,
+		InstalledAt:    installedAt,
+		PackageSize:    calculateDirSize(filepath.Dir(pomPath)),
 		Description:    description,
 	}
 }
 
-// calculateDirSize calculates the total size of all files in a directory
-func (m *MavenCollector) calculateDirSize(dir string) int64 {
-	var size int64
+// parseMavenPomData parses POM XML bytes and resolves groupId/version from parent
+// when not set directly. Returns ok=false if required fields are missing.
+func parseMavenPomData(data []byte) (groupID, artifactID, version, description string, ok bool) {
+	var pom mavenPom
+	if err := xml.Unmarshal(data, &pom); err != nil {
+		return
+	}
 
+	groupID = pom.GroupId
+	if groupID == "" {
+		groupID = pom.Parent.GroupId
+	}
+	version = pom.Version
+	if version == "" {
+		version = pom.Parent.Version
+	}
+	artifactID = pom.ArtifactId
+
+	if groupID == "" || artifactID == "" || version == "" {
+		return
+	}
+
+	description = pom.Name
+	if description == "" {
+		description = artifactID
+	}
+
+	ok = true
+	return
+}
+
+// calculateDirSize returns the total size of all files (non-recursive) in dir.
+func calculateDirSize(dir string) int64 {
+	var size int64
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
-
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-
-		info, err := entry.Info()
-		if err != nil {
-			continue
+		if info, err := entry.Info(); err == nil {
+			size += info.Size()
 		}
-
-		size += info.Size()
 	}
-
 	return size
 }

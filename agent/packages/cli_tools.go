@@ -1,6 +1,7 @@
 package packages
 
 import (
+	"context"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -73,7 +74,7 @@ var predefinedCLIs = []cliTool{
 	{"make", []string{"--version"}, "build"},
 	{"cmake", []string{"--version"}, "build"},
 	{"gradle", []string{"--version"}, "build"},
-	{"maven", []string{"--version"}, "build"},
+	{"mvn", []string{"--version"}, "build"},
 	{"ant", []string{"--version"}, "build"},
 	{"ninja", []string{"--version"}, "build"},
 
@@ -102,49 +103,56 @@ var predefinedCLIs = []cliTool{
 	// Monitoring & Observability
 	{"prometheus", []string{"--version"}, "monitoring"},
 	{"grafana-cli", []string{"--version"}, "monitoring"},
-	{"curl", []string{"--version"}, "monitoring"},
-	{"wget", []string{"--version"}, "monitoring"},
+	{"curl", []string{"--version"}, "network"},
+	{"wget", []string{"--version"}, "network"},
 	{"jq", []string{"--version"}, "monitoring"},
 }
+
+// versionTimeout is the maximum time allowed per version command invocation.
+const versionTimeout = 5 * time.Second
+
+// versionPatterns are compiled once at package init and reused across calls.
+var versionPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)version\s+v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
+	regexp.MustCompile(`(?i)^v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
+	regexp.MustCompile(`(?i)^\w+\s+v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
+	regexp.MustCompile(`^v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
+	regexp.MustCompile(`v?(\d+\.\d+\.\d+)`),
+}
+
+var semverFallback = regexp.MustCompile(`\d+\.\d+\.\d+`)
 
 // Collect gathers versions of all available CLI tools
 func (c *CLIToolsCollector) Collect() ([]*Package, error) {
 	var packages []*Package
 
 	for _, tool := range predefinedCLIs {
-		// Check if tool exists in PATH
 		toolPath, err := exec.LookPath(tool.name)
 		if err != nil {
-			// Tool not installed, skip
 			continue
 		}
 
-		// Try to get version
-		version := c.getVersion(tool)
+		version := c.getVersion(toolPath, tool)
 		if version == "" {
-			// Could not determine version, skip
 			continue
 		}
 
 		packages = append(packages, &Package{
 			Name:           tool.name,
 			Version:        version,
-			Architecture:   "",          // CLI tools are usually architecture-independent
 			PackageManager: "cli-tools",
-			Source:         tool.category, // Use category as source
-			InstalledAt:    time.Time{},   // Cannot determine install date easily
-			PackageSize:    0,              // Could stat the binary for size
-			Description:    toolPath,       // Store path as description
+			Source:         tool.category,
+			Description:    toolPath,
 		})
 	}
 
 	return packages, nil
 }
 
-// getVersion tries multiple commands to extract version
-func (c *CLIToolsCollector) getVersion(tool cliTool) string {
+// getVersion tries multiple version commands for the given binary path.
+func (c *CLIToolsCollector) getVersion(toolPath string, tool cliTool) string {
 	for _, versionCmd := range tool.versionCommands {
-		version := c.tryVersionCommand(tool.name, versionCmd)
+		version := c.tryVersionCommand(toolPath, versionCmd)
 		if version != "" {
 			return version
 		}
@@ -152,57 +160,32 @@ func (c *CLIToolsCollector) getVersion(tool cliTool) string {
 	return ""
 }
 
-// tryVersionCommand executes a version command and parses output
-func (c *CLIToolsCollector) tryVersionCommand(toolName, versionCmd string) string {
-	// Split command into parts
-	parts := strings.Fields(versionCmd)
-	args := []string{}
-	if len(parts) > 0 {
-		args = parts
-	}
+// tryVersionCommand executes a version command with a timeout and parses output.
+// toolPath must be the resolved binary path (from exec.LookPath).
+func (c *CLIToolsCollector) tryVersionCommand(toolPath, versionCmd string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), versionTimeout)
+	defer cancel()
 
-	// Execute command with timeout
-	cmd := exec.Command(toolName, args...)
+	args := strings.Fields(versionCmd)
+	cmd := exec.CommandContext(ctx, toolPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return ""
 	}
 
-	// Parse version from output
 	return c.parseVersion(string(output))
 }
 
-// parseVersion extracts version number from command output
+// parseVersion extracts a semantic version number from command output
 func (c *CLIToolsCollector) parseVersion(output string) string {
-	// Common version patterns
-	// [a-zA-Z0-9._-]* allows alphanumeric, dots, underscores, hyphens (but not commas, spaces, etc.)
-	patterns := []string{
-		// "version 1.2.3" or "v1.2.3"
-		`(?i)version\s+v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`,
-		`(?i)^v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`,
-
-		// "Tool 1.2.3"
-		`(?i)^\w+\s+v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`,
-
-		// Just version numbers at start of line
-		`^v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`,
-
-		// Version anywhere in first line
-		`v?(\d+\.\d+\.\d+)`,
-	}
-
-	// Try each pattern
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		matches := re.FindStringSubmatch(output)
-		if len(matches) > 1 {
+	for _, re := range versionPatterns {
+		if matches := re.FindStringSubmatch(output); len(matches) > 1 {
 			return strings.TrimSpace(matches[1])
 		}
 	}
 
-	// Fallback: look for semantic version anywhere
-	re := regexp.MustCompile(`\d+\.\d+\.\d+`)
-	if match := re.FindString(output); match != "" {
+	// Fallback: any x.y.z anywhere in output
+	if match := semverFallback.FindString(output); match != "" {
 		return match
 	}
 
