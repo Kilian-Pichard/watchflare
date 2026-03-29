@@ -81,11 +81,20 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 		}
 	}
 
-	// Step 5: Check if this is a re-registration (existing UUID provided)
+	// Step 5: Check if this is a re-registration (existing UUID provided).
+	// The UUID must match the pending agent's own AgentID to prevent a token holder
+	// from hijacking an arbitrary existing agent.
 	var agentToUse *models.Server
 	var deletePending bool
 
 	if req.ExistingAgentUuid != "" {
+		if req.ExistingAgentUuid != pendingAgent.AgentID {
+			return &pb.RegisterServerResponse{
+				Success: false,
+				Message: "Invalid registration request",
+			}, nil
+		}
+
 		// Try to find existing agent by UUID
 		var existingAgent models.Server
 		result := database.DB.Where("agent_id = ?", req.ExistingAgentUuid).First(&existingAgent)
