@@ -3,6 +3,7 @@ package update
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -51,7 +52,7 @@ func CheckForUpdate(currentVersion string) (*UpdateInfo, error) {
 	}
 
 	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
 		return nil, fmt.Errorf("failed to parse release info: %w", err)
 	}
 
