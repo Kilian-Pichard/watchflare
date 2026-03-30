@@ -2,6 +2,7 @@ package uuid
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,12 @@ func Load() (string, error) {
 	}
 
 	// Read UUID from file
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read UUID file: %w", err)
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, 256))
 	if err != nil {
 		return "", fmt.Errorf("failed to read UUID file: %w", err)
 	}
