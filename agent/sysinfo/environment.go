@@ -1,10 +1,13 @@
 package sysinfo
 
 import (
+	"io"
 	"os"
 	"runtime"
 	"strings"
 )
+
+const cgroupReadLimit = 64 * 1024 // 64 KB
 
 // EnvironmentType represents the type of environment where the agent runs
 type EnvironmentType string
@@ -78,6 +81,20 @@ func determineType(env *Environment) EnvironmentType {
 	return EnvPhysical
 }
 
+// readCgroup reads /proc/1/cgroup with a size limit.
+func readCgroup() string {
+	f, err := os.Open("/proc/1/cgroup")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, cgroupReadLimit))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 // isRunningInContainer detects if running inside a container
 func isRunningInContainer() bool {
 	// Method 1: Check for /.dockerenv file (Docker)
@@ -86,14 +103,12 @@ func isRunningInContainer() bool {
 	}
 
 	// Method 2: Check cgroup for container indicators
-	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-		content := string(data)
-		if strings.Contains(content, "docker") ||
-			strings.Contains(content, "lxc") ||
-			strings.Contains(content, "kubepods") ||
-			strings.Contains(content, "podman") {
-			return true
-		}
+	content := readCgroup()
+	if strings.Contains(content, "docker") ||
+		strings.Contains(content, "lxc") ||
+		strings.Contains(content, "kubepods") ||
+		strings.Contains(content, "podman") {
+		return true
 	}
 
 	return false
@@ -101,8 +116,7 @@ func isRunningInContainer() bool {
 
 // detectContainerRuntime identifies the container runtime
 func detectContainerRuntime() string {
-	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-		content := string(data)
+	if content := readCgroup(); content != "" {
 		if strings.Contains(content, "docker") {
 			return "docker"
 		}

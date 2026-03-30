@@ -1,13 +1,18 @@
 package sysinfo
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
+
+const sysinfoTimeout = 5 * time.Second
 
 // SystemInfo contains information about the system
 type SystemInfo struct {
@@ -122,9 +127,9 @@ func getKernelVersion() string {
 
 // macOS specific functions
 func getMacOSVersion() string {
-	// Use sw_vers to get macOS version
-	cmd := exec.Command("sw_vers", "-productVersion")
-	output, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), sysinfoTimeout)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "sw_vers", "-productVersion").Output()
 	if err != nil {
 		return "Unknown"
 	}
@@ -132,9 +137,9 @@ func getMacOSVersion() string {
 }
 
 func getMacOSKernelVersion() string {
-	// Use uname -r to get kernel version
-	cmd := exec.Command("uname", "-r")
-	output, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), sysinfoTimeout)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "uname", "-r").Output()
 	if err != nil {
 		return "Unknown"
 	}
@@ -143,18 +148,19 @@ func getMacOSKernelVersion() string {
 
 // Linux specific functions
 func getLinuxVersion() string {
-	// Try to read /etc/os-release for VERSION_ID
-	data, err := os.ReadFile("/etc/os-release")
+	f, err := os.Open("/etc/os-release")
+	if err != nil {
+		return "Unknown"
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, 4*1024))
 	if err != nil {
 		return "Unknown"
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	for _, line := range strings.Split(string(data), "\n") {
 		if strings.HasPrefix(line, "VERSION_ID=") {
-			version := strings.TrimPrefix(line, "VERSION_ID=")
-			version = strings.Trim(version, "\"")
-			return version
+			return strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), "\"")
 		}
 	}
 
@@ -162,9 +168,9 @@ func getLinuxVersion() string {
 }
 
 func getLinuxKernelVersion() string {
-	// Use uname -r to get kernel version
-	cmd := exec.Command("uname", "-r")
-	output, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), sysinfoTimeout)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "uname", "-r").Output()
 	if err != nil {
 		return "Unknown"
 	}

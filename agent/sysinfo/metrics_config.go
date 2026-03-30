@@ -12,9 +12,8 @@ type MetricsConfig struct {
 	CollectTemperature bool
 
 	// Container-specific
-	CollectContainerCPU     bool
-	CollectContainerMemory  bool
-	CollectContainerNetwork bool
+	CollectContainerCPU    bool
+	CollectContainerMemory bool
 
 	// Docker-specific (for VMs running Docker)
 	CollectDockerCPU     bool
