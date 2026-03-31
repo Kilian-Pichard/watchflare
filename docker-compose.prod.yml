@@ -19,6 +19,7 @@ services:
       - DEFAULT_PORT=${DEFAULT_PORT:-8080}
       - GRPC_TIMESTAMP_WINDOW=${GRPC_TIMESTAMP_WINDOW:-300}
       - ENV=production
+      - COOKIE_SECURE=${COOKIE_SECURE:-true} # Set to false only if serving over HTTP without TLS (not recommended)
     volumes:
       - pki_data:/var/lib/watchflare/pki
     depends_on:

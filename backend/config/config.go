@@ -18,6 +18,7 @@ type Config struct {
 	CORSOrigins  []string
 	Environment  string
 	CookieDomain string // Domain for JWT cookie (empty = localhost, set in production)
+	CookieSecure bool   // Secure flag on JWT cookie — set false when serving over HTTP without TLS
 
 	// TLS Configuration
 	TLSMode   string // "auto" or "custom"
@@ -54,6 +55,7 @@ func Load() {
 		CORSOrigins:  parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
 		Environment:  getEnv("ENV", "development"),
 		CookieDomain: getEnv("COOKIE_DOMAIN", ""), // Empty for dev (localhost), set in production
+		CookieSecure: getBoolEnv("COOKIE_SECURE", getEnv("ENV", "development") == "production"),
 
 		// TLS Configuration
 		TLSMode:   getEnv("TLS_MODE", "auto"),
@@ -117,6 +119,18 @@ func parseOrigins(originsStr string) []string {
 		origins[i] = strings.TrimSpace(origin)
 	}
 	return origins
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			slog.Warn("invalid boolean env var, using default", "key", key, "default", defaultValue)
+			return defaultValue
+		}
+		return b
+	}
+	return defaultValue
 }
 
 func getIntEnv(key string, defaultValue int) int {
