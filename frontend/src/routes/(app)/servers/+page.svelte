@@ -89,7 +89,7 @@
 
     async function handleDismissReactivation(serverId: string) {
         try {
-            await api.handleDismissReactivation(serverId);
+            await api.dismissReactivation(serverId);
             await loadPage(page);
         } catch (err) {
             logger.error("Failed to dismiss reactivation:", err);
