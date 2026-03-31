@@ -104,8 +104,8 @@ describe('getStatusClass', () => {
 		expect(getStatusClass('online')).toContain('bg-success');
 	});
 
-	it('returns muted classes for offline', () => {
-		expect(getStatusClass('offline')).toContain('bg-muted');
+	it('returns danger classes for offline', () => {
+		expect(getStatusClass('offline')).toContain('bg-danger');
 	});
 
 	it('returns warning classes for pending', () => {

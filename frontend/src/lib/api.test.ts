@@ -90,7 +90,7 @@ describe('login', () => {
 		await login('test@example.com', 'password123');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/auth/login',
+			'http://localhost:8080/api/auth/login',
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
@@ -137,10 +137,10 @@ describe('register', () => {
 		await register('new@example.com', 'longpassword12');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/auth/register',
+			'http://localhost:8080/api/auth/register',
 			expect.objectContaining({
 				method: 'POST',
-				body: JSON.stringify({ email: 'new@example.com', password: 'longpassword12' })
+				body: JSON.stringify({ email: 'new@example.com', password: 'longpassword12', username: '' })
 			})
 		);
 	});
@@ -162,7 +162,7 @@ describe('listServers', () => {
 		await listServers();
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/servers',
+			'http://localhost:8080/api/servers',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
@@ -174,7 +174,7 @@ describe('listServers', () => {
 		await listServers({ page: 2, perPage: 10 });
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/servers?page=2&per_page=10',
+			'http://localhost:8080/api/servers?page=2&per_page=10',
 			expect.anything()
 		);
 	});
@@ -188,7 +188,7 @@ describe('createServer', () => {
 		await createServer('web-01', '192.168.1.1', false);
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/servers',
+			'http://localhost:8080/api/servers',
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify({ name: 'web-01', configured_ip: '192.168.1.1', allow_any_ip: false })
@@ -205,7 +205,7 @@ describe('deleteServer', () => {
 		await deleteServer('abc-123');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/servers/abc-123',
+			'http://localhost:8080/api/servers/abc-123',
 			expect.objectContaining({ method: 'DELETE' })
 		);
 	});
@@ -219,7 +219,7 @@ describe('changePassword', () => {
 		await changePassword('oldpass', 'newpass12345');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/auth/change-password',
+			'http://localhost:8080/api/auth/change-password',
 			expect.objectContaining({
 				method: 'PUT',
 				body: JSON.stringify({ current_password: 'oldpass', new_password: 'newpass12345' })
@@ -236,7 +236,7 @@ describe('getServerMetrics', () => {
 		await getServerMetrics('srv-1', { time_range: '24h' });
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/servers/srv-1/metrics?time_range=24h',
+			'http://localhost:8080/api/servers/srv-1/metrics?time_range=24h',
 			expect.anything()
 		);
 	});
