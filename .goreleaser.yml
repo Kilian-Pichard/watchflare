@@ -95,7 +95,7 @@ brews:
         brew upgrade watchflare-agent && brew services restart watchflare-agent
 
 changelog:
-  use: github
+  use: git
   sort: asc
   groups:
     - title: "New Features"
