@@ -101,7 +101,7 @@
 
     <!-- Theme -->
     <div class="mb-6">
-        <label class="block text-sm font-medium text-foreground mb-1">Theme</label>
+        <p class="block text-sm font-medium text-foreground mb-1">Theme</p>
         <p class="text-xs text-muted-foreground mb-3">Interface color scheme</p>
         <div class="flex gap-2">
             {#each themeOptions as option}
@@ -121,7 +121,7 @@
 
     <!-- Default Time Range -->
     <div class="mb-6">
-        <label class="block text-sm font-medium text-foreground mb-1">Default Time Range</label>
+        <p class="block text-sm font-medium text-foreground mb-1">Default Time Range</p>
         <p class="text-xs text-muted-foreground mb-3">Default range for dashboard and server metrics charts</p>
         <div class="w-48">
             <Select.Root
@@ -145,7 +145,7 @@
 
     <!-- Time Format -->
     <div class="mb-6">
-        <label class="block text-sm font-medium text-foreground mb-1">Time Format</label>
+        <p class="block text-sm font-medium text-foreground mb-1">Time Format</p>
         <p class="text-xs text-muted-foreground mb-3">Clock format used throughout the interface</p>
         <div class="flex gap-2">
             {#each [{ value: '24h', label: '24-hour' }, { value: '12h', label: '12-hour (AM/PM)' }] as opt}
@@ -163,7 +163,7 @@
 
     <!-- Temperature Unit -->
     <div class="mb-6">
-        <label class="block text-sm font-medium text-foreground mb-1">Temperature Unit</label>
+        <p class="block text-sm font-medium text-foreground mb-1">Temperature Unit</p>
         <p class="text-xs text-muted-foreground mb-3">Unit for CPU and sensor temperature readings</p>
         <div class="flex gap-2">
             {#each [{ value: 'celsius', label: '°C — Celsius' }, { value: 'fahrenheit', label: '°F — Fahrenheit' }] as opt}
@@ -181,7 +181,7 @@
 
     <!-- Network Unit -->
     <div class="mb-6">
-        <label class="block text-sm font-medium text-foreground mb-1">Network Throughput Unit</label>
+        <p class="block text-sm font-medium text-foreground mb-1">Network Throughput Unit</p>
         <p class="text-xs text-muted-foreground mb-3">Unit for network RX/TX rates</p>
         <div class="flex gap-2">
             {#each [{ value: 'bytes', label: 'Bytes/s (MB/s)' }, { value: 'bits', label: 'Bits/s (Mbps)' }] as opt}
@@ -199,7 +199,7 @@
 
     <!-- Disk Unit -->
     <div class="mb-6">
-        <label class="block text-sm font-medium text-foreground mb-1">Disk I/O Unit</label>
+        <p class="block text-sm font-medium text-foreground mb-1">Disk I/O Unit</p>
         <p class="text-xs text-muted-foreground mb-3">Unit for disk read/write rates</p>
         <div class="flex gap-2">
             {#each [{ value: 'bytes', label: 'Bytes/s (MB/s)' }, { value: 'bits', label: 'Bits/s (Mbps)' }] as opt}
@@ -217,7 +217,7 @@
 
     <!-- Gauge Thresholds -->
     <div class="mb-6">
-        <label class="block text-sm font-medium text-foreground mb-1">Gauge Color Thresholds</label>
+        <p class="block text-sm font-medium text-foreground mb-1">Gauge Color Thresholds</p>
         <p class="text-xs text-muted-foreground mb-3">Percentage values that trigger warning and critical colors in CPU, memory and disk gauges</p>
         <div class="flex items-center gap-6">
             <div class="flex items-center gap-3">
