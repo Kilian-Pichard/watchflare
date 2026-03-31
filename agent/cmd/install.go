@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,8 @@ import (
 	"watchflare-agent/config"
 	"watchflare-agent/install"
 )
+
+const installLogReadLimit = 1 * 1024 * 1024 // 1 MB
 
 // Install handles agent installation
 func Install() {
@@ -146,7 +149,14 @@ func Install() {
 
 			fmt.Print("  → Checking agent health...")
 			time.Sleep(8 * time.Second)
-			logContent, err := os.ReadFile(install.LogPath)
+			logContent, err := func() ([]byte, error) {
+				f, err := os.Open(install.LogPath)
+				if err != nil {
+					return nil, err
+				}
+				defer f.Close()
+				return io.ReadAll(io.LimitReader(f, installLogReadLimit))
+			}()
 			if err == nil && hasClockSyncError(string(logContent)) {
 				fmt.Println(" ⚠")
 				fmt.Println()

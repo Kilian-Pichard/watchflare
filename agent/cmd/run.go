@@ -120,6 +120,7 @@ func Run() {
 
 	// Wait for signal
 	sig := <-sigCh
+	signal.Stop(sigCh)
 	slog.Info("shutting down", "signal", sig.String())
 
 	// Cancel context (triggers shutdown in sender and heartbeat)

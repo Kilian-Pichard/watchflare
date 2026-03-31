@@ -1,12 +1,19 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"os/user"
 	"strconv"
+	"time"
+)
+
+const (
+	execTimeout    = 10 * time.Second
+	maxBinaryBytes = 100 * 1024 * 1024 // 100 MB
 )
 
 const (
@@ -62,7 +69,9 @@ func CheckRoot() error {
 
 // getUserID returns the UID for a username
 func getUserID(username string) (int, error) {
-	cmd := exec.Command("id", "-u", username)
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "id", "-u", username)
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("user not found or incomplete: %w", err)
@@ -105,8 +114,11 @@ func CreateUser() error {
 
 // createUserLinux creates a system user on Linux
 func createUserLinux(username string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	defer cancel()
+
 	// Create group first
-	cmd := exec.Command("groupadd", "--system", username)
+	cmd := exec.CommandContext(ctx, "groupadd", "--system", username)
 	if err := cmd.Run(); err != nil {
 		// Ignore if group already exists
 		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 9 {
@@ -115,7 +127,7 @@ func createUserLinux(username string) error {
 	}
 
 	// Create user
-	cmd = exec.Command("useradd",
+	cmd = exec.CommandContext(ctx, "useradd",
 		"--system",
 		"--gid", username,
 		"--home-dir", "/var/empty",
@@ -209,8 +221,8 @@ func InstallBinary(sourcePath string) error {
 		return fmt.Errorf("failed to create destination binary: %w", err)
 	}
 
-	// Copy file
-	if _, err := io.Copy(dst, src); err != nil {
+	// Copy file (bounded to prevent disk exhaustion from oversized source)
+	if _, err := io.CopyN(dst, src, maxBinaryBytes); err != nil && err != io.EOF {
 		dst.Close()
 		return fmt.Errorf("failed to copy binary: %w", err)
 	}
@@ -303,7 +315,10 @@ func RemoveDirectories(removeData, removeConfig bool) error {
 
 // RemoveUser removes the watchflare system user
 func RemoveUser() error {
-	cmd := exec.Command("userdel", UserName)
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "userdel", UserName)
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 6 {
 			// User doesn't exist, that's fine
@@ -313,7 +328,7 @@ func RemoveUser() error {
 	}
 
 	// Try to remove group (may fail if other users use it, that's okay)
-	exec.Command("groupdel", UserName).Run()
+	exec.CommandContext(ctx, "groupdel", UserName).Run() //nolint:errcheck
 
 	fmt.Printf("  → Removed user '%s'\n", UserName)
 	return nil

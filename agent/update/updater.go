@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 	"syscall"
 	"time"
 )
+
+const serviceCtlTimeout = 30 * time.Second
 
 const (
 	binaryInstallPath  = "/usr/local/bin/watchflare-agent"
@@ -169,7 +172,8 @@ func downloadToTemp(url, pattern string) (string, error) {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
 
-	if _, err := io.Copy(tmp, resp.Body); err != nil {
+	const maxTarballBytes = 250 * 1024 * 1024 // 250 MB
+	if _, err := io.Copy(tmp, io.LimitReader(resp.Body, maxTarballBytes)); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
 		return "", fmt.Errorf("failed to write temp file: %w", err)
@@ -193,8 +197,9 @@ func verifyChecksum(tarballPath, tarballName, checksumsURL string) error {
 		return fmt.Errorf("unexpected HTTP status: %s", resp.Status)
 	}
 
+	const maxChecksumsBytes = 1 * 1024 * 1024 // 1 MB
 	var expectedHash string
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(io.LimitReader(resp.Body, maxChecksumsBytes))
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Fields(line)
@@ -296,18 +301,20 @@ func copyFile(src, dst string, mode os.FileMode) error {
 }
 
 func stopService() error {
+	ctx, cancel := context.WithTimeout(context.Background(), serviceCtlTimeout)
+	defer cancel()
 	switch runtime.GOOS {
 	case "linux":
 		if _, err := exec.LookPath("systemctl"); err != nil {
 			return nil
 		}
-		cmd := exec.Command("systemctl", "stop", systemdServiceName)
+		cmd := exec.CommandContext(ctx, "systemctl", "stop", systemdServiceName)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to stop service: %w\n%s", err, string(out))
 		}
 		return nil
 	case "darwin":
-		exec.Command("launchctl", "bootout", "system/"+macOSServiceName).Run()
+		exec.CommandContext(ctx, "launchctl", "bootout", "system/"+macOSServiceName).Run() //nolint:errcheck
 		return nil
 	default:
 		return nil
@@ -315,18 +322,20 @@ func stopService() error {
 }
 
 func startService() error {
+	ctx, cancel := context.WithTimeout(context.Background(), serviceCtlTimeout)
+	defer cancel()
 	switch runtime.GOOS {
 	case "linux":
 		if _, err := exec.LookPath("systemctl"); err != nil {
 			return nil
 		}
-		cmd := exec.Command("systemctl", "start", systemdServiceName)
+		cmd := exec.CommandContext(ctx, "systemctl", "start", systemdServiceName)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start service: %w\n%s", err, string(out))
 		}
 		return nil
 	case "darwin":
-		cmd := exec.Command("launchctl", "bootstrap", "system", plistPath)
+		cmd := exec.CommandContext(ctx, "launchctl", "bootstrap", "system", plistPath)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start service: %w\n%s", err, string(out))
 		}

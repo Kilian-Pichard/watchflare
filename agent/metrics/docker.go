@@ -87,7 +87,7 @@ func CollectContainerMetrics(tracker *DeltaTracker) ([]ContainerMetric, error) {
 	}
 
 	var containers []dockerContainer
-	if err := json.NewDecoder(resp.Body).Decode(&containers); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&containers); err != nil {
 		return nil, err
 	}
 
@@ -164,6 +164,10 @@ func getContainerStats(client *http.Client, containerID string) (*dockerStatsRes
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("docker API returned status %d for container %s", resp.StatusCode, truncateID(containerID))
+	}
 
 	// Limit response size to prevent excessive memory use from unexpectedly large payloads
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MB

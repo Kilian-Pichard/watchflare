@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-const cgroupReadLimit = 64 * 1024 // 64 KB
+const (
+	cgroupReadLimit = 64 * 1024 // 64 KB
+	dmiReadLimit    = 4 * 1024  // 4 KB — DMI values are always tiny
+)
 
 // EnvironmentType represents the type of environment where the agent runs
 type EnvironmentType string
@@ -81,18 +84,23 @@ func determineType(env *Environment) EnvironmentType {
 	return EnvPhysical
 }
 
-// readCgroup reads /proc/1/cgroup with a size limit.
-func readCgroup() string {
-	f, err := os.Open("/proc/1/cgroup")
+// readFileLimited reads a file with a size limit and returns its content as a string.
+func readFileLimited(path string, limit int64) string {
+	f, err := os.Open(path)
 	if err != nil {
 		return ""
 	}
 	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, cgroupReadLimit))
+	data, err := io.ReadAll(io.LimitReader(f, limit))
 	if err != nil {
 		return ""
 	}
 	return string(data)
+}
+
+// readCgroup reads /proc/1/cgroup with a size limit.
+func readCgroup() string {
+	return readFileLimited("/proc/1/cgroup", cgroupReadLimit)
 }
 
 // isRunningInContainer detects if running inside a container
@@ -143,8 +151,7 @@ func isRunningInVM() bool {
 	// Linux: check multiple indicators
 	if runtime.GOOS == "linux" {
 		// Method 1: Check /sys/class/dmi/id/product_name
-		if data, err := os.ReadFile("/sys/class/dmi/id/product_name"); err == nil {
-			product := strings.ToLower(string(data))
+		if product := strings.ToLower(readFileLimited("/sys/class/dmi/id/product_name", dmiReadLimit)); product != "" {
 			if strings.Contains(product, "vmware") ||
 				strings.Contains(product, "virtualbox") ||
 				strings.Contains(product, "kvm") ||
@@ -156,8 +163,7 @@ func isRunningInVM() bool {
 		}
 
 		// Method 2: Check /sys/class/dmi/id/sys_vendor
-		if data, err := os.ReadFile("/sys/class/dmi/id/sys_vendor"); err == nil {
-			vendor := strings.ToLower(string(data))
+		if vendor := strings.ToLower(readFileLimited("/sys/class/dmi/id/sys_vendor", dmiReadLimit)); vendor != "" {
 			if strings.Contains(vendor, "vmware") ||
 				strings.Contains(vendor, "innotek") || // VirtualBox
 				strings.Contains(vendor, "qemu") ||
@@ -184,8 +190,7 @@ func isRunningInVM() bool {
 func detectHypervisor() string {
 	if runtime.GOOS == "linux" {
 		// Check product name
-		if data, err := os.ReadFile("/sys/class/dmi/id/product_name"); err == nil {
-			product := strings.ToLower(string(data))
+		if product := strings.ToLower(readFileLimited("/sys/class/dmi/id/product_name", dmiReadLimit)); product != "" {
 			if strings.Contains(product, "vmware") {
 				return "vmware"
 			}
@@ -198,8 +203,7 @@ func detectHypervisor() string {
 		}
 
 		// Check sys vendor
-		if data, err := os.ReadFile("/sys/class/dmi/id/sys_vendor"); err == nil {
-			vendor := strings.ToLower(string(data))
+		if vendor := strings.ToLower(readFileLimited("/sys/class/dmi/id/sys_vendor", dmiReadLimit)); vendor != "" {
 			if strings.Contains(vendor, "vmware") {
 				return "vmware"
 			}

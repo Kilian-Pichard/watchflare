@@ -1,15 +1,19 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"watchflare-agent/install"
 	"watchflare-agent/update"
 )
+
+const brewCheckTimeout = 10 * time.Second
 
 // Update handles the `watchflare-agent update [--check]` command.
 // It runs in two phases:
@@ -111,7 +115,9 @@ func isInstalledViaBrew() bool {
 	if isBrewPath(self) {
 		return true
 	}
-	cmd := exec.Command("brew", "list", "--formula", "watchflare-agent")
+	ctx, cancel := context.WithTimeout(context.Background(), brewCheckTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "brew", "list", "--formula", "watchflare-agent")
 	return cmd.Run() == nil
 }
 

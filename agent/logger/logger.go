@@ -15,14 +15,14 @@ import (
 //
 //	2006/01/02 15:04:05 INFO   message  key=value
 type handler struct {
-	mu    sync.Mutex
+	mu    *sync.Mutex // pointer so derived handlers (WithAttrs/WithGroup) share the same lock
 	w     io.Writer
 	level slog.Level
 	attrs []slog.Attr
 }
 
 func newHandler(w io.Writer, level slog.Level) *handler {
-	return &handler{w: w, level: level}
+	return &handler{mu: &sync.Mutex{}, w: w, level: level}
 }
 
 func (h *handler) Enabled(_ context.Context, level slog.Level) bool {
@@ -69,6 +69,7 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 
 func (h *handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &handler{
+		mu:    h.mu,
 		w:     h.w,
 		level: h.level,
 		attrs: append(append([]slog.Attr{}, h.attrs...), attrs...),
@@ -79,6 +80,7 @@ func (h *handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 // group prefixing. Groups are silently ignored to keep output flat.
 func (h *handler) WithGroup(_ string) slog.Handler {
 	return &handler{
+		mu:    h.mu,
 		w:     h.w,
 		level: h.level,
 		attrs: h.attrs,

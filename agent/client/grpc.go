@@ -172,7 +172,7 @@ func SaveCACertificate(caCertPEM, certPath string) error {
 	}
 
 	// Write CA certificate with restricted permissions
-	if err := os.WriteFile(certPath, []byte(caCertPEM), 0644); err != nil {
+	if err := os.WriteFile(certPath, []byte(caCertPEM), 0640); err != nil {
 		return fmt.Errorf("failed to write CA certificate: %w", err)
 	}
 

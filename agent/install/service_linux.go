@@ -3,11 +3,15 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+const systemctlTimeout = 30 * time.Second
 
 const (
 	systemdServiceFile = "/etc/systemd/system/watchflare-agent.service"
@@ -84,7 +88,9 @@ WantedBy=multi-user.target
 	fmt.Printf("  → Installed to %s\n", systemdServiceFile)
 
 	// Reload systemd
-	cmd := exec.Command("systemctl", "daemon-reload")
+	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "daemon-reload")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to reload systemd: %w", err)
 	}
@@ -107,7 +113,9 @@ func (s *LinuxService) Uninstall() error {
 	}
 
 	// Disable service — error intentionally ignored (may not have been enabled)
-	exec.Command("systemctl", "disable", serviceName).Run()
+	disableCtx, disableCancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	exec.CommandContext(disableCtx, "systemctl", "disable", serviceName).Run() //nolint:errcheck
+	disableCancel()
 
 	// Remove service file
 	if err := os.Remove(systemdServiceFile); err != nil && !os.IsNotExist(err) {
@@ -115,7 +123,9 @@ func (s *LinuxService) Uninstall() error {
 	}
 
 	// Reload systemd
-	cmd := exec.Command("systemctl", "daemon-reload")
+	reloadCtx, reloadCancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer reloadCancel()
+	cmd := exec.CommandContext(reloadCtx, "systemctl", "daemon-reload")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to reload systemd: %w", err)
 	}
@@ -130,7 +140,9 @@ func (s *LinuxService) Start() error {
 		return fmt.Errorf("systemd not available")
 	}
 
-	cmd := exec.Command("systemctl", "start", serviceName)
+	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "start", serviceName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
 	}
@@ -145,7 +157,9 @@ func (s *LinuxService) Stop() error {
 		return fmt.Errorf("systemd not available")
 	}
 
-	cmd := exec.Command("systemctl", "stop", serviceName)
+	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "stop", serviceName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stop service: %w", err)
 	}
@@ -160,7 +174,9 @@ func (s *LinuxService) Enable() error {
 		return fmt.Errorf("systemd not available")
 	}
 
-	cmd := exec.Command("systemctl", "enable", serviceName)
+	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "enable", serviceName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to enable service: %w", err)
 	}
@@ -181,7 +197,9 @@ func (s *LinuxService) IsRunning() bool {
 		return false
 	}
 
-	cmd := exec.Command("systemctl", "is-active", "--quiet", serviceName)
+	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", serviceName)
 	return cmd.Run() == nil
 }
 
@@ -191,7 +209,9 @@ func (s *LinuxService) Restart() error {
 		return fmt.Errorf("systemd not available")
 	}
 
-	cmd := exec.Command("systemctl", "restart", serviceName)
+	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "restart", serviceName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to restart service: %w", err)
 	}
@@ -222,7 +242,9 @@ func (s *LinuxService) hasSystemd() bool {
 		return false
 	}
 
-	cmd := exec.Command("systemctl", "is-system-running")
+	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "is-system-running")
 	output, _ := cmd.Output()
 	state := strings.TrimSpace(string(output))
 	return state == "running" || state == "degraded"
