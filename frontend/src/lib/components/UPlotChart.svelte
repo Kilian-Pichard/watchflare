@@ -53,8 +53,10 @@
 
     let container: HTMLDivElement | undefined = $state(undefined);
     let chart: uPlot | null = null;
+    let chartReady = $state(false);
     let mounted = $state(false);
     let rawMouseTop = 0;
+    let resizeObserver: ResizeObserver | null = null;
 
     // Module-level color cache shared across all UPlotChart instances
     // Invalidated on theme change (class attribute mutation on <html>)
@@ -373,11 +375,11 @@
         seriesIdx: number,
         idx0: number,
         idx1: number,
-        nullGaps: number[][],
-    ) => {
+        nullGaps: [number, number][],
+    ): [number, number][] => {
         const threshold = timeRange ? GAP_THRESHOLDS[timeRange] : null;
         if (!threshold) return nullGaps;
-        const gaps: number[][] = [...nullGaps];
+        const gaps: [number, number][] = [...nullGaps];
         const timestamps = u.data[0];
         const vals = u.data[seriesIdx];
 
@@ -553,12 +555,14 @@
         lastHeight = height;
 
         chart = new uPlot(buildOpts(width, height), data, container);
+        chartReady = true;
     }
 
     function destroyChart() {
         if (chart) {
             chart.destroy();
             chart = null;
+            chartReady = false;
         }
     }
 
@@ -584,7 +588,6 @@
         prevScalesKey = _scales;
         prevTimeFormat = _timeFormat;
 
-        const _prevScales = prevScalesKey;
         if (
             chart &&
             _data &&
@@ -599,9 +602,9 @@
         }
     });
 
-    // Tick the x-axis forward on a wall-clock timer (re-creates interval when timeRange changes)
+    // Tick the x-axis forward on a wall-clock timer (re-creates interval when chart or timeRange changes)
     $effect(() => {
-        if (!chart || !timeRange) return;
+        if (!chartReady || !chart || !timeRange) return;
         const tickMs = TICK_INTERVALS[timeRange];
         if (!tickMs) return;
         const id = setInterval(() => {
@@ -612,7 +615,7 @@
                     ? data[0][data[0].length - 1]
                     : browserNow;
             const now = Math.max(browserNow, lastDataTs);
-            chart.setScale("x", [now - TIME_RANGE_SECONDS[timeRange!], now]);
+            chart.setScale("x", { min: now - TIME_RANGE_SECONDS[timeRange!], max: now });
         }, tickMs);
         return () => clearInterval(id);
     });
@@ -621,7 +624,7 @@
         mounted = true;
         createChart();
 
-        const resizeObserver = new ResizeObserver(() => {
+        resizeObserver = new ResizeObserver(() => {
             if (!chart || !container) return;
             const width = container.clientWidth;
             const height = container.clientHeight;
@@ -635,7 +638,6 @@
                 chart.setSize({ width, height });
             }
         });
-        resizeObserver.observe(container);
 
         // Recreate chart on theme change (colors are baked into canvas)
         const themeObserver = new MutationObserver(() => {
@@ -647,12 +649,26 @@
         });
 
         return () => {
-            resizeObserver.disconnect();
+            resizeObserver?.disconnect();
+            resizeObserver = null;
             themeObserver.disconnect();
         };
     });
 
-    onDestroy(destroyChart);
+    // Attach resizeObserver when container becomes available.
+    // container lives inside {#if hasData}, so it may appear after onMount
+    // (e.g. when the first SSE data arrives). Using $effect ensures we observe
+    // it regardless of when it is bound.
+    $effect(() => {
+        if (container && resizeObserver) {
+            resizeObserver.observe(container);
+        }
+    });
+
+    onDestroy(() => {
+        destroyChart();
+        cacheObserver?.disconnect();
+    });
 
     const TIME_RANGE_LABELS: Record<string, string> = {
         "1h": "1 hour",
