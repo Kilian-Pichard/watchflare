@@ -69,6 +69,16 @@ func ApplyUpdate(info *UpdateInfo) error {
 	}
 	logStep("binary extracted", "path", tmpBinary)
 
+	// On Linux, the re-exec from /tmp is unnecessary: Linux allows replacing
+	// an in-use binary via inode renaming — the running process keeps the old
+	// inode until it exits. Apply directly without copying to /tmp.
+	// (macOS routes through Homebrew and never reaches this point.)
+	if runtime.GOOS == "linux" {
+		return ApplyExtracted(tmpBinary, "")
+	}
+
+	// macOS (direct install): re-exec from /tmp to avoid the SIP restriction
+	// that sends SIGKILL when a process replaces a binary it has memory-mapped.
 	self, err := os.Executable()
 	if err != nil {
 		os.Remove(tmpBinary)
@@ -105,7 +115,9 @@ func ApplyExtracted(extractedBinaryPath, updaterPath string) error {
 	exe, _ := os.Executable()
 	logStep("update phase 2 start", "pid", os.Getpid(), "exe", exe)
 	defer os.Remove(extractedBinaryPath)
-	defer os.Remove(updaterPath)
+	if updaterPath != "" {
+		defer os.Remove(updaterPath)
+	}
 
 	logStep("stopping service")
 	if err := stopService(); err != nil {
