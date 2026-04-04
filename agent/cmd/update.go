@@ -35,6 +35,9 @@ func Update() {
 			applyVersion = strings.TrimPrefix(arg, update.VersionFlag)
 		case arg == "--check":
 			checkOnly = true
+		default:
+			fmt.Fprintf(os.Stderr, "Error: unknown flag %q\nUsage: watchflare-agent update [--check]\n", arg)
+			os.Exit(1)
 		}
 	}
 
