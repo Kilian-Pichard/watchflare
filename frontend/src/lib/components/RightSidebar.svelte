@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { fade, fly } from "svelte/transition";
     import { generateAlerts } from "$lib/utils";
     import { servers } from "$lib/stores";
     import { XCircle, AlertTriangle } from "lucide-svelte";
@@ -24,27 +23,27 @@
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && isOpen && onClose()} />
 
-{#if isOpen}
-    <!-- Backdrop -->
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div
-        transition:fade={{ duration: 200 }}
-        class="fixed inset-0 z-40 bg-black/50"
-        role="presentation"
-        onclick={onClose}
-    ></div>
+<!-- Backdrop -->
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+<div
+    style="transition: opacity 300ms, visibility 0ms {isOpen ? '0ms' : '300ms'}"
+    class="fixed inset-0 z-40 bg-black/50 lg:hidden {isOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}"
+    role="presentation"
+    onclick={onClose}
+></div>
 
-    <!-- Panel -->
+<!-- Panel -->
+<div
+    role="dialog"
+    aria-modal="true"
+    aria-hidden={!isOpen}
+    inert={!isOpen}
+    tabindex="-1"
+    class="fixed right-0 top-0 z-50 h-svh w-80 max-w-[85vw] py-4 pr-4 bg-transparent transition-transform duration-300 {isOpen ? 'translate-x-0' : 'translate-x-full'}"
+>
     <div
-        transition:fly={{ x: 320, duration: 300 }}
-        class="fixed right-0 top-0 z-50 h-svh w-80 max-w-[85vw] py-4 pr-4 bg-transparent"
-        role="dialog"
-        aria-modal="true"
-        tabindex="-1"
+        class="flex h-full flex-col overflow-y-auto bg-surface rounded-2xl border"
     >
-        <div
-            class="flex h-full flex-col overflow-y-auto bg-surface rounded-2xl border"
-        >
             <!-- Header -->
             <div class="flex items-center justify-between border-b px-6 py-4">
                 <h2 class="text-sm font-semibold text-foreground">
@@ -136,4 +135,3 @@
             </div>
         </div>
     </div>
-{/if}

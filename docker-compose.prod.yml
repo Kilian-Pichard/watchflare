@@ -3,7 +3,7 @@ services:
     image: ghcr.io/kilian-pichard/watchflare:latest
     container_name: watchflare
     ports:
-      - "${HUB_PORT:-8080}:${DEFAULT_PORT:-8080}"
+      - "${HUB_PORT:-8080}:8080"
       - "${GRPC_PORT:-50051}:50051"
     environment:
       - POSTGRES_HOST=postgres
@@ -14,12 +14,12 @@ services:
       - POSTGRES_SSLMODE=disable
       - GRPC_PORT=50051
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - SMTP_ENCRYPTION_KEY=${SMTP_ENCRYPTION_KEY:-}
       - TLS_MODE=${TLS_MODE:-auto}
       - TLS_PKI_DIR=/var/lib/watchflare/pki
-      - DEFAULT_PORT=${DEFAULT_PORT:-8080}
       - GRPC_TIMESTAMP_WINDOW=${GRPC_TIMESTAMP_WINDOW:-300}
       - ENV=production
-      - COOKIE_SECURE=${COOKIE_SECURE:-true} # Set to false only if serving over HTTP without TLS (not recommended)
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
     volumes:
       - pki_data:/var/lib/watchflare/pki
     depends_on:

@@ -17,8 +17,12 @@
     let userReady = $state(false);
 
     onMount(async () => {
-        await userStore.load();
-        userReady = true;
+        try {
+            await userStore.load();
+            userReady = true;
+        } catch {
+            window.location.href = "/login";
+        }
     });
 </script>
 

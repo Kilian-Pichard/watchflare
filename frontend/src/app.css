@@ -159,3 +159,9 @@
     margin-inline: auto;
   }
 }
+
+/* Prevent iOS Safari auto-zoom on input focus (triggered when font-size < 16px) */
+input, select, textarea {
+  font-size: 16px !important;
+}
+

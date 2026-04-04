@@ -22,9 +22,13 @@ export default defineConfig({
 
 		proxy: {
 			'/api': {
-				target: 'http://localhost:8080',
+				target: process.env.BACKEND_URL || 'http://localhost:8080',
 				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/api/, '')
+				configure: (proxy) => {
+					proxy.on('proxyReq', (proxyReq) => {
+						proxyReq.setHeader('Origin', 'http://localhost:5173');
+					});
+				}
 			}
 		}
 	}

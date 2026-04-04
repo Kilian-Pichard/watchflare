@@ -243,27 +243,31 @@
         <p class="block text-sm font-medium text-foreground mb-1">Gauge Color Thresholds</p>
         <p class="text-xs text-muted-foreground mb-3">Percentage values that trigger warning and critical colors in CPU, memory and disk gauges</p>
         <div class="flex items-center gap-6">
-            <div class="flex items-center gap-3">
-                <span class="text-xs font-medium text-warning w-16">Warning</span>
-                <input
-                    type="number"
-                    min="1"
-                    max="99"
-                    bind:value={gaugeWarning}
-                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                />
-                <span class="text-xs text-muted-foreground">%</span>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <span class="text-xs font-medium text-warning sm:w-16">Warning</span>
+                <div class="flex items-center gap-2">
+                    <input
+                        type="number"
+                        min="1"
+                        max="99"
+                        bind:value={gaugeWarning}
+                        class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    />
+                    <span class="text-xs text-muted-foreground">%</span>
+                </div>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="text-xs font-medium text-danger w-16">Critical</span>
-                <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    bind:value={gaugeCritical}
-                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                />
-                <span class="text-xs text-muted-foreground">%</span>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <span class="text-xs font-medium text-danger sm:w-16">Critical</span>
+                <div class="flex items-center gap-2">
+                    <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        bind:value={gaugeCritical}
+                        class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    />
+                    <span class="text-xs text-muted-foreground">%</span>
+                </div>
             </div>
         </div>
     </div>
