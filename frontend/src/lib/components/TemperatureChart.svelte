@@ -146,7 +146,10 @@
 
 	const axes = $derived<uPlot.Axis[]>([
 		{},
-		{ values: (_u: uPlot, ticks: number[]) => ticks.map(v => fmtTemp(v)) }
+		{
+			size: 68,
+			values: (_u: uPlot, ticks: number[]) => ticks.map(v => fmtTemp(v)),
+		}
 	]);
 </script>
 
