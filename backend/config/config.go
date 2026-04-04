@@ -14,8 +14,9 @@ type Config struct {
 	Port        string
 	GRPCPort    string
 	DatabaseURL string
-	JWTSecret   string
-	CORSOrigins  []string
+	JWTSecret          string
+	SMTPEncryptionKey  string
+	CORSOrigins        []string
 	Environment  string
 	CookieDomain string // Domain for JWT cookie (empty = localhost, set in production)
 	CookieSecure bool   // Secure flag on JWT cookie — set false when serving over HTTP without TLS
@@ -41,7 +42,7 @@ func Load() {
 	_ = godotenv.Load()
 
 	AppConfig = &Config{
-		Port:     getEnv("DEFAULT_PORT", "8080"),
+		Port:     getEnv("PORT", "8080"),
 		GRPCPort: getEnv("GRPC_PORT", "50051"),
 		DatabaseURL: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			getEnv("POSTGRES_HOST", "localhost"),
@@ -51,8 +52,9 @@ func Load() {
 			getEnv("POSTGRES_DB", "watchflare"),
 			getEnv("POSTGRES_SSLMODE", "disable"),
 		),
-		JWTSecret: getEnv("JWT_SECRET", ""),
-		CORSOrigins:  parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
+		JWTSecret:         getEnv("JWT_SECRET", ""),
+		SMTPEncryptionKey: getEnv("SMTP_ENCRYPTION_KEY", ""),
+		CORSOrigins:       parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
 		Environment:  getEnv("ENV", "development"),
 		CookieDomain: getEnv("COOKIE_DOMAIN", ""), // Empty for dev (localhost), set in production
 		CookieSecure: getBoolEnv("COOKIE_SECURE", getEnv("ENV", "development") == "production"),
@@ -82,6 +84,20 @@ func Load() {
 			"current_length", len(AppConfig.JWTSecret),
 			"required", 32,
 			"hint", "Generate a secure secret: openssl rand -base64 32",
+		)
+		os.Exit(1)
+	}
+
+	// Validate SMTP encryption key — required if SMTP is configured, warn otherwise
+	if AppConfig.SMTPEncryptionKey == "" {
+		slog.Warn("SMTP_ENCRYPTION_KEY is not set — SMTP password storage will be unavailable",
+			"hint", "Generate a secure key: openssl rand -base64 32",
+		)
+	} else if len(AppConfig.SMTPEncryptionKey) < 32 {
+		slog.Error("SMTP_ENCRYPTION_KEY too short",
+			"current_length", len(AppConfig.SMTPEncryptionKey),
+			"required", 32,
+			"hint", "Generate a secure key: openssl rand -base64 32",
 		)
 		os.Exit(1)
 	}

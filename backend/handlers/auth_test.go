@@ -34,7 +34,8 @@ func testDSN() string {
 func setupTestDB(t *testing.T) {
 	t.Helper()
 	config.AppConfig = &config.Config{
-		JWTSecret: "test-secret-key-must-be-32-chars!!",
+		JWTSecret:         "test-secret-key-must-be-32-chars!!",
+		SMTPEncryptionKey: "test-smtp-encryption-key-32chars!",
 	}
 	if err := database.Connect(testDSN()); err != nil {
 		t.Skipf("skipping test: database unavailable: %v", err)

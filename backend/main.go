@@ -187,6 +187,15 @@ func setupRouter() *gin.Engine {
 		protectedGroup.PUT("/change-username", handlers.ChangeUsername)
 	}
 
+	// Settings routes (protected)
+	settingsGroup := api.Group("/settings")
+	settingsGroup.Use(middleware.AuthMiddleware())
+	{
+		settingsGroup.GET("/smtp", handlers.GetSMTPSettings)
+		settingsGroup.PUT("/smtp", handlers.UpdateSMTPSettings)
+		settingsGroup.POST("/smtp/test", handlers.TestSMTPConnection)
+	}
+
 	// Agent info routes (protected)
 	agentGroup := api.Group("/agent")
 	agentGroup.Use(middleware.AuthMiddleware())
