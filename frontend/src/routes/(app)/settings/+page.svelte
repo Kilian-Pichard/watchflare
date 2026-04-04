@@ -62,6 +62,10 @@
             saveError = 'Critical threshold must be between 1 and 100.';
             return;
         }
+        if (gaugeWarning >= gaugeCritical) {
+            saveError = 'Warning threshold must be lower than critical threshold.';
+            return;
+        }
 
         saving = true;
         try {
@@ -89,7 +93,7 @@
 </svelte:head>
 
 <div class="mb-6">
-    <h1 class="text-xl sm:text-2xl font-semibold text-foreground">Settings</h1>
+    <h1 class="text-xl sm:text-2xl font-semibold text-foreground">General</h1>
     <p class="text-sm text-muted-foreground mt-1">
         Application preferences and configuration
     </p>
@@ -227,7 +231,7 @@
                     min="1"
                     max="99"
                     bind:value={gaugeWarning}
-                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
                 <span class="text-xs text-muted-foreground">%</span>
             </div>
@@ -238,7 +242,7 @@
                     min="1"
                     max="100"
                     bind:value={gaugeCritical}
-                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    class="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
                 <span class="text-xs text-muted-foreground">%</span>
             </div>

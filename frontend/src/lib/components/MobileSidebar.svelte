@@ -4,7 +4,8 @@
     import { page } from "$app/stores";
     import { mobileMenuOpen } from "$lib/stores/sidebar";
     import { get } from "svelte/store";
-    import { Home, Server, Settings } from "lucide-svelte";
+    import { Settings, ChevronDown } from "lucide-svelte";
+    import { navItems, settingsItems } from "$lib/navigation";
     import SSEStatusBadge from "./SSEStatusBadge.svelte";
     import UserMenuButton from "./UserMenuButton.svelte";
 
@@ -36,11 +37,13 @@
         };
     });
 
-    const navItems = [
-        { href: "/", label: "Dashboard", icon: Home },
-        { href: "/servers", label: "Servers", icon: Server },
-        { href: "/settings", label: "Settings", icon: Settings },
-    ];
+    let settingsOpen = $state($page.url.pathname.startsWith("/settings"));
+
+    $effect(() => {
+        if ($page.url.pathname.startsWith("/settings")) {
+            settingsOpen = true;
+        }
+    });
 
     function isActive(href: string): boolean {
         if (href === "/") {
@@ -49,16 +52,15 @@
         return $page.url.pathname.startsWith(href);
     }
 
+    function isSubActive(href: string): boolean {
+        return $page.url.pathname === href;
+    }
+
     function closeMobileMenu() {
         mobileMenuOpen.set(false);
     }
-
-    function handleNavClick() {
-        closeMobileMenu();
-    }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 <!-- Mobile backdrop -->
 {#if $mobileMenuOpen}
     <div
@@ -69,7 +71,12 @@
     ></div>
 {/if}
 
-<aside
+<div
+    role="dialog"
+    aria-label="Navigation menu"
+    aria-modal="true"
+    aria-hidden={!$mobileMenuOpen}
+    inert={!$mobileMenuOpen}
     class="fixed left-0 top-0 z-40 py-4 pl-4 lg:hidden h-svh w-4/5 max-w-72 bg-transparent overflow-y-auto transition-transform duration-300 {$mobileMenuOpen
         ? 'translate-x-0'
         : '-translate-x-full'}"
@@ -86,7 +93,8 @@
                 {@const Icon = item.icon}
                 <a
                     href={item.href}
-                    onclick={handleNavClick}
+                    onclick={closeMobileMenu}
+                    aria-current={isActive(item.href) ? "page" : undefined}
                     class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors {isActive(
                         item.href,
                     )
@@ -97,6 +105,36 @@
                     <span>{item.label}</span>
                 </a>
             {/each}
+
+            <!-- Settings group -->
+            <div>
+                <button
+                    type="button"
+                    aria-expanded={settingsOpen}
+                    onclick={() => { settingsOpen = !settingsOpen; }}
+                    class="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-surface-foreground hover:bg-surface-accent"
+                >
+                    <Settings class="h-5 w-5 shrink-0" />
+                    <span class="flex-1 text-left">Settings</span>
+                    <ChevronDown class="h-4 w-4 transition-transform duration-200 {settingsOpen ? 'rotate-180' : ''}" />
+                </button>
+                {#if settingsOpen}
+                    <div class="ml-6 mt-1 mb-1 flex flex-col gap-0.5 border-l border-border pl-2">
+                        {#each settingsItems as sub}
+                            <a
+                                href={sub.href}
+                                onclick={closeMobileMenu}
+                                aria-current={isSubActive(sub.href) ? "page" : undefined}
+                                class="rounded-lg py-2.5 px-3 text-sm font-medium transition-colors {isSubActive(sub.href)
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-surface-foreground hover:bg-surface-accent'}"
+                            >
+                                {sub.label}
+                            </a>
+                        {/each}
+                    </div>
+                {/if}
+            </div>
         </nav>
 
         <!-- SSE Connection Status + User Menu -->
@@ -112,4 +150,4 @@
             </div>
         </div>
     </div>
-</aside>
+</div>

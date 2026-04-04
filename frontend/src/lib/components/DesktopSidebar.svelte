@@ -4,9 +4,10 @@
         sidebarCollapsed,
         sidebarTransitioning,
     } from "$lib/stores/sidebar";
-    import { Home, Server, Settings } from "lucide-svelte";
+    import { Settings, ChevronDown } from "lucide-svelte";
     import SSEStatusBadge from "./SSEStatusBadge.svelte";
     import UserMenuButton from "./UserMenuButton.svelte";
+    import { navItems, settingsItems } from "$lib/navigation";
 
     const transitioning = $derived($sidebarTransitioning);
     const collapsed = $derived($sidebarCollapsed);
@@ -19,17 +20,23 @@
             : `max-w-48 ml-3 opacity-100 ${transitionClass}`,
     );
 
-    const navItems = [
-        { href: "/", label: "Dashboard", icon: Home },
-        { href: "/servers", label: "Servers", icon: Server },
-        { href: "/settings", label: "Settings", icon: Settings },
-    ];
+    let settingsOpen = $state($page.url.pathname.startsWith("/settings"));
+
+    $effect(() => {
+        if ($page.url.pathname.startsWith("/settings")) {
+            settingsOpen = true;
+        }
+    });
 
     function isActive(href: string): boolean {
         if (href === "/") {
             return $page.url.pathname === "/";
         }
         return $page.url.pathname.startsWith(href);
+    }
+
+    function isSubActive(href: string): boolean {
+        return $page.url.pathname === href;
     }
 </script>
 
@@ -61,6 +68,7 @@
                 {@const Icon = item.icon}
                 <a
                     href={item.href}
+                    aria-current={isActive(item.href) ? "page" : undefined}
                     class="flex items-center rounded-lg py-3.25 px-3.25 text-sm font-medium transition-colors {isActive(
                         item.href,
                     )
@@ -74,6 +82,50 @@
                     >
                 </a>
             {/each}
+
+            <!-- Settings group -->
+            {#if collapsed}
+                <!-- Collapsed: icon only, links to General -->
+                <a
+                    href="/settings"
+                    aria-current={isActive('/settings') ? "page" : undefined}
+                    class="flex items-center rounded-lg py-3.25 px-3.25 text-sm font-medium transition-colors {isActive('/settings')
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-surface-foreground hover:bg-surface-accent'}"
+                    title="Settings"
+                >
+                    <Settings class="h-5 w-5 shrink-0" />
+                </a>
+            {:else}
+                <!-- Expanded: group with sub-items -->
+                <div>
+                    <button
+                        type="button"
+                        aria-expanded={settingsOpen}
+                        onclick={() => { settingsOpen = !settingsOpen; }}
+                        class="w-full flex items-center rounded-lg py-3.25 px-3.25 text-sm font-medium transition-colors text-surface-foreground hover:bg-surface-accent"
+                    >
+                        <Settings class="h-5 w-5 shrink-0" />
+                        <span class="whitespace-nowrap overflow-hidden flex-1 text-left {textClass}">Settings</span>
+                        <ChevronDown class="h-4 w-4 shrink-0 mr-1 transition-transform duration-200 {settingsOpen ? 'rotate-180' : ''}" />
+                    </button>
+                    {#if settingsOpen}
+                        <div class="ml-6 mt-1 mb-1 flex flex-col gap-0.5 border-l border-border pl-2">
+                            {#each settingsItems as sub}
+                                <a
+                                    href={sub.href}
+                                    aria-current={isSubActive(sub.href) ? "page" : undefined}
+                                    class="rounded-lg py-3.25 px-3 text-sm font-medium transition-colors {isSubActive(sub.href)
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'text-surface-foreground hover:bg-surface-accent'}"
+                                >
+                                    {sub.label}
+                                </a>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+            {/if}
         </nav>
 
         <!-- SSE Connection Status + User Menu -->
