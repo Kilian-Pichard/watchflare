@@ -174,7 +174,7 @@
         try {
             const response = await api.regenerateToken(serverId);
             regeneratedToken = response.token;
-            backendHost = window.location.hostname;
+            backendHost = window.location.host;
             showRegenerateConfirm = false;
             await loadServer();
         } catch (err) {
@@ -409,7 +409,7 @@
             type="text"
             bind:value={newServerName}
             placeholder="e.g., production-web-01"
-            class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
     </div>
     <div class="flex gap-3 justify-end">
@@ -446,7 +446,7 @@
             type="text"
             bind:value={newIP}
             placeholder="e.g., 192.168.1.100"
-            class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
     </div>
     <div class="flex gap-3 justify-end">

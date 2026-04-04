@@ -87,7 +87,7 @@
 						placeholder="e.g., web-server-01"
 						aria-invalid={!!fieldErrors.name}
 						aria-describedby={fieldErrors.name ? 'name-error' : undefined}
-						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary {fieldErrors.name ? 'border-destructive' : ''}"
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {fieldErrors.name ? 'border-destructive' : ''}"
 					/>
 					{#if fieldErrors.name}<p id="name-error" class="mt-1 text-xs text-destructive">{fieldErrors.name}</p>{/if}
 				</div>
@@ -104,7 +104,7 @@
 						placeholder="e.g., 192.168.1.100"
 						aria-invalid={!!fieldErrors.configuredIP}
 						aria-describedby={fieldErrors.configuredIP ? 'configuredIP-error' : undefined}
-						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary {fieldErrors.configuredIP ? 'border-destructive' : ''}"
+						class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {fieldErrors.configuredIP ? 'border-destructive' : ''}"
 					/>
 					{#if fieldErrors.configuredIP}<p id="configuredIP-error" class="mt-1 text-xs text-destructive">{fieldErrors.configuredIP}</p>{/if}
 					<p class="mt-1 text-xs text-muted-foreground">

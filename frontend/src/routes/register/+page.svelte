@@ -90,7 +90,7 @@
                         aria-describedby={fieldErrors.email
                             ? "email-error"
                             : undefined}
-                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.email
+                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 {fieldErrors.email
                             ? 'border-destructive'
                             : ''}"
                     />
@@ -117,7 +117,7 @@
                         placeholder="johndoe"
                         maxlength={50}
                         disabled={loading}
-                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
                     />
                     <p class="mt-1 text-xs text-muted-foreground">
                         Leave blank to use your email prefix
@@ -142,7 +142,7 @@
                         aria-describedby={fieldErrors.password
                             ? "password-error"
                             : undefined}
-                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.password
+                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 {fieldErrors.password
                             ? 'border-destructive'
                             : ''}"
                     />
@@ -175,7 +175,7 @@
                         aria-describedby={fieldErrors.confirmPassword
                             ? "confirmPassword-error"
                             : undefined}
-                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.confirmPassword
+                        class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 {fieldErrors.confirmPassword
                             ? 'border-destructive'
                             : ''}"
                     />

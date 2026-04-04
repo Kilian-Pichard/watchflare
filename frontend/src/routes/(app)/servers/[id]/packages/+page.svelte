@@ -49,7 +49,7 @@
             ? "All packages"
             : selectedManagers.size === 1
               ? getManagerLabel([...selectedManagers][0])
-              : `${selectedManagers.size} packages`,
+              : `${selectedManagers.size} managers`,
     );
     let currentPage = $derived(Math.floor(offset / limit) + 1);
     let totalPages = $derived(Math.ceil(totalCount / limit));
@@ -296,7 +296,7 @@
                 oninput={handleSearchInput}
                 onkeydown={(e) => e.key === "Enter" && handleSearch()}
                 placeholder="Search packages..."
-                class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
         </div>
         <DropdownMenu.Root>

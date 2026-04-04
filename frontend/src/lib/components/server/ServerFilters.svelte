@@ -33,7 +33,7 @@
         placeholder="Search servers..."
         value={searchQuery}
         oninput={onSearchInput}
-        class="w-full md:w-56 rounded-lg border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+        class="w-full md:w-56 rounded-lg border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     />
     <Select.Root
         type="single"

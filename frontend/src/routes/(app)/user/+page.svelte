@@ -160,7 +160,7 @@
                     placeholder="Enter a username"
                     maxlength={50}
                     disabled={usernameLoading}
-                    class="flex-1 rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                    class="flex-1 rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
                 />
                 <button
                     type="submit"
@@ -194,7 +194,7 @@
                     oninput={(e) => { emailOverride = (e.target as HTMLInputElement).value; }}
                     placeholder="Enter email address"
                     disabled={emailLoading}
-                    class="flex-1 rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                    class="flex-1 rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
                 />
                 <button
                     type="submit"
@@ -243,7 +243,7 @@
                         aria-describedby={fieldErrors.currentPassword
                             ? "currentPassword-error"
                             : undefined}
-                        class="w-full rounded-lg border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.currentPassword
+                        class="w-full rounded-lg border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 {fieldErrors.currentPassword
                             ? 'border-destructive'
                             : ''}"
                     />
@@ -285,7 +285,7 @@
                         aria-describedby={fieldErrors.newPassword
                             ? "newPassword-error"
                             : undefined}
-                        class="w-full rounded-lg border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.newPassword
+                        class="w-full rounded-lg border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 {fieldErrors.newPassword
                             ? 'border-destructive'
                             : ''}"
                     />
@@ -327,7 +327,7 @@
                         aria-describedby={fieldErrors.confirmPassword
                             ? "confirmPassword-error"
                             : undefined}
-                        class="w-full rounded-lg border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 {fieldErrors.confirmPassword
+                        class="w-full rounded-lg border bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 {fieldErrors.confirmPassword
                             ? 'border-destructive'
                             : ''}"
                     />
