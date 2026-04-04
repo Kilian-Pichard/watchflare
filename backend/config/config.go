@@ -11,7 +11,6 @@ import (
 )
 
 type Config struct {
-	Port        string
 	GRPCPort    string
 	DatabaseURL string
 	JWTSecret          string
@@ -42,7 +41,6 @@ func Load() {
 	_ = godotenv.Load()
 
 	AppConfig = &Config{
-		Port:     getEnv("PORT", "8080"),
 		GRPCPort: getEnv("GRPC_PORT", "50051"),
 		DatabaseURL: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			getEnv("POSTGRES_HOST", "localhost"),
@@ -57,7 +55,7 @@ func Load() {
 		CORSOrigins:       parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
 		Environment:  getEnv("ENV", "development"),
 		CookieDomain: getEnv("COOKIE_DOMAIN", ""), // Empty for dev (localhost), set in production
-		CookieSecure: getBoolEnv("COOKIE_SECURE", getEnv("ENV", "development") == "production"),
+		CookieSecure: getBoolEnv("COOKIE_SECURE", false),
 
 		// TLS Configuration
 		TLSMode:   getEnv("TLS_MODE", "auto"),
@@ -112,10 +110,17 @@ func Load() {
 		}
 	}
 
+	// Warn about cookie security
+	if !AppConfig.CookieSecure {
+		slog.Warn("COOKIE_SECURE is false — JWT cookies are not marked Secure, set to true when serving over HTTPS")
+	} else if AppConfig.Environment != "production" {
+		slog.Warn("COOKIE_SECURE is true in a non-production environment — ensure you are serving over HTTPS or cookies will not be sent by browsers")
+	}
+
 	slog.Info("configuration loaded",
-		"port", AppConfig.Port,
 		"grpc_port", AppConfig.GRPCPort,
 		"environment", AppConfig.Environment,
+		"cookie_secure", AppConfig.CookieSecure,
 	)
 }
 

@@ -69,7 +69,6 @@ func TestLoad_ValidConfig(t *testing.T) {
 	Load()
 
 	assert.NotNil(t, AppConfig)
-	assert.Equal(t, "8080", AppConfig.Port)
 	assert.Equal(t, "50051", AppConfig.GRPCPort)
 	assert.Equal(t, 300, AppConfig.GRPCTimestampWindow)
 }

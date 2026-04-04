@@ -27,6 +27,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+const httpPort = "8080"
+
 func main() {
 	// Initialize logger first so all subsequent output uses the clean format
 	logger.Init()
@@ -83,13 +85,13 @@ func main() {
 	// Setup HTTP server
 	router := setupRouter()
 	httpServer := &http.Server{
-		Addr:    ":" + config.AppConfig.Port,
-		Handler: router.Handler(),
+		Addr:    ":" + httpPort,
+		Handler: router,
 	}
 
 	// Start HTTP server
 	go func() {
-		slog.Info("HTTP server starting", "port", config.AppConfig.Port)
+		slog.Info("HTTP server starting", "port", httpPort)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("HTTP server failed", "error", err)
 		}
@@ -166,6 +168,9 @@ func setupRouter() *gin.Engine {
 			"status": "ok",
 		})
 	})
+
+	// Public app configuration (used by frontend at startup)
+	api.GET("/config", handlers.GetAppConfig)
 
 	// Auth routes (public)
 	authGroup := api.Group("/auth")

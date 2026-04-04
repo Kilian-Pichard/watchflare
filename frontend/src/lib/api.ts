@@ -70,6 +70,17 @@ export class ApiError extends Error {
 }
 
 // Check if initial setup is required (no users exist)
+export async function getAppConfig(): Promise<{ cookie_secure: boolean }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/config`, {
+      credentials: "include",
+    });
+    return await response.json();
+  } catch {
+    return { cookie_secure: true }; // assume secure on error (no false alarm)
+  }
+}
+
 export async function checkSetupRequired(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/setup-required`, {

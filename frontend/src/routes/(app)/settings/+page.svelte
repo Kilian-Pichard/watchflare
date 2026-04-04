@@ -1,10 +1,19 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import { APP_VERSION } from "$lib/version";
     import { userStore } from "$lib/stores/user";
     import { TIME_RANGES } from "$lib/utils";
-    import { Sun, Moon, Monitor, Check } from "lucide-svelte";
+    import { Sun, Moon, Monitor, Check, ShieldAlert } from "lucide-svelte";
     import type { Theme, TimeRange, TimeFormat, TemperatureUnit, NetworkUnit, DiskUnit } from "$lib/types";
     import * as Select from "$lib/components/ui/select";
+    import { getAppConfig } from "$lib/api";
+
+    let cookieSecure = $state(true);
+
+    onMount(async () => {
+        const appConfig = await getAppConfig();
+        cookieSecure = appConfig.cookie_secure;
+    });
 
     const githubUrl = "https://github.com/Kilian-Pichard/watchflare";
     const releaseUrl = `${githubUrl}/releases/tag/v${APP_VERSION}`;
@@ -98,6 +107,16 @@
         Application preferences and configuration
     </p>
 </div>
+
+{#if !cookieSecure}
+    <div role="alert" class="mb-6 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
+        <ShieldAlert class="h-4 w-4 shrink-0 mt-0.5" />
+        <div>
+            <p class="font-medium">Cookies are not marked Secure</p>
+            <p class="mt-0.5 text-warning/80">Set <code class="font-mono text-xs bg-warning/10 px-1 rounded">COOKIE_SECURE=true</code> in your environment and serve Watchflare over HTTPS in production.</p>
+        </div>
+    </div>
+{/if}
 
 <!-- General Preferences Card -->
 <div class="rounded-lg border bg-card p-4 sm:p-6 mb-6">
