@@ -82,6 +82,10 @@ func main() {
 	defer versionCancel()
 	services.StartVersionChecker(versionCtx)
 
+	// Start alert worker (evaluates alert rules every 30s)
+	alertWorker := services.NewAlertWorker(30 * time.Second)
+	go alertWorker.Start()
+
 	// Setup HTTP server
 	router := setupRouter()
 	httpServer := &http.Server{
@@ -131,6 +135,7 @@ func main() {
 	syncWorker.Stop()
 	staleChecker.Stop()
 	aggregatedMetricsScheduler.Stop()
+	alertWorker.Stop()
 
 	// Stop servers
 	grpcServer.GracefulStop()
@@ -199,6 +204,8 @@ func setupRouter() *gin.Engine {
 		settingsGroup.GET("/smtp", handlers.GetSMTPSettings)
 		settingsGroup.PUT("/smtp", handlers.UpdateSMTPSettings)
 		settingsGroup.POST("/smtp/test", handlers.TestSMTPConnection)
+		settingsGroup.GET("/alerts", handlers.GetAlertRules)
+		settingsGroup.PUT("/alerts", handlers.UpdateAlertRules)
 	}
 
 	// Agent info routes (protected)
@@ -237,6 +244,9 @@ func setupRouter() *gin.Engine {
 		serverGroup.GET("/:id/packages/history", handlers.GetServerPackageHistory)
 		serverGroup.GET("/:id/packages/collections", handlers.GetServerPackageCollections)
 		serverGroup.GET("/:id/packages/stats", handlers.GetPackageStats)
+		serverGroup.GET("/:id/alerts", handlers.GetServerAlertRules)
+		serverGroup.PUT("/:id/alerts/:metric_type", handlers.UpsertServerAlertRule)
+		serverGroup.DELETE("/:id/alerts/:metric_type", handlers.DeleteServerAlertRule)
 	}
 
 	// Serve embedded frontend (SPA with fallback to index.html)

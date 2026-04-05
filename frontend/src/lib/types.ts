@@ -394,6 +394,64 @@ export interface GetSMTPSettingsResponse {
   smtp: SmtpSettings;
 }
 
+// ===== Alert Rules =====
+
+export type AlertMetricType =
+  | 'server_down'
+  | 'cpu_usage'
+  | 'memory_usage'
+  | 'disk_usage'
+  | 'load_avg'
+  | 'load_avg_5'
+  | 'load_avg_15'
+  | 'temperature';
+
+export const ALERT_METRIC_TYPES: AlertMetricType[] = [
+  'server_down',
+  'cpu_usage',
+  'memory_usage',
+  'disk_usage',
+  'load_avg',
+  'load_avg_5',
+  'load_avg_15',
+  'temperature',
+];
+
+export const ALERT_METRIC_LABELS: Record<AlertMetricType, string> = {
+  server_down: 'Server offline',
+  cpu_usage: 'CPU usage',
+  memory_usage: 'Memory usage',
+  disk_usage: 'Disk usage',
+  load_avg: 'Load average (1m)',
+  load_avg_5: 'Load average (5m)',
+  load_avg_15: 'Load average (15m)',
+  temperature: 'CPU temperature',
+};
+
+export interface AlertRule {
+  metric_type: AlertMetricType;
+  enabled: boolean;
+  threshold: number;
+  duration_minutes: number;
+  updated_at: string;
+}
+
+export interface EffectiveAlertRule {
+  metric_type: AlertMetricType;
+  enabled: boolean;
+  threshold: number;
+  duration_minutes: number;
+  is_override: boolean;
+}
+
+export interface GetAlertRulesResponse {
+  rules: AlertRule[];
+}
+
+export interface GetServerAlertRulesResponse {
+  rules: EffectiveAlertRule[];
+}
+
 // ===== Toast Notifications =====
 
 export type ToastType = "info" | "success" | "warning" | "error";

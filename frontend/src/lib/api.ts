@@ -19,6 +19,9 @@ import type {
   User,
   GetSMTPSettingsResponse,
   UpdateSMTPSettingsRequest,
+  GetAlertRulesResponse,
+  GetServerAlertRulesResponse,
+  AlertMetricType,
 } from "./types";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
@@ -535,5 +538,43 @@ export async function testSmtpConnection(
   return apiRequest<{ message: string }>("/settings/smtp/test", {
     method: "POST",
     body: JSON.stringify({ recipient: recipient ?? "" }),
+  });
+}
+
+// Alert Rules API calls
+export async function getAlertRules(): Promise<GetAlertRulesResponse> {
+  return apiRequest<GetAlertRulesResponse>('/settings/alerts');
+}
+
+export async function updateAlertRules(
+  rules: Array<{ metric_type: AlertMetricType; enabled: boolean; threshold: number; duration_minutes: number }>,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/settings/alerts', {
+    method: 'PUT',
+    body: JSON.stringify({ rules }),
+  });
+}
+
+export async function getServerAlertRules(serverId: string): Promise<GetServerAlertRulesResponse> {
+  return apiRequest<GetServerAlertRulesResponse>(`/servers/${serverId}/alerts`);
+}
+
+export async function upsertServerAlertRule(
+  serverId: string,
+  metricType: AlertMetricType,
+  data: { enabled: boolean; threshold: number; duration_minutes: number },
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/servers/${serverId}/alerts/${metricType}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteServerAlertRule(
+  serverId: string,
+  metricType: AlertMetricType,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/servers/${serverId}/alerts/${metricType}`, {
+    method: 'DELETE',
   });
 }

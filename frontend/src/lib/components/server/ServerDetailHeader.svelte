@@ -20,6 +20,7 @@
         Clock,
         Tag,
         ArrowUpCircle,
+        Bell,
     } from "lucide-svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
     import type { Server, GetPackageStatsResponse, Metric } from "$lib/types";
@@ -35,6 +36,7 @@
         onRename,
         onPause,
         onResume,
+        onAlertRules,
     }: {
         server: Server;
         packageStats: GetPackageStatsResponse | null;
@@ -46,6 +48,7 @@
         onRename: () => void;
         onPause: () => void;
         onResume: () => void;
+        onAlertRules: () => void;
     } = $props();
 
     const agentOutdated = $derived(isAgentOutdated(server.agent_version, latestAgentVersion));
@@ -179,6 +182,15 @@
                         </DropdownMenu.Item>
                     {/if}
                 {/if}
+                <DropdownMenu.Item
+                    onclick={() => {
+                        open = false;
+                        onAlertRules();
+                    }}
+                >
+                    <Bell class="h-4 w-4" />
+                    Alert Rules
+                </DropdownMenu.Item>
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item
                     onclick={() => {

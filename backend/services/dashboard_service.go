@@ -85,7 +85,7 @@ func buildAggregatedQuery(aggregateTable, bucketInterval string) string {
 			COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN d.disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
 		FROM per_server_data d
 		JOIN servers s ON d.server_id = s.id
-		WHERE s.status = 'online'
+		WHERE s.status NOT IN ('expired', 'pending')
 		GROUP BY d.ts
 		ORDER BY d.ts ASC
 	`, bucketInterval, aggregateTable, bucketInterval, bucketInterval, bucketInterval)
@@ -151,7 +151,7 @@ func GetAggregatedMetrics(timeRange string) ([]AggregatedPoint, error) {
 					   s.environment_type
 				FROM metrics m
 				JOIN servers s ON m.server_id = s.id
-				WHERE s.status = 'online'
+				WHERE s.status NOT IN ('expired', 'pending')
 				  AND m.timestamp > $1
 				  AND m.timestamp <= $2
 			),

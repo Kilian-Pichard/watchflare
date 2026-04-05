@@ -11,6 +11,7 @@
     import ServerDetailHeader from "$lib/components/server/ServerDetailHeader.svelte";
     import ServerAlerts from "$lib/components/server/ServerAlerts.svelte";
     import ServerMetricsCharts from "$lib/components/server/ServerMetricsCharts.svelte";
+    import ServerAlertRulesDrawer from "$lib/components/server/ServerAlertRulesDrawer.svelte";
     import InstallInstructions from "$lib/components/InstallInstructions.svelte";
 
     const TIME_RANGE_SECONDS: Record<string, number> = {
@@ -47,6 +48,7 @@
     let timeRange: TimeRange = $state("1h");
     let sseUnsubscribe: (() => void) | null = null;
     let latestAgentVersion: string | null = $state(null);
+    let showAlertRules = $state(false);
 
     const serverId = $derived($page.params.id);
 
@@ -326,6 +328,7 @@
         onRename={() => { newServerName = server?.name || ''; showRename = true; }}
         onPause={handlePause}
         onResume={handleResume}
+        onAlertRules={() => { showAlertRules = true; }}
     />
 
 
@@ -357,6 +360,12 @@
         {containerMetrics}
         bind:timeRange
         onTimeRangeChange={handleTimeRangeChange}
+    />
+
+    <ServerAlertRulesDrawer
+        serverId={serverId}
+        open={showAlertRules}
+        onClose={() => { showAlertRules = false; }}
     />
 {/if}
 

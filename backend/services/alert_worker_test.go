@@ -1,0 +1,154 @@
+package services
+
+import (
+	"testing"
+	"watchflare/backend/models"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestEvaluateMetric_ServerDown(t *testing.T) {
+	// Offline server → breaching
+	breaching, value := evaluateMetric(models.MetricTypeServerDown, 0, models.StatusOffline, nil)
+	assert.True(t, breaching)
+	assert.Equal(t, float64(0), value)
+
+	// Online server → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeServerDown, 0, models.StatusOnline, nil)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+}
+
+func TestEvaluateMetric_CPUUsage(t *testing.T) {
+	// Above threshold
+	m := &models.Metric{CPUUsagePercent: 90.0}
+	breaching, value := evaluateMetric(models.MetricTypeCPUUsage, 80.0, models.StatusOnline, m)
+	assert.True(t, breaching)
+	assert.Equal(t, 90.0, value)
+
+	// Below threshold
+	breaching, value = evaluateMetric(models.MetricTypeCPUUsage, 95.0, models.StatusOnline, m)
+	assert.False(t, breaching)
+	assert.Equal(t, 90.0, value)
+
+	// Nil metric → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeCPUUsage, 80.0, models.StatusOnline, nil)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+}
+
+func TestEvaluateMetric_MemoryUsage(t *testing.T) {
+	// 8GB used out of 16GB = 50%
+	m := &models.Metric{
+		MemoryTotalBytes: 16 * 1024 * 1024 * 1024,
+		MemoryUsedBytes:  8 * 1024 * 1024 * 1024,
+	}
+
+	// Threshold 40% → breaching (50% >= 40%)
+	breaching, value := evaluateMetric(models.MetricTypeMemoryUsage, 40.0, models.StatusOnline, m)
+	assert.True(t, breaching)
+	assert.InDelta(t, 50.0, value, 0.01)
+
+	// Threshold 60% → not breaching (50% < 60%)
+	breaching, value = evaluateMetric(models.MetricTypeMemoryUsage, 60.0, models.StatusOnline, m)
+	assert.False(t, breaching)
+	assert.InDelta(t, 50.0, value, 0.01)
+
+	// Nil metric → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeMemoryUsage, 40.0, models.StatusOnline, nil)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+
+	// Zero total bytes → not breaching (avoid division by zero)
+	m2 := &models.Metric{MemoryTotalBytes: 0, MemoryUsedBytes: 1024}
+	breaching, value = evaluateMetric(models.MetricTypeMemoryUsage, 40.0, models.StatusOnline, m2)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+}
+
+func TestEvaluateMetric_DiskUsage(t *testing.T) {
+	// 90GB used out of 100GB = 90%
+	m := &models.Metric{
+		DiskTotalBytes: 100 * 1024 * 1024 * 1024,
+		DiskUsedBytes:  90 * 1024 * 1024 * 1024,
+	}
+
+	// Threshold 85% → breaching
+	breaching, value := evaluateMetric(models.MetricTypeDiskUsage, 85.0, models.StatusOnline, m)
+	assert.True(t, breaching)
+	assert.InDelta(t, 90.0, value, 0.01)
+
+	// Threshold 95% → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeDiskUsage, 95.0, models.StatusOnline, m)
+	assert.False(t, breaching)
+	assert.InDelta(t, 90.0, value, 0.01)
+
+	// Nil metric → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeDiskUsage, 85.0, models.StatusOnline, nil)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+}
+
+func TestEvaluateMetric_LoadAvg(t *testing.T) {
+	m := &models.Metric{
+		LoadAvg1Min:  2.5,
+		LoadAvg5Min:  1.8,
+		LoadAvg15Min: 1.2,
+	}
+
+	// load_avg (1min) — above threshold
+	breaching, value := evaluateMetric(models.MetricTypeLoadAvg, 2.0, models.StatusOnline, m)
+	assert.True(t, breaching)
+	assert.Equal(t, 2.5, value)
+
+	// load_avg (1min) — below threshold
+	breaching, value = evaluateMetric(models.MetricTypeLoadAvg, 3.0, models.StatusOnline, m)
+	assert.False(t, breaching)
+	assert.Equal(t, 2.5, value)
+
+	// load_avg_5 — above threshold
+	breaching, value = evaluateMetric(models.MetricTypeLoadAvg5, 1.5, models.StatusOnline, m)
+	assert.True(t, breaching)
+	assert.Equal(t, 1.8, value)
+
+	// load_avg_15 — below threshold
+	breaching, value = evaluateMetric(models.MetricTypeLoadAvg15, 2.0, models.StatusOnline, m)
+	assert.False(t, breaching)
+	assert.Equal(t, 1.2, value)
+
+	// Nil metric → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeLoadAvg, 2.0, models.StatusOnline, nil)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+}
+
+func TestEvaluateMetric_Temperature(t *testing.T) {
+	m := &models.Metric{CPUTemperatureCelsius: 75.0}
+
+	// Above threshold
+	breaching, value := evaluateMetric(models.MetricTypeTemperature, 70.0, models.StatusOnline, m)
+	assert.True(t, breaching)
+	assert.Equal(t, 75.0, value)
+
+	// Below threshold
+	breaching, value = evaluateMetric(models.MetricTypeTemperature, 80.0, models.StatusOnline, m)
+	assert.False(t, breaching)
+	assert.Equal(t, 75.0, value)
+
+	// Zero value (sensor unavailable) → not breaching
+	m2 := &models.Metric{CPUTemperatureCelsius: 0}
+	breaching, value = evaluateMetric(models.MetricTypeTemperature, 70.0, models.StatusOnline, m2)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+
+	// Nil metric → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeTemperature, 70.0, models.StatusOnline, nil)
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+}
+
+func TestEvaluateMetric_UnknownType(t *testing.T) {
+	breaching, value := evaluateMetric("unknown_metric", 50.0, models.StatusOnline, &models.Metric{CPUUsagePercent: 99})
+	assert.False(t, breaching)
+	assert.Equal(t, float64(0), value)
+}

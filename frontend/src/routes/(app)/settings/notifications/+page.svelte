@@ -3,13 +3,17 @@
     import { fly } from "svelte/transition";
     import { userStore } from "$lib/stores/user";
     import { Check, Send, TriangleAlert, X } from "lucide-svelte";
-    import type { SmtpTLSMode, SmtpAuthType } from "$lib/types";
+    import type { SmtpTLSMode, SmtpAuthType, AlertRule, AlertMetricType } from "$lib/types";
+    import { ALERT_METRIC_TYPES, ALERT_METRIC_LABELS } from "$lib/types";
     import {
         getSmtpSettings,
         updateSmtpSettings,
         testSmtpConnection,
+        getAlertRules,
+        updateAlertRules,
     } from "$lib/api";
     import * as Select from "$lib/components/ui/select";
+    import Toggle from "$lib/components/ui/Toggle.svelte";
 
     const user = $derived($userStore.user);
 
@@ -30,6 +34,20 @@
     let smtpSaving = $state(false);
     let smtpSaveSuccess = $state(false);
     let saveSuccessTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // Alert rules
+    type EditableRule = {
+        metric_type: AlertMetricType;
+        enabled: boolean;
+        threshold: number;
+        duration_minutes: number;
+    };
+    let alertRules = $state<EditableRule[]>([]);
+    let alertLoaded = $state(false);
+    let alertSaving = $state(false);
+    let alertSaveSuccess = $state(false);
+    let alertSaveTimer: ReturnType<typeof setTimeout> | undefined;
+    let alertSaveError = $state("");
 
     // Per-field validation errors (shown inline below each field)
     let fieldErrors = $state<Record<string, string>>({});
@@ -122,6 +140,7 @@
     onDestroy(() => {
         clearTimeout(saveSuccessTimer);
         clearTimeout(toastTimer);
+        clearTimeout(alertSaveTimer);
     });
 
     onMount(async () => {
@@ -143,7 +162,65 @@
         }
         testRecipient = user?.email ?? "";
         loaded = true;
+
+        try {
+            const res = await getAlertRules();
+            alertRules = res.rules.map((r) => ({
+                metric_type: r.metric_type,
+                enabled: r.enabled,
+                threshold: r.threshold,
+                duration_minutes: r.duration_minutes,
+            }));
+        } catch {
+            // Start with empty editable rules seeded from canonical order
+            alertRules = ALERT_METRIC_TYPES.map((mt) => ({
+                metric_type: mt,
+                enabled: false,
+                threshold: mt === 'temperature' ? 80 : mt === 'load_avg' ? 5 : 90,
+                duration_minutes: mt === 'server_down' ? 1 : 5,
+            }));
+        }
+        alertLoaded = true;
     });
+
+    async function handleSaveAlerts() {
+        alertSaveError = "";
+        alertSaveSuccess = false;
+        clearTimeout(alertSaveTimer);
+
+        const invalidThreshold = alertRules.find(r => r.enabled && r.metric_type !== 'server_down' && (r.threshold === null || isNaN(r.threshold as unknown as number)));
+        if (invalidThreshold) { alertSaveError = `Enter a threshold for ${ALERT_METRIC_LABELS[invalidThreshold.metric_type]}.`; return; }
+        const invalidDuration = alertRules.find(r => r.enabled && (r.duration_minutes === null || isNaN(r.duration_minutes as unknown as number)));
+        if (invalidDuration) { alertSaveError = `Enter a duration for ${ALERT_METRIC_LABELS[invalidDuration.metric_type]}.`; return; }
+
+        alertSaving = true;
+        try {
+            await updateAlertRules(alertRules);
+            alertSaveSuccess = true;
+            alertSaveTimer = setTimeout(() => { alertSaveSuccess = false; }, 3000);
+        } catch (err) {
+            alertSaveError = err instanceof Error ? err.message : "Failed to save alert rules.";
+        } finally {
+            alertSaving = false;
+        }
+    }
+
+    function thresholdUnit(metricType: AlertMetricType): string {
+        if (metricType === 'cpu_usage' || metricType === 'memory_usage' || metricType === 'disk_usage') return '%';
+        if (metricType === 'temperature') return '°C';
+        return '';
+    }
+
+    const ALERT_DEFAULTS: Record<AlertMetricType, { threshold: number; duration: number }> = {
+        server_down:   { threshold: 0,  duration: 1 },
+        cpu_usage:     { threshold: 90, duration: 5 },
+        memory_usage:  { threshold: 90, duration: 5 },
+        disk_usage:    { threshold: 90, duration: 5 },
+        load_avg:      { threshold: 5,  duration: 5 },
+        load_avg_5:    { threshold: 5,  duration: 5 },
+        load_avg_15:   { threshold: 5,  duration: 5 },
+        temperature:   { threshold: 80, duration: 5 },
+    };
 
     async function handleSave() {
         fieldErrors = {};
@@ -229,22 +306,7 @@
 
     <!-- Enabled toggle -->
     <div class="mb-6 flex items-center gap-3">
-        <button
-            type="button"
-            role="switch"
-            aria-checked={smtpEnabled}
-            aria-labelledby="smtp-enable-label"
-            onclick={() => { smtpEnabled = !smtpEnabled; }}
-            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary {loaded ? 'transition-colors' : ''} {smtpEnabled
-                ? 'bg-primary'
-                : 'bg-muted border border-border'}"
-        >
-            <span
-                class="inline-block h-4 w-4 transform rounded-full bg-white shadow-sm {loaded ? 'transition-transform' : ''} {smtpEnabled
-                    ? 'translate-x-6'
-                    : 'translate-x-1'}"
-            ></span>
-        </button>
+        <Toggle bind:checked={smtpEnabled} aria-labelledby="smtp-enable-label" />
         <div>
             <p id="smtp-enable-label" class="text-sm font-medium text-foreground">Email notifications</p>
             <p class="text-xs text-muted-foreground mt-0.5">Send alert emails via SMTP</p>
@@ -461,6 +523,92 @@
         {#if !smtpEnabled}
             <p class="mt-2 text-xs text-muted-foreground">Enable SMTP above to send a test email.</p>
         {/if}
+    </div>
+</div>
+
+<!-- Alert Rules -->
+<div
+    class="rounded-lg border bg-card p-4 sm:p-6 mb-6 transition-opacity duration-200 {alertLoaded ? 'opacity-100' : 'opacity-0'}"
+>
+    <h2 class="text-lg font-semibold text-foreground mb-1">Alert Rules</h2>
+    <p class="text-sm text-muted-foreground mb-6">
+        Global thresholds for email alerts. Alerts fire when a condition persists for the configured duration.
+    </p>
+
+    <div class="divide-y divide-border">
+        {#each alertRules as rule (rule.metric_type)}
+            <div class="py-4 first:pt-0 last:pb-0">
+                <div class="flex items-start gap-4">
+                    <!-- Toggle -->
+                    <Toggle bind:checked={rule.enabled} class="mt-0.5" />
+
+                    <!-- Label + inputs -->
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-foreground mb-3">
+                            {ALERT_METRIC_LABELS[rule.metric_type]}
+                        </p>
+
+                        <div class="flex flex-wrap gap-4 {rule.enabled ? '' : 'opacity-40 pointer-events-none'}">
+                            <!-- Threshold (hidden for server_down) -->
+                            {#if rule.metric_type !== 'server_down'}
+                                <div>
+                                    <label class="block text-xs text-muted-foreground mb-1">Threshold</label>
+                                    <div class="flex items-center gap-1.5">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step={rule.metric_type === 'load_avg' ? '0.1' : '1'}
+                                            bind:value={rule.threshold}
+                                            placeholder={String(ALERT_DEFAULTS[rule.metric_type].threshold)}
+                                            class="w-20 rounded-lg border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        {#if thresholdUnit(rule.metric_type)}
+                                            <span class="text-xs text-muted-foreground">{thresholdUnit(rule.metric_type)}</span>
+                                        {/if}
+                                    </div>
+                                </div>
+                            {/if}
+
+                            <!-- Duration -->
+                            <div>
+                                <label class="block text-xs text-muted-foreground mb-1">Duration</label>
+                                <div class="flex items-center gap-1.5">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        bind:value={rule.duration_minutes}
+                                        placeholder={String(ALERT_DEFAULTS[rule.metric_type].duration)}
+                                        class="w-16 rounded-lg border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                    <span class="text-xs text-muted-foreground">min</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {/each}
+    </div>
+
+    {#if alertSaveError}
+        <p class="mt-4 text-sm text-destructive">{alertSaveError}</p>
+    {/if}
+
+    <div class="mt-6">
+        <button
+            type="button"
+            onclick={handleSaveAlerts}
+            disabled={alertSaving || alertSaveSuccess}
+            class="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            {#if alertSaveSuccess}
+                <Check class="h-4 w-4" />
+                Saved
+            {:else}
+                {alertSaving ? "Saving..." : "Save alert rules"}
+            {/if}
+        </button>
     </div>
 </div>
 
