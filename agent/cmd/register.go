@@ -130,7 +130,7 @@ func runRegistration(token, host, port string) (bool, error) {
 		AgentKey:   regResp.AgentKey,
 		CACertFile: caCertPath,
 		ServerName: regResp.ServerName,
-		LogFile:    config.DefaultLogFile,
+		LogFile:    config.GetLogFile(),
 	}
 	cfg.SetDefaults()
 

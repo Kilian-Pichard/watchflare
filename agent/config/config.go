@@ -46,6 +46,15 @@ func GetDataDir() string {
 	return DefaultDataDir
 }
 
+// GetLogFile returns the log file path
+// Priority: WATCHFLARE_LOG_FILE env var > default system path
+func GetLogFile() string {
+	if f := os.Getenv("WATCHFLARE_LOG_FILE"); f != "" {
+		return f
+	}
+	return DefaultLogFile
+}
+
 // Config holds the agent configuration
 type Config struct {
 	ServerHost string `toml:"server_host"`
