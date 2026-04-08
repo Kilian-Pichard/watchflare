@@ -258,6 +258,12 @@ func (w *AlertWorker) evaluateServer(
 						"server_id", server.ID, "metric_type", metricType, "error", err)
 				} else {
 					slog.Info("alert resolved", "server", server.Name, "metric_type", metricType)
+					if incident.Notified {
+						if err := sendResolutionEmail(server, metricType, incident.StartedAt, now, recipient); err != nil {
+							slog.Error("alert worker: failed to send resolution email",
+								"server_id", server.ID, "metric_type", metricType, "error", err)
+						}
+					}
 				}
 			}
 		}
@@ -407,6 +413,69 @@ func buildAlertEmailContent(serverName, metricType string, threshold, currentVal
 	subject = fmt.Sprintf("[Watchflare Alert] %s — %s exceeded", serverName, metricLabel)
 	body = fmt.Sprintf("An alert has been triggered for server %q.\n\n%s: %s\n\nThis alert started at %s.\n\nThis notification was sent by Watchflare.",
 		serverName, metricLabel, valueDesc, startedAt.Format(time.RFC1123))
+	return
+}
+
+// sendResolutionEmail delivers a resolution notification email.
+func sendResolutionEmail(server *models.Server, metricType string, startedAt, resolvedAt time.Time, recipient string) error {
+	var s models.SmtpSettings
+	if err := database.DB.First(&s).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	if !s.Enabled {
+		return nil
+	}
+
+	var plainPassword string
+	if s.EncryptedPassword != "" {
+		if config.AppConfig.SMTPEncryptionKey == "" {
+			return errors.New("SMTP_ENCRYPTION_KEY is not configured")
+		}
+		var err error
+		plainPassword, err = encryption.Decrypt(s.EncryptedPassword, config.AppConfig.SMTPEncryptionKey)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt SMTP password: %w", err)
+		}
+	}
+
+	subject, body := buildResolutionEmailContent(server.Name, metricType, startedAt, resolvedAt)
+	return sendEmail(&s, plainPassword, recipient, subject, body)
+}
+
+func buildResolutionEmailContent(serverName, metricType string, startedAt, resolvedAt time.Time) (subject, body string) {
+	duration := resolvedAt.Sub(startedAt).Round(time.Second)
+
+	var metricLabel string
+	switch metricType {
+	case models.MetricTypeServerDown:
+		subject = fmt.Sprintf("[Watchflare Resolved] %s is back online", serverName)
+		body = fmt.Sprintf("Server %q is back online.\n\nThe server was offline for %s (since %s).\n\nThis notification was sent by Watchflare.",
+			serverName, duration, startedAt.Format(time.RFC1123))
+		return
+	case models.MetricTypeCPUUsage:
+		metricLabel = "CPU usage"
+	case models.MetricTypeMemoryUsage:
+		metricLabel = "Memory usage"
+	case models.MetricTypeDiskUsage:
+		metricLabel = "Disk usage"
+	case models.MetricTypeLoadAvg:
+		metricLabel = "Load average (1m)"
+	case models.MetricTypeLoadAvg5:
+		metricLabel = "Load average (5m)"
+	case models.MetricTypeLoadAvg15:
+		metricLabel = "Load average (15m)"
+	case models.MetricTypeTemperature:
+		metricLabel = "CPU temperature"
+	default:
+		metricLabel = metricType
+	}
+
+	subject = fmt.Sprintf("[Watchflare Resolved] %s — %s back to normal", serverName, metricLabel)
+	body = fmt.Sprintf("The alert for server %q has been resolved.\n\n%s is back to normal.\n\nAlert duration: %s (started at %s).\n\nThis notification was sent by Watchflare.",
+		serverName, metricLabel, duration, startedAt.Format(time.RFC1123))
 	return
 }
 

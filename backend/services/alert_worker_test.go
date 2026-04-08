@@ -1,7 +1,9 @@
 package services
 
 import (
+	"strings"
 	"testing"
+	"time"
 	"watchflare/backend/models"
 
 	"github.com/stretchr/testify/assert"
@@ -151,4 +153,39 @@ func TestEvaluateMetric_UnknownType(t *testing.T) {
 	breaching, value := evaluateMetric("unknown_metric", 50.0, models.StatusOnline, &models.Metric{CPUUsagePercent: 99})
 	assert.False(t, breaching)
 	assert.Equal(t, float64(0), value)
+}
+
+func TestBuildResolutionEmailContent_ServerDown(t *testing.T) {
+	startedAt := time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC)
+	resolvedAt := time.Date(2026, 4, 8, 10, 5, 30, 0, time.UTC)
+
+	subject, body := buildResolutionEmailContent("web01", models.MetricTypeServerDown, startedAt, resolvedAt)
+
+	assert.Contains(t, subject, "Resolved")
+	assert.Contains(t, subject, "web01")
+	assert.Contains(t, subject, "back online")
+	assert.Contains(t, body, "web01")
+	assert.Contains(t, body, "5m30s")
+}
+
+func TestBuildResolutionEmailContent_CPUUsage(t *testing.T) {
+	startedAt := time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC)
+	resolvedAt := time.Date(2026, 4, 8, 10, 10, 0, 0, time.UTC)
+
+	subject, body := buildResolutionEmailContent("web01", models.MetricTypeCPUUsage, startedAt, resolvedAt)
+
+	assert.Contains(t, subject, "Resolved")
+	assert.Contains(t, subject, "CPU usage")
+	assert.Contains(t, body, "CPU usage")
+	assert.True(t, strings.Contains(body, "10m0s"))
+}
+
+func TestBuildResolutionEmailContent_UnknownMetric(t *testing.T) {
+	startedAt := time.Now().Add(-2 * time.Minute)
+	resolvedAt := time.Now()
+
+	subject, body := buildResolutionEmailContent("db01", "custom_metric", startedAt, resolvedAt)
+
+	assert.Contains(t, subject, "custom_metric")
+	assert.Contains(t, body, "db01")
 }
