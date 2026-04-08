@@ -1,7 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import type { Server, ServerWithMetrics, ServerStatus } from '$lib/types';
 import { listServers } from '$lib/api';
-import { countAlerts } from '$lib/utils';
 
 interface ServersState {
 	servers: ServerWithMetrics[];
@@ -106,4 +105,3 @@ export const offlineServers = derived(serversStore, $store =>
 	$store.servers.filter(item => item.server.status === 'offline')
 );
 export const serversLoading = derived(serversStore, $store => $store.loading);
-export const alertCount = derived(servers, ($servers) => countAlerts($servers));

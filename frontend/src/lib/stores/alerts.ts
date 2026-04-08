@@ -1,10 +1,11 @@
-import { writable } from 'svelte/store';
-import type { DroppedMetric } from '$lib/types';
-import { getDroppedMetrics } from '$lib/api';
+import { writable, derived } from 'svelte/store';
+import type { ActiveIncident, DroppedMetric } from '$lib/types';
+import { getDroppedMetrics, getActiveIncidents } from '$lib/api';
 import { logger } from '$lib/utils';
 
 interface AlertsState {
 	droppedMetrics: DroppedMetric[];
+	activeIncidents: ActiveIncident[];
 	loading: boolean;
 	error: string | null;
 }
@@ -12,43 +13,48 @@ interface AlertsState {
 function createAlertsStore() {
 	const { subscribe, set, update } = writable<AlertsState>({
 		droppedMetrics: [],
+		activeIncidents: [],
 		loading: false,
-		error: null
+		error: null,
 	});
 
 	return {
 		subscribe,
 
-		// Load dropped metrics alerts
 		async load(): Promise<void> {
 			update(state => ({ ...state, loading: true, error: null }));
-
 			try {
 				const data = await getDroppedMetrics();
-
 				update(state => ({
 					...state,
 					droppedMetrics: data.dropped_metrics || [],
 					loading: false,
-					error: null
+					error: null,
 				}));
 			} catch (err) {
 				logger.error('Failed to load dropped metrics:', err);
-
-				// Keep existing droppedMetrics on error instead of clearing them
 				update(state => ({
 					...state,
 					loading: false,
-					error: err instanceof Error ? err.message : 'Failed to load alerts'
+					error: err instanceof Error ? err.message : 'Failed to load alerts',
 				}));
 			}
 		},
 
-		// Clear alerts
+		async loadIncidents(): Promise<void> {
+			try {
+				const data = await getActiveIncidents();
+				update(state => ({ ...state, activeIncidents: data.incidents }));
+			} catch (err) {
+				logger.error('Failed to load active incidents:', err);
+			}
+		},
+
 		clear(): void {
-			set({ droppedMetrics: [], loading: false, error: null });
-		}
+			set({ droppedMetrics: [], activeIncidents: [], loading: false, error: null });
+		},
 	};
 }
 
 export const alertsStore = createAlertsStore();
+export const alertCount = derived(alertsStore, $s => $s.activeIncidents.length);

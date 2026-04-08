@@ -3,6 +3,8 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"time"
+	"watchflare/backend/database"
 	"watchflare/backend/models"
 	"watchflare/backend/services"
 
@@ -138,6 +140,37 @@ func DeleteServerAlertRule(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "server alert rule deleted"})
+}
+
+// ActiveIncidentItem is the response shape for GET /alerts/active.
+type ActiveIncidentItem struct {
+	ID             string    `json:"id"`
+	ServerID       string    `json:"server_id"`
+	ServerName     string    `json:"server_name"`
+	MetricType     string    `json:"metric_type"`
+	StartedAt      time.Time `json:"started_at"`
+	ThresholdValue float64   `json:"threshold_value"`
+	CurrentValue   float64   `json:"current_value"`
+}
+
+// GetActiveIncidents returns all unresolved alert incidents with their server name.
+func GetActiveIncidents(c *gin.Context) {
+	var items []ActiveIncidentItem
+	err := database.DB.Table("alert_incidents").
+		Select("alert_incidents.id, alert_incidents.server_id, servers.name AS server_name, alert_incidents.metric_type, alert_incidents.started_at, alert_incidents.threshold_value, alert_incidents.current_value").
+		Joins("JOIN servers ON servers.id = alert_incidents.server_id").
+		Where("alert_incidents.resolved_at IS NULL").
+		Order("alert_incidents.started_at DESC").
+		Scan(&items).Error
+	if err != nil {
+		slog.Error("failed to get active incidents", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get active incidents"})
+		return
+	}
+	if items == nil {
+		items = []ActiveIncidentItem{}
+	}
+	c.JSON(http.StatusOK, gin.H{"incidents": items})
 }
 
 func isValidMetricType(mt string) bool {

@@ -194,63 +194,7 @@ export function getManagerColor(manager: string): string {
 	return MANAGER_COLORS[manager] || 'bg-muted text-muted-foreground border-border';
 }
 
-// Count active alerts from server list
-export interface ServerWithLatestMetric {
-	server: { status: string; [key: string]: unknown };
-	latestMetric?: {
-		cpu_usage_percent: number;
-		memory_used_bytes: number;
-		memory_total_bytes: number;
-		[key: string]: unknown;
-	} | null;
-}
 
-export function countAlerts(servers: ServerWithLatestMetric[]): number {
-	let count = 0;
-	for (const { server, latestMetric } of servers) {
-		if (server.status === 'paused') continue;
-		if (server.status === 'offline') count++;
-		if (server.status === 'ip_mismatch') count++;
-		if (latestMetric && latestMetric.cpu_usage_percent > 90) count++;
-		if (latestMetric && latestMetric.memory_total_bytes > 0) {
-			const memPct = (latestMetric.memory_used_bytes / latestMetric.memory_total_bytes) * 100;
-			if (memPct > 90) count++;
-		}
-	}
-	return count;
-}
-
-export interface Alert {
-	type: 'critical' | 'warning';
-	server: string;
-	message: string;
-	time: string;
-}
-
-export function generateAlerts(servers: ServerWithLatestMetric[]): Alert[] {
-	const alerts: Alert[] = [];
-
-	for (const { server, latestMetric } of servers) {
-		if (server.status === 'paused') continue;
-		if (server.status === 'offline') {
-			alerts.push({ type: 'critical', server: server.name as string, message: 'Server is offline', time: 'Just now' });
-		}
-		if (server.status === 'ip_mismatch') {
-			alerts.push({ type: 'warning', server: server.name as string, message: 'IP address mismatch detected', time: 'Just now' });
-		}
-		if (latestMetric && latestMetric.cpu_usage_percent > 90) {
-			alerts.push({ type: 'warning', server: server.name as string, message: `High CPU usage: ${latestMetric.cpu_usage_percent.toFixed(1)}%`, time: 'Just now' });
-		}
-		if (latestMetric && latestMetric.memory_total_bytes > 0) {
-			const memPercent = (latestMetric.memory_used_bytes / latestMetric.memory_total_bytes) * 100;
-			if (memPercent > 90) {
-				alerts.push({ type: 'warning', server: server.name as string, message: `High memory usage: ${memPercent.toFixed(1)}%`, time: 'Just now' });
-			}
-		}
-	}
-
-	return alerts.slice(0, 10);
-}
 
 // SSE reactivation toast (shared across pages)
 export function handleSSEReactivation(event: SSEEvent): void {

@@ -452,6 +452,20 @@ export interface GetServerAlertRulesResponse {
   rules: EffectiveAlertRule[];
 }
 
+export interface ActiveIncident {
+  id: string;
+  server_id: string;
+  server_name: string;
+  metric_type: AlertMetricType;
+  started_at: string;
+  threshold_value: number;
+  current_value: number;
+}
+
+export interface GetActiveIncidentsResponse {
+  incidents: ActiveIncident[];
+}
+
 // ===== Toast Notifications =====
 
 export type ToastType = "info" | "success" | "warning" | "error";

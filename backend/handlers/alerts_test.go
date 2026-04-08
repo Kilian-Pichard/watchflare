@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/middleware"
 	"watchflare/backend/models"
@@ -24,6 +25,7 @@ func setupAlertsRouter() *gin.Engine {
 	{
 		protected.GET("/settings/alerts", GetAlertRules)
 		protected.PUT("/settings/alerts", UpdateAlertRules)
+		protected.GET("/settings/alerts/active", GetActiveIncidents)
 		protected.GET("/servers/:id/alerts", GetServerAlertRules)
 		protected.PUT("/servers/:id/alerts/:metric_type", UpsertServerAlertRule)
 		protected.DELETE("/servers/:id/alerts/:metric_type", DeleteServerAlertRule)
@@ -32,8 +34,10 @@ func setupAlertsRouter() *gin.Engine {
 }
 
 func teardownAlertData() {
+	database.DB.Exec("DELETE FROM alert_incidents")
 	database.DB.Exec("DELETE FROM server_alert_rules")
 	database.DB.Exec("DELETE FROM alert_rules")
+	database.DB.Exec("DELETE FROM servers")
 	database.DB.Exec("DELETE FROM users")
 }
 
@@ -285,6 +289,75 @@ func TestDeleteServerAlertRule_Unauthenticated(t *testing.T) {
 
 	r := setupAlertsRouter()
 	req, _ := http.NewRequest("DELETE", "/servers/server-abc/alerts/"+models.MetricTypeCPUUsage, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestGetActiveIncidents(t *testing.T) {
+	setupTestDB(t)
+	defer teardownAlertData()
+
+	r := setupAlertsRouter()
+	cookie := registerAndGetCookie(t, "incidents@test.com")
+
+	// Seed a server and an active incident
+	server := models.Server{ID: "server-inc-1", Name: "test-server", Status: "offline"}
+	require.NoError(t, database.DB.Create(&server).Error)
+
+	incident := models.AlertIncident{
+		ServerID:       server.ID,
+		MetricType:     models.MetricTypeServerDown,
+		StartedAt:      time.Now().Add(-5 * time.Minute),
+		ThresholdValue: 0,
+		CurrentValue:   0,
+	}
+	require.NoError(t, database.DB.Create(&incident).Error)
+
+	req, _ := http.NewRequest("GET", "/settings/alerts/active", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	incidents, ok := resp["incidents"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, incidents, 1)
+
+	item := incidents[0].(map[string]interface{})
+	assert.Equal(t, server.ID, item["server_id"])
+	assert.Equal(t, "test-server", item["server_name"])
+	assert.Equal(t, models.MetricTypeServerDown, item["metric_type"])
+}
+
+func TestGetActiveIncidents_Empty(t *testing.T) {
+	setupTestDB(t)
+	defer teardownAlertData()
+
+	r := setupAlertsRouter()
+	cookie := registerAndGetCookie(t, "incidents2@test.com")
+
+	req, _ := http.NewRequest("GET", "/settings/alerts/active", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	incidents, ok := resp["incidents"].([]interface{})
+	require.True(t, ok)
+	assert.Empty(t, incidents)
+}
+
+func TestGetActiveIncidents_Unauthenticated(t *testing.T) {
+	setupTestDB(t)
+	defer teardownAlertData()
+
+	r := setupAlertsRouter()
+	req, _ := http.NewRequest("GET", "/settings/alerts/active", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)

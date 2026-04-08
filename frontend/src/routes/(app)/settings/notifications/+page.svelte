@@ -14,6 +14,7 @@
     } from "$lib/api";
     import * as Select from "$lib/components/ui/select";
     import Toggle from "$lib/components/ui/Toggle.svelte";
+    import Slider from "$lib/components/ui/Slider.svelte";
 
     const user = $derived($userStore.user);
 
@@ -211,16 +212,25 @@
         return '';
     }
 
-    const ALERT_DEFAULTS: Record<AlertMetricType, { threshold: number; duration: number }> = {
-        server_down:   { threshold: 0,  duration: 1 },
-        cpu_usage:     { threshold: 90, duration: 5 },
-        memory_usage:  { threshold: 90, duration: 5 },
-        disk_usage:    { threshold: 90, duration: 5 },
-        load_avg:      { threshold: 5,  duration: 5 },
-        load_avg_5:    { threshold: 5,  duration: 5 },
-        load_avg_15:   { threshold: 5,  duration: 5 },
-        temperature:   { threshold: 80, duration: 5 },
+    const DESCRIPTIONS: Record<AlertMetricType, string> = {
+        server_down:  "Alert when the server stops sending heartbeats.",
+        cpu_usage:    "Alert when CPU usage stays above the threshold.",
+        memory_usage: "Alert when RAM usage stays above the threshold.",
+        disk_usage:   "Alert when disk usage stays above the threshold.",
+        load_avg:     "Alert when the 1-min load average exceeds the threshold.",
+        load_avg_5:   "Alert when the 5-min load average exceeds the threshold.",
+        load_avg_15:  "Alert when the 15-min load average exceeds the threshold.",
+        temperature:  "Alert when CPU temperature exceeds the threshold.",
     };
+
+    const GAUGE_MAX: Partial<Record<AlertMetricType, number>> = {
+        cpu_usage:    100,
+        memory_usage: 100,
+        disk_usage:   100,
+        temperature:  120,
+    };
+
+    const DURATION_MAX = 60;
 
     async function handleSave() {
         fieldErrors = {};
@@ -535,58 +545,77 @@
         Global thresholds for email alerts. Alerts fire when a condition persists for the configured duration.
     </p>
 
-    <div class="divide-y divide-border">
+    <div>
         {#each alertRules as rule (rule.metric_type)}
-            <div class="py-4 first:pt-0 last:pb-0">
-                <div class="flex items-start gap-4">
-                    <!-- Toggle -->
-                    <Toggle bind:checked={rule.enabled} class="mt-0.5" />
+            <div class="py-4 border-b border-border/50 last:border-0">
+                <!-- Title + toggle -->
+                <div class="flex items-center justify-between gap-4">
+                    <span class="text-sm font-medium text-foreground">{ALERT_METRIC_LABELS[rule.metric_type]}</span>
+                    <Toggle bind:checked={rule.enabled} />
+                </div>
 
-                    <!-- Label + inputs -->
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-foreground mb-3">
-                            {ALERT_METRIC_LABELS[rule.metric_type]}
-                        </p>
+                <!-- Description -->
+                <p class="text-xs text-muted-foreground mt-1">{DESCRIPTIONS[rule.metric_type]}</p>
 
-                        <div class="flex flex-wrap gap-4 {rule.enabled ? '' : 'opacity-40 pointer-events-none'}">
-                            <!-- Threshold (hidden for server_down) -->
-                            {#if rule.metric_type !== 'server_down'}
-                                <div>
-                                    <label class="block text-xs text-muted-foreground mb-1">Threshold</label>
-                                    <div class="flex items-center gap-1.5">
+                <!-- Controls -->
+                {#if rule.enabled}
+                    <div class="mt-4 rounded-xl bg-muted/40 px-4 py-3 space-y-4">
+                        {#if rule.metric_type !== 'server_down'}
+                            <!-- Threshold -->
+                            <div>
+                                <p class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Threshold</p>
+                                <div class="flex items-center gap-3">
+                                    {#if GAUGE_MAX[rule.metric_type]}
+                                        <Slider
+                                            bind:value={rule.threshold}
+                                            min={0}
+                                            max={GAUGE_MAX[rule.metric_type]}
+                                            step={1}
+                                        />
+                                    {:else}
+                                        <div class="flex-1"></div>
+                                    {/if}
+                                    <div class="flex items-center gap-1 shrink-0">
                                         <input
                                             type="number"
                                             min="0"
-                                            step={rule.metric_type === 'load_avg' ? '0.1' : '1'}
+                                            step={rule.metric_type === 'load_avg' || rule.metric_type === 'load_avg_5' || rule.metric_type === 'load_avg_15' ? '0.1' : '1'}
                                             bind:value={rule.threshold}
-                                            placeholder={String(ALERT_DEFAULTS[rule.metric_type].threshold)}
-                                            class="w-20 rounded-lg border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            class="w-14 rounded-lg border bg-background px-2 py-1 text-xs text-foreground text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                         {#if thresholdUnit(rule.metric_type)}
-                                            <span class="text-xs text-muted-foreground">{thresholdUnit(rule.metric_type)}</span>
+                                            <span class="text-xs text-muted-foreground w-5">{thresholdUnit(rule.metric_type)}</span>
                                         {/if}
                                     </div>
                                 </div>
-                            {/if}
+                            </div>
+                        {/if}
 
-                            <!-- Duration -->
-                            <div>
-                                <label class="block text-xs text-muted-foreground mb-1">Duration</label>
-                                <div class="flex items-center gap-1.5">
+                        <!-- Duration -->
+                        <div>
+                            <p class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Duration</p>
+                            <div class="flex items-center gap-3">
+                                <Slider
+                                    bind:value={rule.duration_minutes}
+                                    min={1}
+                                    max={DURATION_MAX}
+                                    step={1}
+                                />
+                                <div class="flex items-center gap-1 shrink-0">
                                     <input
                                         type="number"
                                         min="1"
+                                        max={DURATION_MAX}
                                         step="1"
                                         bind:value={rule.duration_minutes}
-                                        placeholder={String(ALERT_DEFAULTS[rule.metric_type].duration)}
-                                        class="w-16 rounded-lg border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        class="w-14 rounded-lg border bg-background px-2 py-1 text-xs text-foreground text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
-                                    <span class="text-xs text-muted-foreground">min</span>
+                                    <span class="text-xs text-muted-foreground w-5">min</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                {/if}
             </div>
         {/each}
     </div>

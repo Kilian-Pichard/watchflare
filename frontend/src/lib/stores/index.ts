@@ -24,7 +24,6 @@ export {
 	onlineServers,
 	offlineServers,
 	serversLoading,
-	alertCount
 } from './servers';
 
 // Metrics store
@@ -40,7 +39,7 @@ export {
 } from './aggregated';
 
 // Alerts store
-export { alertsStore } from './alerts';
+export { alertsStore, alertCount } from './alerts';
 
 // Auth actions
 export { authActions } from './auth';

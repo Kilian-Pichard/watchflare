@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { onMount } from "svelte";
-    import { uiStore, sidebarCollapsed, sidebarTransitioning, userStore } from "$lib/stores";
+    import { onMount, onDestroy } from "svelte";
+    import { uiStore, sidebarCollapsed, sidebarTransitioning, userStore, alertsStore } from "$lib/stores";
     import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
     import MobileSidebar from "$lib/components/MobileSidebar.svelte";
     import Header from "$lib/components/Header.svelte";
@@ -10,6 +10,7 @@
 
     let rightSidebarOpen = $derived($uiStore.rightSidebarOpen);
     let userReady = $state(false);
+    let incidentPollInterval: ReturnType<typeof setInterval> | undefined;
 
     onMount(async () => {
         try {
@@ -18,6 +19,12 @@
         } catch {
             window.location.href = "/login";
         }
+        alertsStore.loadIncidents();
+        incidentPollInterval = setInterval(() => alertsStore.loadIncidents(), 30_000);
+    });
+
+    onDestroy(() => {
+        clearInterval(incidentPollInterval);
     });
 </script>
 

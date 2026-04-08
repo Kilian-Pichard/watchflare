@@ -206,6 +206,7 @@ func setupRouter() *gin.Engine {
 		settingsGroup.POST("/smtp/test", handlers.TestSMTPConnection)
 		settingsGroup.GET("/alerts", handlers.GetAlertRules)
 		settingsGroup.PUT("/alerts", handlers.UpdateAlertRules)
+		settingsGroup.GET("/alerts/active", handlers.GetActiveIncidents)
 	}
 
 	// Agent info routes (protected)

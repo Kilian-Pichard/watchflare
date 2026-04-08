@@ -21,6 +21,7 @@ import type {
   UpdateSMTPSettingsRequest,
   GetAlertRulesResponse,
   GetServerAlertRulesResponse,
+  GetActiveIncidentsResponse,
   AlertMetricType,
 } from "./types";
 
@@ -577,4 +578,8 @@ export async function deleteServerAlertRule(
   return apiRequest<{ message: string }>(`/servers/${serverId}/alerts/${metricType}`, {
     method: 'DELETE',
   });
+}
+
+export async function getActiveIncidents(): Promise<GetActiveIncidentsResponse> {
+  return apiRequest<GetActiveIncidentsResponse>('/settings/alerts/active');
 }
