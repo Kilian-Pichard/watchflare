@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, getContext } from "svelte";
     import { page } from "$app/stores";
     import * as api from "$lib/api.js";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -22,7 +22,7 @@
 
     const timeFormat = $derived(($userStore.user?.time_format ?? '24h') as '12h' | '24h');
 
-    let server: Server | null = $state(null);
+    const ctx = getContext<{ server: Server | null }>('serverDetail');
     let packages: Package[] = $state([]);
     let stats: PackageStats | null = $state(null);
     let collections: PackageCollection[] = $state([]);
@@ -58,13 +58,12 @@
         await loadData();
     });
 
-    // Full load: server info, stats, collections + packages
+    // Full load: stats, collections + packages
     async function loadData() {
         loading = true;
         try {
-            const [serverData, packagesData, statsData, collectionsData] =
+            const [packagesData, statsData, collectionsData] =
                 await Promise.all([
-                    api.getServer(serverId),
                     api.getServerPackages(serverId, {
                         limit,
                         offset,
@@ -79,7 +78,6 @@
                     }),
                 ]);
 
-            server = serverData.server;
             packages = packagesData.packages || [];
             totalCount = packagesData.total_count || 0;
             stats = statsData;
@@ -213,48 +211,8 @@
 </script>
 
 <svelte:head>
-    <title>Packages{server ? ` - ${server.name}` : ""} - Watchflare</title>
+    <title>Packages{ctx.server ? ` - ${ctx.server.name}` : ''} - Watchflare</title>
 </svelte:head>
-
-<!-- Back Link -->
-<div class="mb-6">
-    <a
-        href="/servers/{serverId}"
-        class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-    >
-        <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 19l-7-7 7-7"
-            />
-        </svg>
-        Back to Server
-    </a>
-</div>
-
-<!-- Header -->
-<div class="mb-6">
-    <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Package Inventory</p>
-    <h1 class="text-lg font-semibold text-foreground">{server?.name ?? '…'}</h1>
-    {#if server}
-        <p class="text-sm text-muted-foreground mt-1 flex items-center flex-wrap gap-x-3">
-            {#if server.hostname}
-                <span>{server.hostname}</span>
-            {/if}
-            {#if server.ip_address_v4 || server.configured_ip}
-                {#if server.hostname}<span class="text-border">|</span>{/if}
-                <span>{server.ip_address_v4 || server.configured_ip}</span>
-            {/if}
-        </p>
-    {/if}
-</div>
 
 <!-- Error -->
 {#if error}
