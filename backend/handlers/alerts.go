@@ -3,6 +3,7 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
@@ -171,6 +172,76 @@ func GetActiveIncidents(c *gin.Context) {
 		items = []ActiveIncidentItem{}
 	}
 	c.JSON(http.StatusOK, gin.H{"incidents": items})
+}
+
+// ServerIncidentItem is the response shape for GET /servers/:id/incidents.
+type ServerIncidentItem struct {
+	ID             string     `json:"id"`
+	MetricType     string     `json:"metric_type"`
+	StartedAt      time.Time  `json:"started_at"`
+	ResolvedAt     *time.Time `json:"resolved_at"`
+	ThresholdValue float64    `json:"threshold_value"`
+	CurrentValue   float64    `json:"current_value"`
+}
+
+// GetServerIncidents returns the incident history for a specific server (paginated).
+// Query params: status=all|active|resolved (default: all), limit (default: 20, max: 100), offset (default: 0).
+func GetServerIncidents(c *gin.Context) {
+	serverID := c.Param("id")
+
+	limitStr := c.DefaultQuery("limit", "20")
+	offsetStr := c.DefaultQuery("offset", "0")
+	statusFilter := c.DefaultQuery("status", "all")
+
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(offsetStr)
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := database.DB.Model(&models.AlertIncident{}).Where("server_id = ?", serverID)
+	switch statusFilter {
+	case "active":
+		query = query.Where("resolved_at IS NULL")
+	case "resolved":
+		query = query.Where("resolved_at IS NOT NULL")
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		slog.Error("failed to count server incidents", "server_id", serverID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get incidents"})
+		return
+	}
+
+	var incidents []models.AlertIncident
+	if err := query.Order("started_at DESC").Limit(limit).Offset(offset).Find(&incidents).Error; err != nil {
+		slog.Error("failed to get server incidents", "server_id", serverID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get incidents"})
+		return
+	}
+
+	items := make([]ServerIncidentItem, len(incidents))
+	for i, inc := range incidents {
+		items[i] = ServerIncidentItem{
+			ID:             inc.ID,
+			MetricType:     inc.MetricType,
+			StartedAt:      inc.StartedAt,
+			ResolvedAt:     inc.ResolvedAt,
+			ThresholdValue: inc.ThresholdValue,
+			CurrentValue:   inc.CurrentValue,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"incidents":   items,
+		"total_count": total,
+		"limit":       limit,
+		"offset":      offset,
+	})
 }
 
 func isValidMetricType(mt string) bool {

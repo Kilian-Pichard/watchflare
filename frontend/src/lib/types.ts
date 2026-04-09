@@ -466,6 +466,24 @@ export interface GetActiveIncidentsResponse {
   incidents: ActiveIncident[];
 }
 
+export interface ServerIncident {
+  id: string;
+  metric_type: AlertMetricType;
+  started_at: string;
+  resolved_at: string | null;
+  threshold_value: number;
+  current_value: number;
+}
+
+export type IncidentStatusFilter = 'all' | 'active' | 'resolved';
+
+export interface GetServerIncidentsResponse {
+  incidents: ServerIncident[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
 // ===== Toast Notifications =====
 
 export type ToastType = "info" | "success" | "warning" | "error";

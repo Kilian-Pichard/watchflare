@@ -22,6 +22,8 @@ import type {
   GetAlertRulesResponse,
   GetServerAlertRulesResponse,
   GetActiveIncidentsResponse,
+  GetServerIncidentsResponse,
+  IncidentStatusFilter,
   AlertMetricType,
 } from "./types";
 
@@ -582,4 +584,12 @@ export async function deleteServerAlertRule(
 
 export async function getActiveIncidents(): Promise<GetActiveIncidentsResponse> {
   return apiRequest<GetActiveIncidentsResponse>('/settings/alerts/active');
+}
+
+export async function getServerIncidents(
+  serverId: string,
+  params: { status?: IncidentStatusFilter; limit?: number; offset?: number } = {},
+): Promise<GetServerIncidentsResponse> {
+  const qs = buildQueryString(params);
+  return apiRequest<GetServerIncidentsResponse>(`/servers/${serverId}/incidents${qs}`);
 }

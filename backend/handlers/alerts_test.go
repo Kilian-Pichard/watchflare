@@ -29,6 +29,7 @@ func setupAlertsRouter() *gin.Engine {
 		protected.GET("/servers/:id/alerts", GetServerAlertRules)
 		protected.PUT("/servers/:id/alerts/:metric_type", UpsertServerAlertRule)
 		protected.DELETE("/servers/:id/alerts/:metric_type", DeleteServerAlertRule)
+		protected.GET("/servers/:id/incidents", GetServerIncidents)
 	}
 	return r
 }
@@ -350,6 +351,125 @@ func TestGetActiveIncidents_Empty(t *testing.T) {
 	incidents, ok := resp["incidents"].([]interface{})
 	require.True(t, ok)
 	assert.Empty(t, incidents)
+}
+
+func TestGetServerIncidents(t *testing.T) {
+	setupTestDB(t)
+	defer teardownAlertData()
+
+	r := setupAlertsRouter()
+	cookie := registerAndGetCookie(t, "sinc@test.com")
+
+	server := models.Server{ID: "server-sinc", Name: "sinc-server", Status: "offline"}
+	require.NoError(t, database.DB.Create(&server).Error)
+
+	// Active incident
+	active := models.AlertIncident{
+		ServerID:   server.ID,
+		MetricType: models.MetricTypeServerDown,
+		StartedAt:  time.Now().Add(-5 * time.Minute),
+	}
+	require.NoError(t, database.DB.Create(&active).Error)
+
+	// Resolved incident
+	resolved := models.AlertIncident{
+		ServerID:   server.ID,
+		MetricType: models.MetricTypeCPUUsage,
+		StartedAt:  time.Now().Add(-30 * time.Minute),
+	}
+	require.NoError(t, database.DB.Create(&resolved).Error)
+	resolvedAt := time.Now().Add(-20 * time.Minute)
+	require.NoError(t, database.DB.Model(&resolved).Update("resolved_at", resolvedAt).Error)
+
+	req, _ := http.NewRequest("GET", "/servers/server-sinc/incidents", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	incidents, ok := resp["incidents"].([]interface{})
+	require.True(t, ok)
+	assert.Equal(t, float64(2), resp["total_count"])
+	assert.Len(t, incidents, 2)
+}
+
+func TestGetServerIncidents_StatusFilter(t *testing.T) {
+	setupTestDB(t)
+	defer teardownAlertData()
+
+	r := setupAlertsRouter()
+	cookie := registerAndGetCookie(t, "sinc2@test.com")
+
+	server := models.Server{ID: "server-sinc2", Name: "sinc2-server", Status: "offline"}
+	require.NoError(t, database.DB.Create(&server).Error)
+
+	active := models.AlertIncident{
+		ServerID:   server.ID,
+		MetricType: models.MetricTypeServerDown,
+		StartedAt:  time.Now().Add(-5 * time.Minute),
+	}
+	require.NoError(t, database.DB.Create(&active).Error)
+
+	resolved := models.AlertIncident{
+		ServerID:   server.ID,
+		MetricType: models.MetricTypeCPUUsage,
+		StartedAt:  time.Now().Add(-30 * time.Minute),
+	}
+	require.NoError(t, database.DB.Create(&resolved).Error)
+	require.NoError(t, database.DB.Model(&resolved).Update("resolved_at", time.Now()).Error)
+
+	// Filter: active only
+	req, _ := http.NewRequest("GET", "/servers/server-sinc2/incidents?status=active", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, float64(1), resp["total_count"])
+
+	// Filter: resolved only
+	req, _ = http.NewRequest("GET", "/servers/server-sinc2/incidents?status=resolved", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, float64(1), resp["total_count"])
+}
+
+func TestGetServerIncidents_Empty(t *testing.T) {
+	setupTestDB(t)
+	defer teardownAlertData()
+
+	r := setupAlertsRouter()
+	cookie := registerAndGetCookie(t, "sinc3@test.com")
+
+	req, _ := http.NewRequest("GET", "/servers/no-such-server/incidents", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	incidents, ok := resp["incidents"].([]interface{})
+	require.True(t, ok)
+	assert.Empty(t, incidents)
+	assert.Equal(t, float64(0), resp["total_count"])
+}
+
+func TestGetServerIncidents_Unauthenticated(t *testing.T) {
+	setupTestDB(t)
+	defer teardownAlertData()
+
+	r := setupAlertsRouter()
+	req, _ := http.NewRequest("GET", "/servers/server-abc/incidents", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestGetActiveIncidents_Unauthenticated(t *testing.T) {

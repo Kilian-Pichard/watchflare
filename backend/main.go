@@ -245,6 +245,7 @@ func setupRouter() *gin.Engine {
 		serverGroup.GET("/:id/packages/history", handlers.GetServerPackageHistory)
 		serverGroup.GET("/:id/packages/collections", handlers.GetServerPackageCollections)
 		serverGroup.GET("/:id/packages/stats", handlers.GetPackageStats)
+		serverGroup.GET("/:id/incidents", handlers.GetServerIncidents)
 		serverGroup.GET("/:id/alerts", handlers.GetServerAlertRules)
 		serverGroup.PUT("/:id/alerts/:metric_type", handlers.UpsertServerAlertRule)
 		serverGroup.DELETE("/:id/alerts/:metric_type", handlers.DeleteServerAlertRule)

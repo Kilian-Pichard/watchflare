@@ -12,6 +12,7 @@
     import ServerAlerts from "$lib/components/server/ServerAlerts.svelte";
     import ServerMetricsCharts from "$lib/components/server/ServerMetricsCharts.svelte";
     import ServerAlertRulesDrawer from "$lib/components/server/ServerAlertRulesDrawer.svelte";
+    import ServerIncidentsSection from "$lib/components/server/ServerIncidentsSection.svelte";
     import InstallInstructions from "$lib/components/InstallInstructions.svelte";
 
     const TIME_RANGE_SECONDS: Record<string, number> = {
@@ -361,6 +362,8 @@
         bind:timeRange
         onTimeRangeChange={handleTimeRangeChange}
     />
+
+    <ServerIncidentsSection {serverId} />
 
     <ServerAlertRulesDrawer
         serverId={serverId}
