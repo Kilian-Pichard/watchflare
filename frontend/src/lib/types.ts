@@ -68,7 +68,7 @@ export interface Server {
   configured_ip: string;
   ignore_ip_mismatch: boolean;
   status: ServerStatus;
-  last_seen: string;
+  last_seen: string | null;
   created_at: string;
   environment_type: EnvironmentType;
   container_runtime: string | null;

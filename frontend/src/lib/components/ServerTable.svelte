@@ -7,6 +7,7 @@
         Pause,
         Play,
         Trash2,
+        BellRing,
     } from "lucide-svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
     import ServerFilters from "$lib/components/server/ServerFilters.svelte";
@@ -15,6 +16,7 @@
     const {
         servers,
         latestMetrics,
+        activeIncidentServerIds = new Map(),
         onRename,
         onPause,
         onResume,
@@ -22,6 +24,7 @@
     }: {
         servers: ServerWithMetrics[];
         latestMetrics: Record<string, Metric>;
+        activeIncidentServerIds?: Map<string, number>;
         onRename: (server: Server) => void;
         onPause: (serverId: string) => void;
         onResume: (serverId: string) => void;
@@ -229,6 +232,13 @@
                         <span class="font-medium text-foreground break-all"
                             >{server.name}</span
                         >
+                        {#if activeIncidentServerIds.has(server.id)}
+                            {@const count = activeIncidentServerIds.get(server.id) ?? 0}
+                            <span class="flex items-center gap-1 text-warning">
+                                <BellRing class="shrink-0 h-3.5 w-3.5" />
+                                <span class="text-xs font-medium">{count}</span>
+                            </span>
+                        {/if}
                     </div>
                     <div class="flex items-center gap-1 shrink-0 ml-3">
                         <span
@@ -363,7 +373,7 @@
                 <tr class="border-b bg-muted/30">
                     <th
                         scope="col"
-                        class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("name")}
                     >
                         <span
@@ -375,7 +385,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("status")}
                     >
                         <span
@@ -387,7 +397,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("cpu")}
                     >
                         <span
@@ -399,7 +409,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("memory")}
                     >
                         <span
@@ -411,7 +421,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("disk")}
                     >
                         <span
@@ -423,7 +433,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("load")}
                     >
                         <span
@@ -435,7 +445,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("net")}
                     >
                         <span
@@ -447,7 +457,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("temp")}
                     >
                         <span
@@ -459,7 +469,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
                     >
                     </th>
                 </tr>
@@ -474,11 +484,20 @@
                         <!-- Server Name -->
                         <td class="px-4 py-3.5">
                             <div class="group flex flex-col">
-                                <span
-                                    class="font-medium text-foreground group-hover:text-primary transition-colors whitespace-nowrap"
-                                >
-                                    {server.name}
-                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="font-medium text-foreground group-hover:text-primary transition-colors whitespace-nowrap"
+                                    >
+                                        {server.name}
+                                    </span>
+                                    {#if activeIncidentServerIds.has(server.id)}
+                                        {@const count = activeIncidentServerIds.get(server.id) ?? 0}
+                                        <span class="flex items-center gap-1 text-warning">
+                                            <BellRing class="shrink-0 h-3.5 w-3.5" />
+                                            <span class="text-xs font-medium">{count}</span>
+                                        </span>
+                                    {/if}
+                                </div>
                                 {#if server.hostname}
                                     <span
                                         class="text-xs text-muted-foreground whitespace-nowrap"

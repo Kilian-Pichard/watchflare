@@ -48,6 +48,12 @@
     let serversList = $derived($servers);
     let stats = $derived($dashboardStats);
     let droppedAlerts = $derived($alertsStore.droppedMetrics);
+    let activeIncidentServerIds = $derived(
+        $alertsStore.activeIncidents.reduce((map, i) => {
+            map.set(i.server_id, (map.get(i.server_id) ?? 0) + 1);
+            return map;
+        }, new Map<string, number>())
+    );
     let metricsCollapsed = $derived($uiStore.metricsCollapsed);
     let selectedTimeRange = $derived($currentTimeRange);
 
@@ -293,6 +299,7 @@
         <ServerTable
             servers={serversList.filter((s) => s.server.status !== "pending")}
             latestMetrics={$latestMetrics}
+            {activeIncidentServerIds}
             onRename={handleRename}
             onPause={handlePause}
             onResume={handleResume}

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"watchflare/backend/cache"
@@ -180,6 +181,11 @@ func UpdateConfiguredIP(c *gin.Context) {
 	var req UpdateConfiguredIPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if net.ParseIP(req.NewIP) == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid IP address format"})
 		return
 	}
 

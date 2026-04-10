@@ -50,28 +50,28 @@
 <table class="w-full min-w-[640px]">
 	<thead>
 		<tr class="border-b bg-muted/30">
-			<th scope="col" class="w-2/5 px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('name')}>
+			<th scope="col" class="w-2/5 px-4 py-2 text-left text-sm font-semibold text-muted-foreground" onclick={() => onSort('name')}>
 				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					Name
 					{@render sortIcon('name')}
 				</span>
 			</th>
-			<th scope="col" class="w-1/5 px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('status')}>
+			<th scope="col" class="w-1/5 px-4 py-2 text-left text-sm font-semibold text-muted-foreground" onclick={() => onSort('status')}>
 				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					Status
 					{@render sortIcon('status')}
 				</span>
 			</th>
-			<th scope="col" class="w-1/4 px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider" onclick={() => onSort('ip')}>
+			<th scope="col" class="w-1/4 px-4 py-2 text-left text-sm font-semibold text-muted-foreground" onclick={() => onSort('ip')}>
 				<span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">
 					IP Address
 					{@render sortIcon('ip')}
 				</span>
 			</th>
-			<th scope="col" class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider table-cell">
+			<th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground table-cell">
 				Agent
 			</th>
-			<th scope="col" class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+			<th scope="col" class="px-4 py-2 text-right text-sm font-semibold text-muted-foreground">
 				Actions
 			</th>
 		</tr>

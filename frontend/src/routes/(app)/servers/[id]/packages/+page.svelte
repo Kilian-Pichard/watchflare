@@ -18,23 +18,34 @@
         formatDateTime,
     } from "$lib/utils";
     import { userStore } from "$lib/stores/user";
-    import { Filter, ChevronDown } from "lucide-svelte";
+    import { Filter, ChevronDown, ChevronRight } from "lucide-svelte";
 
     const timeFormat = $derived(($userStore.user?.time_format ?? '24h') as '12h' | '24h');
 
-    const ctx = getContext<{ server: Server | null }>('serverDetail');
-    let packages: Package[] = $state([]);
-    let stats: PackageStats | null = $state(null);
-    let collections: PackageCollection[] = $state([]);
+    type PackagesCache = {
+        packages: Package[]; stats: PackageStats | null; collections: PackageCollection[];
+        totalCount: number; offset: number; searchTerm: string;
+        allManagerKeys: string[]; selectedManagers: string[];
+    };
+    const ctx = getContext<{
+        server: Server | null;
+        packagesCache: PackagesCache | null;
+        setPackagesCache: (data: PackagesCache) => void;
+    }>('serverDetail');
+
+    const cached = ctx.packagesCache;
+    let packages: Package[] = $state(cached?.packages ?? []);
+    let stats: PackageStats | null = $state(cached?.stats ?? null);
+    let collections: PackageCollection[] = $state(cached?.collections ?? []);
     let history: PackageHistory[] = $state([]);
-    let loading = $state(true);
+    let loading = $state(!cached);
     let error = $state("");
-    let searchTerm = $state("");
-    let selectedManagers: Set<string> = $state(new Set());
-    let allManagerKeys: string[] = $state([]);
-    let totalCount = $state(0);
+    let searchTerm = $state(cached?.searchTerm ?? "");
+    let selectedManagers: Set<string> = $state(new Set(cached?.selectedManagers ?? []));
+    let allManagerKeys: string[] = $state(cached?.allManagerKeys ?? []);
+    let totalCount = $state(cached?.totalCount ?? 0);
     let limit = PACKAGES_PER_PAGE;
-    let offset = $state(0);
+    let offset = $state(cached?.offset ?? 0);
     let showCollections = $state(false);
     let showHistory = $state(false);
 
@@ -55,12 +66,20 @@
     let totalPages = $derived(Math.ceil(totalCount / limit));
 
     onMount(async () => {
-        await loadData();
+        await loadData(!!cached);
     });
 
+    function saveToCache() {
+        ctx.setPackagesCache({
+            packages, stats, collections, totalCount, offset, searchTerm,
+            allManagerKeys, selectedManagers: [...selectedManagers],
+        });
+    }
+
     // Full load: stats, collections + packages
-    async function loadData() {
-        loading = true;
+    // silent=true → no loading spinner, data updates quietly (used on tab return)
+    async function loadData(silent = false) {
+        if (!silent) loading = true;
         try {
             const [packagesData, statsData, collectionsData] =
                 await Promise.all([
@@ -83,7 +102,6 @@
             stats = statsData;
             collections = collectionsData.collections || [];
 
-            // On first load, initialise selectedManagers with all available managers
             if (
                 allManagerKeys.length === 0 &&
                 statsData.by_package_manager?.length > 0
@@ -94,10 +112,10 @@
                 selectedManagers = new Set(allManagerKeys);
             }
         } catch (err: unknown) {
-            error =
-                err instanceof Error ? err.message : "Failed to load packages";
+            if (!silent) error = err instanceof Error ? err.message : "Failed to load packages";
         } finally {
-            loading = false;
+            if (!silent) loading = false;
+            saveToCache();
         }
     }
 
@@ -122,6 +140,7 @@
                 err instanceof Error ? err.message : "Failed to load packages";
         } finally {
             tableLoading = false;
+            saveToCache();
         }
     }
 
@@ -140,17 +159,11 @@
     let searchDebounce: ReturnType<typeof setTimeout>;
 
     function handleSearchInput() {
+        offset = 0;
         clearTimeout(searchDebounce);
         searchDebounce = setTimeout(() => {
-            offset = 0;
             loadPackages();
         }, 300);
-    }
-
-    async function handleSearch() {
-        clearTimeout(searchDebounce);
-        offset = 0;
-        await loadPackages();
     }
 
     function toggleManager(manager: string) {
@@ -224,67 +237,72 @@
 {/if}
 
 <!-- Stats -->
-{#if stats}
+{#if loading}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        {#each Array(4) as _}
+            <div class="rounded-xl border bg-card px-4 py-3.5 animate-pulse">
+                <div class="h-3 w-20 rounded bg-muted mb-3"></div>
+                <div class="h-7 w-12 rounded bg-muted"></div>
+            </div>
+        {/each}
+    </div>
+{:else if stats}
     {@const managerCards = (stats.by_package_manager || []).slice(0, 2)}
-    <div class="flex flex-wrap gap-3 mb-6">
-        <div class="rounded-lg border bg-card p-3 w-40">
-            <p class="text-xs text-muted-foreground mb-1">Total Packages</p>
-            <p class="text-lg font-semibold text-foreground">{stats.total_packages || 0}</p>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div class="rounded-xl border bg-card px-4 py-3.5">
+            <p class="text-xs text-muted-foreground mb-1.5">Total packages</p>
+            <p class="text-2xl font-semibold tabular-nums text-foreground">{stats.total_packages || 0}</p>
         </div>
-        <div class="rounded-lg border bg-card p-3 w-40">
-            <p class="text-xs text-muted-foreground mb-1">Recent Changes (30d)</p>
-            <p class="text-lg font-semibold text-foreground">{stats.recent_changes || 0}</p>
+        <div class="rounded-xl border bg-card px-4 py-3.5">
+            <p class="text-xs text-muted-foreground mb-1.5">Changes (30d)</p>
+            <p class="text-2xl font-semibold tabular-nums text-foreground">{stats.recent_changes || 0}</p>
         </div>
         {#each managerCards as pm}
-            <div class="rounded-lg border bg-card p-3 w-40">
-                <p class="text-xs text-muted-foreground mb-1">{getManagerLabel(pm.package_manager)}</p>
-                <p class="text-lg font-semibold text-foreground">{pm.count}</p>
+            <div class="rounded-xl border bg-card px-4 py-3.5">
+                <p class="text-xs text-muted-foreground mb-1.5 truncate">{getManagerLabel(pm.package_manager)}</p>
+                <p class="text-2xl font-semibold tabular-nums text-foreground">{pm.count}</p>
             </div>
         {/each}
     </div>
 {/if}
 
 <!-- Search & Filters -->
-<div class="mb-6 rounded-lg border bg-card p-3">
-    <div class="flex flex-col sm:flex-row gap-3">
-        <div class="flex-1">
-            <input
-                type="text"
-                bind:value={searchTerm}
-                oninput={handleSearchInput}
-                onkeydown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Search packages..."
-                class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            />
-        </div>
-        <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-                {#snippet child({ props })}
-                    <button
-                        {...props}
-                        class="w-fit inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap
-							{isFiltered
-                            ? 'border-primary bg-primary/5 text-primary hover:bg-primary/10'
-                            : 'bg-background text-foreground hover:bg-muted'}"
-                    >
-                        <Filter class="h-4 w-4" />
-                        {filterLabel}
-                        {#if isFiltered}
-                            <span
-                                class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground"
-                            >
-                                {selectedManagers.size}
-                            </span>
-                        {/if}
-                        <ChevronDown class="h-3.5 w-3.5 opacity-50" />
-                    </button>
-                {/snippet}
-            </DropdownMenu.Trigger>
+<div class="mb-4 flex items-center gap-2">
+    <input
+        type="text"
+        bind:value={searchTerm}
+        oninput={handleSearchInput}
+        onkeydown={(e) => { if (e.key === 'Enter') { clearTimeout(searchDebounce); offset = 0; loadPackages(); } }}
+        placeholder="Search packages..."
+        class="flex-1 rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+    />
+    <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+                <button
+                    {...props}
+                    class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap
+                        {isFiltered
+                        ? 'border-primary/40 bg-primary/5 text-primary hover:bg-primary/10'
+                        : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                >
+                    <Filter class="h-3.5 w-3.5" />
+                    {filterLabel}
+                    {#if isFiltered}
+                        <span class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/15 px-1 text-xs font-medium text-primary">
+                            {selectedManagers.size}
+                        </span>
+                    {/if}
+                    <ChevronDown class="h-3 w-3 opacity-40" />
+                </button>
+            {/snippet}
+        </DropdownMenu.Trigger>
             <DropdownMenu.Content align="end">
                 {#each [...(stats?.by_package_manager || [])].sort((a, b) => b.count - a.count) as pm}
                     <DropdownMenu.Item
                         closeOnSelect={false}
                         onclick={() => toggleManager(pm.package_manager)}
+                        disabled={selectedManagers.size === 1 && selectedManagers.has(pm.package_manager)}
                     >
                         <div
                             class="flex h-4 w-4 shrink-0 items-center justify-center rounded border
@@ -327,132 +345,60 @@
                     </DropdownMenu.Item>
                 {/if}
             </DropdownMenu.Content>
-        </DropdownMenu.Root>
-        <button
-            onclick={handleSearch}
-            class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-            Search
-        </button>
-    </div>
+    </DropdownMenu.Root>
 </div>
 
 <!-- Packages Table -->
-<div class="rounded-lg border bg-card overflow-hidden mb-6">
+<div class="rounded-xl border bg-card overflow-hidden mb-6">
     {#if loading}
         <div class="flex items-center justify-center py-20">
             <p class="text-muted-foreground">Loading packages...</p>
         </div>
-    {:else if packages.length === 0 && !tableLoading}
-        <div
-            class="flex flex-col items-center justify-center py-20 text-center"
-        >
-            <svg
-                class="h-12 w-12 text-muted-foreground/50 mb-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-            >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                />
-            </svg>
-            <p class="text-sm text-muted-foreground">No packages found</p>
-        </div>
     {:else}
-        <div class="overflow-x-auto transition-opacity {tableLoading ? 'opacity-50' : ''}">
+        <div class="overflow-x-auto">
             <table class="w-full">
                 <thead>
                     <tr class="border-b bg-muted/30">
-                        <th
-                            scope="col"
-                            class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
-                            >Name</th
-                        >
-                        <th
-                            scope="col"
-                            class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
-                            >Version</th
-                        >
-                        <th
-                            scope="col"
-                            class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
-                            >Manager</th
-                        >
-                        <th
-                            scope="col"
-                            class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase hidden lg:table-cell"
-                            >Architecture</th
-                        >
-                        <th
-                            scope="col"
-                            class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase hidden xl:table-cell"
-                            >Description</th
-                        >
-                        <th
-                            scope="col"
-                            class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase hidden md:table-cell"
-                            >First Seen</th
-                        >
-                        <th
-                            scope="col"
-                            class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase"
-                            >Last Seen</th
-                        >
+                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Name</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Version</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Manager</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground hidden lg:table-cell">Architecture</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground hidden xl:table-cell">Description</th>
+                        <th scope="col" class="px-4 py-2.5 text-right text-sm font-semibold text-muted-foreground hidden md:table-cell">First Seen</th>
+                        <th scope="col" class="px-4 py-2.5 text-right text-sm font-semibold text-muted-foreground">Last Seen</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-border">
+                <tbody class="divide-y divide-border transition-opacity {tableLoading ? 'opacity-50 pointer-events-none' : ''}">
                     {#each packages as pkg}
                         <tr class="hover:bg-muted/20 transition-colors">
-                            <td
-                                class="px-4 py-3 text-sm font-medium text-foreground"
-                            >
-                                {pkg.name}
-                            </td>
-                            <td
-                                class="px-4 py-3 text-sm font-mono text-muted-foreground"
-                            >
-                                {pkg.version || "-"}
-                            </td>
+                            <td class="px-4 py-3 text-sm font-medium text-foreground">{pkg.name}</td>
+                            <td class="px-4 py-3 text-sm font-mono text-muted-foreground">{pkg.version || "-"}</td>
                             <td class="px-4 py-3">
-                                <span
-                                    class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {getManagerColor(
-                                        pkg.package_manager,
-                                    )}"
-                                >
+                                <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {getManagerColor(pkg.package_manager)}">
                                     {getManagerLabel(pkg.package_manager)}
                                 </span>
                             </td>
-                            <td
-                                class="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell"
-                            >
-                                {pkg.architecture || "-"}
-                            </td>
-                            <td
-                                class="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate hidden xl:table-cell"
-                            >
-                                {pkg.description || "-"}
-                            </td>
-                            <td
-                                class="px-4 py-3 text-right text-sm text-muted-foreground hidden md:table-cell"
-                            >
-                                {formatDateTime(pkg.first_seen, timeFormat)}
-                            </td>
-                            <td
-                                class="px-4 py-3 text-right text-sm text-muted-foreground"
-                            >
-                                {formatDateTime(pkg.last_seen, timeFormat)}
-                            </td>
+                            <td class="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">{pkg.architecture || "-"}</td>
+                            <td class="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate hidden xl:table-cell">{pkg.description || "-"}</td>
+                            <td class="px-4 py-3 text-right text-sm text-muted-foreground hidden md:table-cell">{formatDateTime(pkg.first_seen, timeFormat)}</td>
+                            <td class="px-4 py-3 text-right text-sm text-muted-foreground">{formatDateTime(pkg.last_seen, timeFormat)}</td>
                         </tr>
+                    {:else}
+                        {#if !tableLoading}
+                            <tr>
+                                <td colspan="7" class="py-16 text-center">
+                                    <svg class="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                    </svg>
+                                    <p class="text-sm text-muted-foreground">No packages found</p>
+                                </td>
+                            </tr>
+                        {/if}
                     {/each}
                 </tbody>
             </table>
         </div>
 
-        <!-- Pagination -->
         <Pagination
             {currentPage}
             {totalPages}
@@ -470,26 +416,12 @@
         onclick={toggleHistory}
         class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
     >
-        <svg
-            class="h-4 w-4 transition-transform {showHistory
-                ? 'rotate-90'
-                : ''}"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 5l7 7-7 7"
-            />
-        </svg>
+        <ChevronRight class="h-4 w-4 transition-transform {showHistory ? 'rotate-90' : ''}" />
         {showHistory ? "Hide" : "Show"} Recent Changes
     </button>
 
     {#if showHistory}
-        <div class="mt-4 rounded-lg border bg-card overflow-hidden">
+        <div class="mt-4 rounded-xl border bg-card overflow-hidden">
             {#if history.length === 0}
                 <div class="flex items-center justify-center py-10">
                     <p class="text-sm text-muted-foreground">
@@ -503,27 +435,27 @@
                             <tr class="border-b bg-muted/30">
                                 <th
                                     scope="col"
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
+                                    class="px-4 py-3 text-left text-sm font-semibold text-muted-foreground"
                                     >Date</th
                                 >
                                 <th
                                     scope="col"
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
+                                    class="px-4 py-3 text-left text-sm font-semibold text-muted-foreground"
                                     >Change</th
                                 >
                                 <th
                                     scope="col"
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
+                                    class="px-4 py-3 text-left text-sm font-semibold text-muted-foreground"
                                     >Package</th
                                 >
                                 <th
                                     scope="col"
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
+                                    class="px-4 py-3 text-left text-sm font-semibold text-muted-foreground"
                                     >Version</th
                                 >
                                 <th
                                     scope="col"
-                                    class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase hidden sm:table-cell"
+                                    class="px-4 py-3 text-left text-sm font-semibold text-muted-foreground hidden sm:table-cell"
                                     >Manager</th
                                 >
                             </tr>
@@ -582,52 +514,38 @@
         onclick={() => (showCollections = !showCollections)}
         class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
     >
-        <svg
-            class="h-4 w-4 transition-transform {showCollections
-                ? 'rotate-90'
-                : ''}"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 5l7 7-7 7"
-            />
-        </svg>
+        <ChevronRight class="h-4 w-4 transition-transform {showCollections ? 'rotate-90' : ''}" />
         {showCollections ? "Hide" : "Show"} Collection History
     </button>
 
     {#if showCollections && collections.length > 0}
-        <div class="mt-4 rounded-lg border bg-card overflow-hidden">
+        <div class="mt-4 rounded-xl border bg-card overflow-hidden">
             <table class="w-full">
                 <thead>
                     <tr class="border-b bg-muted/30">
                         <th
                             scope="col"
-                            class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
+                            class="px-4 py-3 text-left text-sm font-semibold text-muted-foreground"
                             >Date</th
                         >
                         <th
                             scope="col"
-                            class="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"
+                            class="px-4 py-3 text-left text-sm font-semibold text-muted-foreground"
                             >Type</th
                         >
                         <th
                             scope="col"
-                            class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase"
+                            class="px-4 py-3 text-right text-sm font-semibold text-muted-foreground"
                             >Packages</th
                         >
                         <th
                             scope="col"
-                            class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase hidden sm:table-cell"
+                            class="px-4 py-3 text-right text-sm font-semibold text-muted-foreground hidden sm:table-cell"
                             >Changes</th
                         >
                         <th
                             scope="col"
-                            class="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase hidden md:table-cell"
+                            class="px-4 py-3 text-right text-sm font-semibold text-muted-foreground hidden md:table-cell"
                             >Duration</th
                         >
                     </tr>

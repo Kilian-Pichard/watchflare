@@ -20,13 +20,11 @@
 		metrics,
 		containerMetrics = [],
 		timeRange = $bindable(),
-		onTimeRangeChange,
 	}: {
 		serverID: string;
 		metrics: Metric[];
 		containerMetrics?: ContainerMetric[];
 		timeRange: TimeRange;
-		onTimeRangeChange: (range: TimeRange) => void;
 	} = $props();
 
 	const latestMetric = $derived(metrics.length > 0 ? metrics[metrics.length - 1] : null);
@@ -75,9 +73,8 @@
 </script>
 
 <div class="mb-6">
-	<div class="mb-4 flex items-center justify-between">
-		<h2 class="text-lg font-semibold text-foreground">Metrics</h2>
-		<TimeRangeSelector bind:value={timeRange} onValueChange={onTimeRangeChange} />
+	<div class="mb-3 flex flex-col sm:flex-row sm:justify-end">
+		<TimeRangeSelector bind:value={timeRange} class="w-full sm:w-auto" />
 	</div>
 
 	<div class="grid gap-4 xl:grid-cols-2">
@@ -165,10 +162,6 @@
 
 {#if hasContainerData}
 	<div class="mb-6">
-		<div class="mb-4">
-			<h2 class="text-lg font-semibold text-foreground">Container Metrics</h2>
-		</div>
-
 		<div class="grid gap-4 xl:grid-cols-2">
 			<div class="rounded-lg border bg-card p-4">
 				<div class="mb-3">

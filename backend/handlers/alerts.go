@@ -53,6 +53,10 @@ func UpdateAlertRules(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "duration_minutes must be at least 1"})
 			return
 		}
+		if !isValidThreshold(item.MetricType, item.Threshold) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "threshold value out of valid range for metric type " + item.MetricType})
+			return
+		}
 	}
 
 	inputs := make([]services.AlertRuleInput, len(req.Rules))
@@ -109,6 +113,10 @@ func UpsertServerAlertRule(c *gin.Context) {
 	}
 	if req.DurationMinutes < 1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_minutes must be at least 1"})
+		return
+	}
+	if !isValidThreshold(metricType, req.Threshold) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "threshold value out of valid range for metric type " + metricType})
 		return
 	}
 
@@ -251,4 +259,20 @@ func isValidMetricType(mt string) bool {
 		}
 	}
 	return false
+}
+
+// isValidThreshold checks that a threshold value is within a sensible range for the given metric type.
+// server_down has no threshold (ignored). Percentages must be 0-100. Temperature 0-150. Load avg > 0.
+func isValidThreshold(metricType string, threshold float64) bool {
+	switch metricType {
+	case models.MetricTypeServerDown:
+		return true
+	case models.MetricTypeCPUUsage, models.MetricTypeMemoryUsage, models.MetricTypeDiskUsage:
+		return threshold >= 0 && threshold <= 100
+	case models.MetricTypeTemperature:
+		return threshold >= 0 && threshold <= 150
+	case models.MetricTypeLoadAvg, models.MetricTypeLoadAvg5, models.MetricTypeLoadAvg15:
+		return threshold >= 0
+	}
+	return true
 }

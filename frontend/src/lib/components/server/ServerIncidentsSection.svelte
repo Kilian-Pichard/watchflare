@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 	import * as api from '$lib/api';
 	import type { ServerIncident, IncidentStatusFilter } from '$lib/types';
 	import { ALERT_METRIC_LABELS } from '$lib/types';
@@ -12,22 +12,37 @@
 
 	const LIMIT = 20;
 
-	let incidents: ServerIncident[] = $state([]);
-	let totalCount = $state(0);
-	let offset = $state(0);
-	let loading = $state(true);
+	type IncidentsCache = { incidents: ServerIncident[]; totalCount: number; offset: number; statusFilter: IncidentStatusFilter };
+	const ctx = getContext<{
+		incidentsCache: IncidentsCache | null;
+		setIncidentsCache: (data: IncidentsCache) => void;
+	}>('serverDetail');
+
+	const cached = ctx?.incidentsCache;
+	let incidents: ServerIncident[] = $state(cached?.incidents ?? []);
+	let totalCount = $state(cached?.totalCount ?? 0);
+	let offset = $state(cached?.offset ?? 0);
+	let loading = $state(!cached);
+	let tableLoading = $state(false);
 	let loadingMore = $state(false);
-	let statusFilter: IncidentStatusFilter = $state('all');
+	let statusFilter: IncidentStatusFilter = $state(cached?.statusFilter ?? 'all');
 
 	onMount(() => {
-		loadIncidents(true);
+		loadIncidents(true, !!cached);
 	});
 
-	async function loadIncidents(reset = false) {
+	function saveToCache() {
+		ctx?.setIncidentsCache({ incidents, totalCount, offset, statusFilter });
+	}
+
+	async function loadIncidents(reset = false, silent = false) {
 		if (reset) {
 			offset = 0;
-			incidents = [];
-			loading = true;
+			if (loading) {
+				// initial load — keep full loading state
+			} else if (!silent) {
+				tableLoading = true;
+			}
 		} else {
 			loadingMore = true;
 		}
@@ -48,7 +63,9 @@
 			// silent — non-critical section
 		} finally {
 			loading = false;
+			tableLoading = false;
 			loadingMore = false;
+			saveToCache();
 		}
 	}
 
@@ -81,15 +98,13 @@
 	}
 </script>
 
-<div class="mb-8">
-	<div class="mb-4 flex items-center justify-between">
-		<h2 class="text-base font-semibold text-foreground">Incident History</h2>
-		<!-- Filter tabs -->
-		<div class="flex rounded-lg border bg-muted/40 p-0.5 text-xs font-medium">
+<div class="mb-6">
+	<div class="mb-4 flex items-center justify-end">
+		<div class="flex rounded-lg border bg-card p-0.5">
 			{#each (['all', 'active', 'resolved'] as IncidentStatusFilter[]) as filter}
 				<button
 					onclick={() => handleFilterChange(filter)}
-					class="rounded-md px-3 py-1 capitalize transition-colors {statusFilter === filter
+					class="rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors {statusFilter === filter
 						? 'bg-background text-foreground shadow-sm'
 						: 'text-muted-foreground hover:text-foreground'}"
 				>
@@ -99,55 +114,53 @@
 		</div>
 	</div>
 
-	{#if loading}
-		<div class="rounded-xl border bg-card p-6 text-center">
-			<p class="text-xs text-muted-foreground">Loading incidents...</p>
-		</div>
-	{:else if incidents.length === 0}
-		<div class="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
-			<p class="text-xs text-muted-foreground">No incidents found</p>
-		</div>
-	{:else}
-		<div class="rounded-xl border bg-card overflow-hidden">
-			<table class="w-full text-xs">
+	<div class="rounded-xl border bg-card overflow-hidden">
+		{#if loading}
+			<div class="flex items-center justify-center py-20">
+				<p class="text-sm text-muted-foreground">Loading incidents...</p>
+			</div>
+		{:else}
+			<table class="w-full">
 				<thead>
 					<tr class="border-b bg-muted/30">
-						<th class="px-4 py-2.5 text-left font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Status</th>
-						<th class="px-4 py-2.5 text-left font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Metric</th>
-						<th class="px-4 py-2.5 text-left font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Value / Threshold</th>
-						<th class="px-4 py-2.5 text-left font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Started</th>
-						<th class="px-4 py-2.5 text-left font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Duration</th>
-						<th class="px-4 py-2.5 text-left font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Resolved</th>
+						<th class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Status</th>
+						<th class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Metric</th>
+						<th class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Value / Threshold</th>
+						<th class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Started</th>
+						<th class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Duration</th>
+						<th class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Resolved</th>
 					</tr>
 				</thead>
-				<tbody class="divide-y">
+				<tbody class="divide-y transition-opacity {tableLoading ? 'opacity-50 pointer-events-none' : ''}">
 					{#each incidents as incident (incident.id)}
 						<tr class="hover:bg-muted/20 transition-colors">
 							<td class="px-4 py-2.5">
 								{#if incident.resolved_at}
-									<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-success/10 text-success border border-success/20">
-										Resolved
-									</span>
+									<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-success/10 text-success border border-success/20">Resolved</span>
 								{:else}
-									<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-destructive/10 text-destructive border border-destructive/20">
-										Active
-									</span>
+									<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive border border-destructive/20">Active</span>
 								{/if}
 							</td>
-							<td class="px-4 py-2.5 text-foreground font-medium">
+							<td class="px-4 py-2.5 text-sm font-medium text-foreground">
 								{ALERT_METRIC_LABELS[incident.metric_type] ?? incident.metric_type}
 							</td>
-							<td class="px-4 py-2.5 text-muted-foreground font-mono">
+							<td class="px-4 py-2.5 text-sm font-mono text-muted-foreground">
 								{formatIncidentValue(incident)}
 							</td>
-							<td class="px-4 py-2.5 text-muted-foreground" title={formatDateTime(incident.started_at, timeFormat)}>
+							<td class="px-4 py-2.5 text-sm text-muted-foreground" title={formatDateTime(incident.started_at, timeFormat)}>
 								{formatRelativeTime(incident.started_at)}
 							</td>
-							<td class="px-4 py-2.5 text-muted-foreground">
+							<td class="px-4 py-2.5 text-sm text-muted-foreground">
 								{incidentDuration(incident)}
 							</td>
-							<td class="px-4 py-2.5 text-muted-foreground">
+							<td class="px-4 py-2.5 text-sm text-muted-foreground">
 								{incident.resolved_at ? formatDateTime(incident.resolved_at, timeFormat) : '—'}
+							</td>
+						</tr>
+					{:else}
+						<tr>
+							<td colspan="6" class="py-16 text-center">
+								<p class="text-sm text-muted-foreground">No incidents found</p>
 							</td>
 						</tr>
 					{/each}
@@ -165,6 +178,6 @@
 					</button>
 				</div>
 			{/if}
-		</div>
-	{/if}
+		{/if}
+	</div>
 </div>

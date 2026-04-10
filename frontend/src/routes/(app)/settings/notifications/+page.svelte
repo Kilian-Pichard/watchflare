@@ -47,8 +47,9 @@
     let alertLoaded = $state(false);
     let alertSaving = $state(false);
     let alertSaveSuccess = $state(false);
-    let alertSaveTimer: ReturnType<typeof setTimeout> | undefined;
     let alertSaveError = $state("");
+    let alertDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let alertSuccessTimer: ReturnType<typeof setTimeout> | undefined;
 
     // Per-field validation errors (shown inline below each field)
     let fieldErrors = $state<Record<string, string>>({});
@@ -141,7 +142,8 @@
     onDestroy(() => {
         clearTimeout(saveSuccessTimer);
         clearTimeout(toastTimer);
-        clearTimeout(alertSaveTimer);
+        clearTimeout(alertDebounceTimer);
+        clearTimeout(alertSuccessTimer);
     });
 
     onMount(async () => {
@@ -184,10 +186,15 @@
         alertLoaded = true;
     });
 
-    async function handleSaveAlerts() {
+    function scheduleAlertSave() {
+        clearTimeout(alertDebounceTimer);
+        alertDebounceTimer = setTimeout(() => autoSaveAlerts(), 800);
+    }
+
+    async function autoSaveAlerts() {
         alertSaveError = "";
         alertSaveSuccess = false;
-        clearTimeout(alertSaveTimer);
+        clearTimeout(alertSuccessTimer);
 
         const invalidThreshold = alertRules.find(r => r.enabled && r.metric_type !== 'server_down' && (r.threshold === null || isNaN(r.threshold as unknown as number)));
         if (invalidThreshold) { alertSaveError = `Enter a threshold for ${ALERT_METRIC_LABELS[invalidThreshold.metric_type]}.`; return; }
@@ -198,12 +205,26 @@
         try {
             await updateAlertRules(alertRules);
             alertSaveSuccess = true;
-            alertSaveTimer = setTimeout(() => { alertSaveSuccess = false; }, 3000);
+            alertSuccessTimer = setTimeout(() => { alertSaveSuccess = false; }, 2000);
         } catch (err) {
             alertSaveError = err instanceof Error ? err.message : "Failed to save alert rules.";
         } finally {
             alertSaving = false;
         }
+    }
+
+    const RECOMMENDED_THRESHOLDS: Partial<Record<AlertMetricType, number>> = {
+        cpu_usage: 90,
+        memory_usage: 90,
+        disk_usage: 85,
+        load_avg: 2.0,
+        load_avg_5: 2.0,
+        load_avg_15: 2.0,
+        temperature: 80,
+    };
+
+    function thresholdPlaceholder(metricType: AlertMetricType): string {
+        return RECOMMENDED_THRESHOLDS[metricType] !== undefined ? String(RECOMMENDED_THRESHOLDS[metricType]) : '';
     }
 
     function thresholdUnit(metricType: AlertMetricType): string {
@@ -228,6 +249,15 @@
         memory_usage: 100,
         disk_usage:   100,
         temperature:  120,
+        load_avg:     16,
+        load_avg_5:   16,
+        load_avg_15:  16,
+    };
+
+    const GAUGE_STEP: Partial<Record<AlertMetricType, number>> = {
+        load_avg:    0.1,
+        load_avg_5:  0.1,
+        load_avg_15: 0.1,
     };
 
     const DURATION_MAX = 60;
@@ -540,7 +570,18 @@
 <div
     class="rounded-lg border bg-card p-4 sm:p-6 mb-6 transition-opacity duration-200 {alertLoaded ? 'opacity-100' : 'opacity-0'}"
 >
-    <h2 class="text-lg font-semibold text-foreground mb-1">Alert Rules</h2>
+    <div class="flex items-center gap-3 mb-1">
+        <h2 class="text-lg font-semibold text-foreground">Alert Rules</h2>
+        {#if alertSaving}
+            <span class="text-xs text-muted-foreground">Saving…</span>
+        {:else if alertSaveSuccess}
+            <span class="flex items-center gap-1 text-xs text-success">
+                <Check class="h-3 w-3" />Saved
+            </span>
+        {:else if alertSaveError}
+            <span class="text-xs text-destructive">{alertSaveError}</span>
+        {/if}
+    </div>
     <p class="text-sm text-muted-foreground mb-6">
         Global thresholds for email alerts. Alerts fire when a condition persists for the configured duration.
     </p>
@@ -551,7 +592,7 @@
                 <!-- Title + toggle -->
                 <div class="flex items-center justify-between gap-4">
                     <span class="text-sm font-medium text-foreground">{ALERT_METRIC_LABELS[rule.metric_type]}</span>
-                    <Toggle bind:checked={rule.enabled} />
+                    <Toggle bind:checked={rule.enabled} onchange={scheduleAlertSave} />
                 </div>
 
                 <!-- Description -->
@@ -565,22 +606,21 @@
                             <div>
                                 <p class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Threshold</p>
                                 <div class="flex items-center gap-3">
-                                    {#if GAUGE_MAX[rule.metric_type]}
-                                        <Slider
-                                            bind:value={rule.threshold}
-                                            min={0}
-                                            max={GAUGE_MAX[rule.metric_type]}
-                                            step={1}
-                                        />
-                                    {:else}
-                                        <div class="flex-1"></div>
-                                    {/if}
+                                    <Slider
+                                        bind:value={rule.threshold}
+                                        min={0}
+                                        max={GAUGE_MAX[rule.metric_type]}
+                                        step={GAUGE_STEP[rule.metric_type] ?? 1}
+                                        oninput={scheduleAlertSave}
+                                    />
                                     <div class="flex items-center gap-1 shrink-0">
                                         <input
                                             type="number"
                                             min="0"
-                                            step={rule.metric_type === 'load_avg' || rule.metric_type === 'load_avg_5' || rule.metric_type === 'load_avg_15' ? '0.1' : '1'}
+                                            step={GAUGE_STEP[rule.metric_type] ?? 1}
+                                            placeholder={thresholdPlaceholder(rule.metric_type)}
                                             bind:value={rule.threshold}
+                                            oninput={scheduleAlertSave}
                                             class="w-14 rounded-lg border bg-background px-2 py-1 text-xs text-foreground text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                         {#if thresholdUnit(rule.metric_type)}
@@ -600,6 +640,7 @@
                                     min={1}
                                     max={DURATION_MAX}
                                     step={1}
+                                    oninput={scheduleAlertSave}
                                 />
                                 <div class="flex items-center gap-1 shrink-0">
                                     <input
@@ -607,7 +648,9 @@
                                         min="1"
                                         max={DURATION_MAX}
                                         step="1"
+                                        placeholder="5"
                                         bind:value={rule.duration_minutes}
+                                        oninput={scheduleAlertSave}
                                         class="w-14 rounded-lg border bg-background px-2 py-1 text-xs text-foreground text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                     <span class="text-xs text-muted-foreground w-5">min</span>
@@ -618,26 +661,6 @@
                 {/if}
             </div>
         {/each}
-    </div>
-
-    {#if alertSaveError}
-        <p class="mt-4 text-sm text-destructive">{alertSaveError}</p>
-    {/if}
-
-    <div class="mt-6">
-        <button
-            type="button"
-            onclick={handleSaveAlerts}
-            disabled={alertSaving || alertSaveSuccess}
-            class="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-            {#if alertSaveSuccess}
-                <Check class="h-4 w-4" />
-                Saved
-            {:else}
-                {alertSaving ? "Saving..." : "Save alert rules"}
-            {/if}
-        </button>
     </div>
 </div>
 

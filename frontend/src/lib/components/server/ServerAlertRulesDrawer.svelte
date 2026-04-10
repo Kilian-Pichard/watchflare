@@ -1,7 +1,8 @@
 <script lang="ts">
-    import { Check, X } from "lucide-svelte";
-    import { getServerAlertRules, upsertServerAlertRule } from "$lib/api";
-    import type { AlertMetricType, EffectiveAlertRule } from "$lib/types";
+    import { onDestroy } from "svelte";
+    import { Check, X, RotateCcw } from "lucide-svelte";
+    import { getAlertRules, getServerAlertRules, upsertServerAlertRule, deleteServerAlertRule } from "$lib/api";
+    import type { AlertMetricType, AlertRule, EffectiveAlertRule } from "$lib/types";
     import { ALERT_METRIC_LABELS } from "$lib/types";
     import RightSidebar from "$lib/components/RightSidebar.svelte";
     import Toggle from "$lib/components/ui/Toggle.svelte";
@@ -11,10 +12,12 @@
         serverId,
         open,
         onClose,
+        onSave,
     }: {
         serverId: string;
         open: boolean;
         onClose: () => void;
+        onSave?: (hasActiveRules: boolean) => void;
     } = $props();
 
     type EditableRule = {
@@ -27,12 +30,28 @@
     };
 
     let rules = $state<EditableRule[]>([]);
+    let globalRules = $state<Record<string, AlertRule>>({});
     let loaded = $state(false);
     let loadError = $state(false);
     let saving = $state(false);
     let saveSuccess = $state(false);
     let saveError = $state("");
-    let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    let resettingRule = $state<string | null>(null);
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let successTimer: ReturnType<typeof setTimeout> | undefined;
+
+    onDestroy(() => {
+        clearTimeout(debounceTimer);
+        clearTimeout(successTimer);
+    });
+
+    function handleClose() {
+        clearTimeout(debounceTimer);
+        if (rules.some(r => r.dirty)) {
+            autoSave();
+        }
+        onClose();
+    }
 
     let hasLoaded = false;
     $effect(() => {
@@ -46,8 +65,16 @@
         loaded = false;
         loadError = false;
         try {
-            const res = await getServerAlertRules(serverId);
-            rules = res.rules.map((r: EffectiveAlertRule) => ({
+            const [serverRes, globalRes] = await Promise.all([
+                getServerAlertRules(serverId),
+                getAlertRules(),
+            ]);
+            const globalMap: Record<string, AlertRule> = {};
+            for (const r of globalRes.rules) {
+                globalMap[r.metric_type] = r;
+            }
+            globalRules = globalMap;
+            rules = serverRes.rules.map((r: EffectiveAlertRule) => ({
                 metric_type: r.metric_type,
                 enabled: r.enabled,
                 threshold: r.threshold,
@@ -61,18 +88,27 @@
         loaded = true;
     }
 
+    function isReallyDifferent(rule: EditableRule): boolean {
+        if (!rule.is_override) return false;
+        const g = globalRules[rule.metric_type];
+        if (!g) return false;
+        return rule.enabled !== g.enabled || rule.threshold !== g.threshold || rule.duration_minutes !== g.duration_minutes;
+    }
+
     function markDirty(metricType: AlertMetricType) {
         const rule = rules.find((r) => r.metric_type === metricType);
         if (rule) {
             rule.dirty = true;
             rule.is_override = true;
         }
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => autoSave(), 800);
     }
 
-    async function handleSave() {
+    async function autoSave() {
         saveError = "";
         saveSuccess = false;
-        clearTimeout(saveTimer);
+        clearTimeout(successTimer);
 
         const invalid = rules.find(
             (r) =>
@@ -108,11 +144,12 @@
                     }),
                 ),
             );
-            await loadRules();
+            for (const rule of rules) {
+                if (rule.dirty) rule.dirty = false;
+            }
+            onSave?.(rules.some(r => r.enabled));
             saveSuccess = true;
-            saveTimer = setTimeout(() => {
-                saveSuccess = false;
-            }, 3000);
+            successTimer = setTimeout(() => { saveSuccess = false; }, 2000);
         } catch (err) {
             saveError = err instanceof Error ? err.message : "Failed to save.";
         } finally {
@@ -137,9 +174,35 @@
         memory_usage: 100,
         disk_usage: 100,
         temperature: 120,
+        load_avg: 16,
+        load_avg_5: 16,
+        load_avg_15: 16,
+    };
+
+    const GAUGE_STEP: Partial<Record<AlertMetricType, number>> = {
+        load_avg: 0.1,
+        load_avg_5: 0.1,
+        load_avg_15: 0.1,
     };
 
     const DURATION_MAX = 60;
+
+    const RECOMMENDED_THRESHOLDS: Partial<Record<AlertMetricType, number>> = {
+        load_avg: 2.0,
+        load_avg_5: 2.0,
+        load_avg_15: 2.0,
+    };
+
+    function thresholdPlaceholder(metricType: AlertMetricType): string {
+        const global = globalRules[metricType];
+        const val = global?.threshold ?? RECOMMENDED_THRESHOLDS[metricType];
+        return val !== undefined ? String(val) : '';
+    }
+
+    function durationPlaceholder(metricType: AlertMetricType): string {
+        const val = globalRules[metricType]?.duration_minutes;
+        return val !== undefined ? String(val) : '5';
+    }
 
     function thresholdUnit(metricType: AlertMetricType): string {
         if (
@@ -152,13 +215,44 @@
         return "";
     }
 
-    const hasDirty = $derived(rules.some((r) => r.dirty));
+    async function handleReset(metricType: AlertMetricType) {
+        resettingRule = metricType;
+        try {
+            await deleteServerAlertRule(serverId, metricType);
+            const rule = rules.find(r => r.metric_type === metricType);
+            const g = globalRules[metricType];
+            if (rule && g) {
+                rule.enabled = g.enabled;
+                rule.threshold = g.threshold;
+                rule.duration_minutes = g.duration_minutes;
+                rule.is_override = false;
+                rule.dirty = false;
+            }
+            onSave?.(rules.some(r => r.enabled));
+        } catch {
+            // non-critical
+        } finally {
+            resettingRule = null;
+        }
+    }
+
 </script>
 
-<RightSidebar {open} {onClose} size="wide">
+<RightSidebar {open} onClose={handleClose} size="wide">
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 py-5 shrink-0">
-        <h2 class="text-sm font-semibold text-foreground">Alert Rules</h2>
+    <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
+        <div class="flex items-center gap-3">
+            <h2 class="text-base font-semibold text-foreground">Alert Rules</h2>
+            {#if saving}
+                <span class="text-xs text-muted-foreground">Saving…</span>
+            {:else if saveSuccess}
+                <span class="flex items-center gap-1 text-xs text-success">
+                    <Check class="h-3 w-3" />Saved
+                </span>
+            {:else if saveError}
+                <span class="text-xs text-destructive">{saveError}</span>
+            {/if}
+        </div>
         <button
             onclick={onClose}
             class="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors"
@@ -184,13 +278,30 @@
                     <div class="py-4 border-b border-border/50 last:border-0">
                         <!-- Title + toggle -->
                         <div class="flex items-center justify-between gap-4">
-                            <span class="text-sm font-medium text-foreground"
-                                >{ALERT_METRIC_LABELS[rule.metric_type]}</span
-                            >
-                            <Toggle
-                                bind:checked={rule.enabled}
-                                onchange={() => markDirty(rule.metric_type)}
-                            />
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="text-sm font-medium text-foreground"
+                                    >{ALERT_METRIC_LABELS[rule.metric_type]}</span
+                                >
+                                {#if isReallyDifferent(rule)}
+                                    <span class="shrink-0 text-[10px] font-medium text-primary bg-primary/10 rounded-full px-1.5 py-0.5">Custom</span>
+                                {/if}
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                {#if isReallyDifferent(rule)}
+                                    <button
+                                        onclick={() => handleReset(rule.metric_type)}
+                                        disabled={resettingRule === rule.metric_type}
+                                        title="Reset to global default"
+                                        class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                                    >
+                                        <RotateCcw class="h-3.5 w-3.5 {resettingRule === rule.metric_type ? 'animate-spin' : ''}" />
+                                    </button>
+                                {/if}
+                                <Toggle
+                                    bind:checked={rule.enabled}
+                                    onchange={() => markDirty(rule.metric_type)}
+                                />
+                            </div>
                         </div>
 
                         <!-- Description -->
@@ -212,45 +323,25 @@
                                             Threshold
                                         </p>
                                         <div class="flex items-center gap-3">
-                                            {#if GAUGE_MAX[rule.metric_type]}
-                                                <Slider
-                                                    bind:value={rule.threshold}
-                                                    min={0}
-                                                    max={GAUGE_MAX[rule.metric_type]}
-                                                    step={1}
-                                                    oninput={() => markDirty(rule.metric_type)}
-                                                />
-                                            {:else}
-                                                <div class="flex-1"></div>
-                                            {/if}
-                                            <div
-                                                class="flex items-center gap-1 shrink-0"
-                                            >
+                                            <Slider
+                                                bind:value={rule.threshold}
+                                                min={0}
+                                                max={GAUGE_MAX[rule.metric_type]}
+                                                step={GAUGE_STEP[rule.metric_type] ?? 1}
+                                                oninput={() => markDirty(rule.metric_type)}
+                                            />
+                                            <div class="flex items-center gap-1 shrink-0">
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    step={rule.metric_type ===
-                                                        "load_avg" ||
-                                                    rule.metric_type ===
-                                                        "load_avg_5" ||
-                                                    rule.metric_type ===
-                                                        "load_avg_15"
-                                                        ? "0.1"
-                                                        : "1"}
+                                                    step={GAUGE_STEP[rule.metric_type] ?? 1}
+                                                    placeholder={thresholdPlaceholder(rule.metric_type)}
                                                     bind:value={rule.threshold}
-                                                    oninput={() =>
-                                                        markDirty(
-                                                            rule.metric_type,
-                                                        )}
+                                                    oninput={() => markDirty(rule.metric_type)}
                                                     class="w-14 rounded-lg border bg-background px-2 py-1 text-xs text-foreground text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 />
                                                 {#if thresholdUnit(rule.metric_type)}
-                                                    <span
-                                                        class="text-xs text-muted-foreground w-5"
-                                                        >{thresholdUnit(
-                                                            rule.metric_type,
-                                                        )}</span
-                                                    >
+                                                    <span class="text-xs text-muted-foreground w-5">{thresholdUnit(rule.metric_type)}</span>
                                                 {/if}
                                             </div>
                                         </div>
@@ -280,11 +371,9 @@
                                                 min="1"
                                                 max={DURATION_MAX}
                                                 step="1"
-                                                bind:value={
-                                                    rule.duration_minutes
-                                                }
-                                                oninput={() =>
-                                                    markDirty(rule.metric_type)}
+                                                placeholder={durationPlaceholder(rule.metric_type)}
+                                                bind:value={rule.duration_minutes}
+                                                oninput={() => markDirty(rule.metric_type)}
                                                 class="w-14 rounded-lg border bg-background px-2 py-1 text-xs text-foreground text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
                                             <span
@@ -302,23 +391,4 @@
         {/if}
     </div>
 
-    <!-- Footer -->
-    <div class="px-6 py-4 shrink-0">
-        {#if saveError}
-            <p class="mb-3 text-xs text-destructive">{saveError}</p>
-        {/if}
-        <button
-            type="button"
-            onclick={handleSave}
-            disabled={saving || saveSuccess || !hasDirty}
-            class="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-            {#if saveSuccess}
-                <Check class="h-4 w-4" />
-                Saved
-            {:else}
-                {saving ? "Saving…" : "Save changes"}
-            {/if}
-        </button>
-    </div>
 </RightSidebar>

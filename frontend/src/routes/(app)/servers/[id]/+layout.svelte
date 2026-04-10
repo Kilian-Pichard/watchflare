@@ -5,7 +5,7 @@
     import * as api from '$lib/api.js';
     import { sseStore } from '$lib/stores/sse';
     import { handleSSEReactivation, logger } from '$lib/utils';
-    import type { Server, GetPackageStatsResponse, Metric, SSEEvent } from '$lib/types';
+    import type { Server, Metric, SSEEvent, Package, PackageStats, PackageCollection, ServerIncident, IncidentStatusFilter, TimeRange, ContainerMetric } from '$lib/types';
     import ServerDetailHeader from '$lib/components/server/ServerDetailHeader.svelte';
     import ServerAlerts from '$lib/components/server/ServerAlerts.svelte';
     import ServerAlertRulesDrawer from '$lib/components/server/ServerAlertRulesDrawer.svelte';
@@ -22,9 +22,14 @@
     let loading = $state(true);
     let error = $state('');
     let clockDesync = $state(false);
-    let packageStats: GetPackageStatsResponse | null = $state(null);
     let latestAgentVersion: string | null = $state(null);
     let latestMetric: Metric | null = $state(null);
+    let hasActiveAlertRules = $state(false);
+
+    // Tab data caches — persist between tab switches for the duration of the server detail session
+    let overviewCache: { metrics: Metric[]; containerMetrics: ContainerMetric[]; timeRange: TimeRange } | null = $state(null);
+    let packagesCache: { packages: Package[]; stats: PackageStats | null; collections: PackageCollection[]; totalCount: number; offset: number; searchTerm: string; allManagerKeys: string[]; selectedManagers: string[] } | null = $state(null);
+    let incidentsCache: { incidents: ServerIncident[]; totalCount: number; offset: number; statusFilter: IncidentStatusFilter } | null = $state(null);
 
     // Modals
     let showDeleteConfirm = $state(false);
@@ -41,6 +46,14 @@
     setContext('serverDetail', {
         get server() { return server; },
         get loading() { return loading; },
+        get latestMetric() { return latestMetric; },
+        setLatestMetric: (m: Metric | null) => { latestMetric = m; },
+        get overviewCache() { return overviewCache; },
+        setOverviewCache: (data: typeof overviewCache) => { overviewCache = data; },
+        get packagesCache() { return packagesCache; },
+        setPackagesCache: (data: typeof packagesCache) => { packagesCache = data; },
+        get incidentsCache() { return incidentsCache; },
+        setIncidentsCache: (data: typeof incidentsCache) => { incidentsCache = data; },
     });
 
     const showIPMismatchWarning = $derived(
@@ -103,15 +116,17 @@
             ]);
             server = response.server;
             clockDesync = response.clock_desync || false;
-            try {
-                packageStats = await api.getPackageStats(serverId);
-            } catch (err) {
-                logger.error('Failed to load package stats:', err);
-            }
         } catch (err) {
-            error = err.message || 'Failed to load server';
+            error = err instanceof Error ? err.message : 'Failed to load server';
         } finally {
             loading = false;
+        }
+        // Load alert rules for bell indicator (non-critical)
+        try {
+            const rulesData = await api.getServerAlertRules(serverId);
+            hasActiveAlertRules = rulesData.rules.some(r => r.enabled);
+        } catch {
+            // non-critical
         }
     }
 
@@ -120,7 +135,7 @@
             await api.deleteServer(serverId);
             goto('/servers');
         } catch (err) {
-            error = err.message || 'Failed to delete server';
+            error = err instanceof Error ? err.message : 'Failed to delete server';
             showDeleteConfirm = false;
         }
     }
@@ -133,7 +148,7 @@
             showRegenerateConfirm = false;
             await loadServer();
         } catch (err) {
-            error = err.message || 'Failed to regenerate token';
+            error = err instanceof Error ? err.message : 'Failed to regenerate token';
             showRegenerateConfirm = false;
         }
     }
@@ -145,7 +160,7 @@
             newServerName = '';
             await loadServer();
         } catch (err) {
-            error = err.message || 'Failed to rename server';
+            error = err instanceof Error ? err.message : 'Failed to rename server';
         }
     }
 
@@ -156,7 +171,7 @@
             newIP = '';
             await loadServer();
         } catch (err) {
-            error = err.message || 'Failed to update IP';
+            error = err instanceof Error ? err.message : 'Failed to update IP';
         }
     }
 
@@ -166,7 +181,7 @@
             await api.updateConfiguredIP(server.id, server.ip_address_v4);
             await loadServer();
         } catch (err) {
-            error = err.message || 'Failed to update IP';
+            error = err instanceof Error ? err.message : 'Failed to update IP';
         }
     }
 
@@ -176,7 +191,7 @@
             await api.ignoreIPMismatch(server.id);
             await loadServer();
         } catch (err) {
-            error = err.message || 'Failed to ignore IP mismatch';
+            error = err instanceof Error ? err.message : 'Failed to ignore IP mismatch';
         }
     }
 
@@ -186,32 +201,43 @@
             await api.dismissReactivation(server.id);
             await loadServer();
         } catch (err) {
-            error = err.message || 'Failed to dismiss reactivation';
+            error = err instanceof Error ? err.message : 'Failed to dismiss reactivation';
         }
     }
 
     async function handlePause() {
         if (!server) return;
+        const previousStatus = server.status;
         try {
             await api.pauseServer(server.id);
             server = { ...server, status: 'paused' };
         } catch (err) {
-            error = err.message || 'Failed to pause server';
+            server = { ...server, status: previousStatus };
+            error = err instanceof Error ? err.message : 'Failed to pause server';
         }
     }
 
     async function handleResume() {
         if (!server) return;
+        const previousStatus = server.status;
         try {
             await api.resumeServer(server.id);
             server = { ...server, status: 'online' };
         } catch (err) {
-            error = err.message || 'Failed to resume server';
+            server = { ...server, status: previousStatus };
+            error = err instanceof Error ? err.message : 'Failed to resume server';
         }
     }
 
-    function handleCopy(text: string) {
-        navigator.clipboard.writeText(text);
+    let copyError = $state(false);
+
+    async function handleCopy(text: string) {
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch {
+            copyError = true;
+            setTimeout(() => copyError = false, 2000);
+        }
     }
 
     function closeChangeIPModal() {
@@ -224,19 +250,6 @@
     <title>{server?.name || 'Server'} - Watchflare</title>
 </svelte:head>
 
-<!-- Back Link -->
-<div class="mb-6">
-    <a
-        href="/servers"
-        class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-    >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-        Back to Servers
-    </a>
-</div>
-
 {#if loading}
     <div class="flex items-center justify-center py-20">
         <p class="text-muted-foreground">Loading server details...</p>
@@ -248,9 +261,9 @@
 {:else if server}
     <ServerDetailHeader
         {server}
-        {packageStats}
         metric={latestMetric}
         {latestAgentVersion}
+        {hasActiveAlertRules}
         onDelete={() => (showDeleteConfirm = true)}
         onRegenerateToken={() => (showRegenerateConfirm = true)}
         onChangeIP={() => (showChangeIP = true)}
@@ -261,14 +274,33 @@
     />
 
     {#if regeneratedToken}
-        <div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 flex items-center justify-between gap-4 flex-wrap">
-            <p class="text-sm font-medium text-warning">This token is valid for 24 hours and will not be displayed again. Make sure to copy it or use it now.</p>
-            <button
-                onclick={() => { handleCopy(regeneratedToken); copiedToken = true; setTimeout(() => copiedToken = false, 2000); }}
-                class="shrink-0 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-            >
-                {copiedToken ? 'Copied!' : 'Copy Token'}
-            </button>
+        <div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 space-y-3">
+            <div class="flex items-center justify-between gap-4 flex-wrap">
+                <p class="text-sm font-medium text-warning">This token is valid for 24 hours and will not be displayed again. Make sure to copy it or use it now.</p>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button
+                        onclick={() => { handleCopy(regeneratedToken); copiedToken = true; setTimeout(() => copiedToken = false, 2000); }}
+                        disabled={copiedToken}
+                        class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60 {copyError ? 'text-destructive border-destructive/40' : 'text-foreground'}"
+                    >
+                        {copiedToken ? 'Copied!' : copyError ? 'Copy failed' : 'Copy Token'}
+                    </button>
+                    <button
+                        onclick={() => { regeneratedToken = ''; }}
+                        class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            </div>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <input
+                readonly
+                value={regeneratedToken}
+                onclick={(e) => (e.currentTarget as HTMLInputElement).select()}
+                class="w-full font-mono text-xs bg-background border rounded-lg px-3 py-2 text-foreground select-all cursor-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
         </div>
         <InstallInstructions {server} token={regeneratedToken} {backendHost} />
     {/if}
@@ -316,6 +348,7 @@
         serverId={serverId}
         open={showAlertRules}
         onClose={() => { showAlertRules = false; }}
+        onSave={(hasActive) => { hasActiveAlertRules = hasActive; }}
     />
 {/if}
 
@@ -396,7 +429,8 @@
         </button>
         <button
             onclick={handleChangeIP}
-            class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            disabled={!newIP.trim()}
+            class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
         >
             Update IP
         </button>

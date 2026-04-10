@@ -61,7 +61,7 @@
 <RightSidebar {open} {onClose}>
     <!-- Header -->
     <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
-        <h2 class="text-sm font-semibold text-foreground">Active Alerts</h2>
+        <h2 class="text-base font-semibold text-foreground">Active Alerts</h2>
         <div class="flex items-center gap-2">
             {#if incidents.length > 0}
                 <span class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-medium text-primary-foreground">

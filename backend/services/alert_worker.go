@@ -20,6 +20,10 @@ type AlertWorker struct {
 	interval time.Duration
 	ctx      context.Context
 	cancel   context.CancelFunc
+	// pending tracks when each server+metric first started breaching.
+	// An incident is only written to DB once the configured duration has elapsed.
+	// Key format: "serverID:metricType"
+	pending map[string]time.Time
 }
 
 func NewAlertWorker(interval time.Duration) *AlertWorker {
@@ -28,6 +32,7 @@ func NewAlertWorker(interval time.Duration) *AlertWorker {
 		interval: interval,
 		ctx:      ctx,
 		cancel:   cancel,
+		pending:  make(map[string]time.Time),
 	}
 }
 
@@ -176,8 +181,11 @@ func (w *AlertWorker) evaluateServer(
 			continue
 		}
 
+		pendingKey := server.ID + ":" + metricType
+
 		if !enabled {
-			// Rule disabled — resolve any open incident silently
+			// Rule disabled — clear pending state and resolve any open incident silently
+			delete(w.pending, pendingKey)
 			resolveIncident(server.ID, metricType, now)
 			continue
 		}
@@ -185,7 +193,7 @@ func (w *AlertWorker) evaluateServer(
 		// Evaluate threshold
 		breaching, currentValue := evaluateMetric(metricType, threshold, currentStatus, latestMetric)
 
-		// Find open incident
+		// Find open incident (may exist from a previous run after restart)
 		var incident models.AlertIncident
 		hasIncident := true
 		if err := database.DB.
@@ -200,68 +208,77 @@ func (w *AlertWorker) evaluateServer(
 		}
 
 		if breaching {
-			if !hasIncident {
-				// For server_down, backdate the incident start to last_seen so the
-				// duration counts from when the server actually went offline, not
-				// from when the worker first noticed it.
-				// Priority: HeartbeatCache (real-time) > server.LastSeen (DB, ~5min lag) > now
-				startedAt := now
-				if metricType == models.MetricTypeServerDown {
-					if hb, ok := hbCache.Get(server.AgentID); ok && hb.Status == models.StatusOffline {
-						startedAt = hb.LastSeen
-					} else if server.LastSeen != nil {
-						startedAt = *server.LastSeen
-					}
-				}
-
-				incident = models.AlertIncident{
-					ServerID:       server.ID,
-					MetricType:     metricType,
-					StartedAt:      startedAt,
-					ThresholdValue: threshold,
-					CurrentValue:   currentValue,
-				}
-				if err := database.DB.Create(&incident).Error; err != nil {
-					slog.Error("alert worker: failed to create incident", "server_id", server.ID, "metric_type", metricType, "error", err)
-					continue
-				}
-				// Fall through to immediately check duration (avoids waiting one
-				// extra tick when the condition has already been met).
-			} else {
-				// Update current value on existing incident
+			if hasIncident {
+				// Incident already exists (restart scenario) — update current value and
+				// send notification if duration elapsed and not yet notified.
 				if err := database.DB.Model(&incident).Update("current_value", currentValue).Error; err != nil {
 					slog.Error("alert worker: failed to update incident value", "server_id", server.ID, "metric_type", metricType, "error", err)
 				}
-			}
-
-			// Fire notification if duration exceeded and not yet notified
-			if !incident.Notified && now.Sub(incident.StartedAt) >= time.Duration(durationMinutes)*time.Minute {
-				if err := sendAlertEmail(server, metricType, threshold, currentValue, incident.StartedAt, recipient); err != nil {
-					slog.Error("alert worker: failed to send alert email",
-						"server_id", server.ID, "metric_type", metricType, "error", err)
-				} else {
-					if err := database.DB.Model(&incident).Update("notified", true).Error; err != nil {
-						slog.Error("alert worker: failed to mark incident notified",
-							"server_id", server.ID, "metric_type", metricType, "error", err)
+				if !incident.Notified && now.Sub(incident.StartedAt) >= time.Duration(durationMinutes)*time.Minute {
+					if err := sendAlertEmail(server, metricType, threshold, currentValue, incident.StartedAt, recipient); err != nil {
+						slog.Error("alert worker: failed to send alert email", "server_id", server.ID, "metric_type", metricType, "error", err)
 					} else {
-						slog.Info("alert fired",
-							"server", server.Name, "metric_type", metricType,
-							"current_value", currentValue, "threshold", threshold)
+						if err := database.DB.Model(&incident).Update("notified", true).Error; err != nil {
+							slog.Error("alert worker: failed to mark incident notified", "server_id", server.ID, "metric_type", metricType, "error", err)
+						} else {
+							slog.Info("alert fired", "server", server.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
+						}
+					}
+				}
+			} else {
+				// No open incident — track in pending map until duration is reached.
+				firstSeen, ok := w.pending[pendingKey]
+				if !ok {
+					// First tick this breach is observed. For server_down, backdate to
+					// actual offline time so duration is measured from the real event.
+					firstSeen = now
+					if metricType == models.MetricTypeServerDown {
+						if hb, ok := hbCache.Get(server.AgentID); ok && hb.Status == models.StatusOffline {
+							firstSeen = hb.LastSeen
+						} else if server.LastSeen != nil {
+							firstSeen = *server.LastSeen
+						}
+					}
+					w.pending[pendingKey] = firstSeen
+				}
+
+				// Duration reached — create incident and fire notification atomically.
+				if now.Sub(firstSeen) >= time.Duration(durationMinutes)*time.Minute {
+					incident = models.AlertIncident{
+						ServerID:       server.ID,
+						MetricType:     metricType,
+						StartedAt:      firstSeen,
+						ThresholdValue: threshold,
+						CurrentValue:   currentValue,
+					}
+					if err := database.DB.Create(&incident).Error; err != nil {
+						slog.Error("alert worker: failed to create incident", "server_id", server.ID, "metric_type", metricType, "error", err)
+						continue
+					}
+					delete(w.pending, pendingKey)
+
+					if err := sendAlertEmail(server, metricType, threshold, currentValue, firstSeen, recipient); err != nil {
+						slog.Error("alert worker: failed to send alert email", "server_id", server.ID, "metric_type", metricType, "error", err)
+					} else {
+						if err := database.DB.Model(&incident).Update("notified", true).Error; err != nil {
+							slog.Error("alert worker: failed to mark incident notified", "server_id", server.ID, "metric_type", metricType, "error", err)
+						} else {
+							slog.Info("alert fired", "server", server.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
+						}
 					}
 				}
 			}
 		} else {
-			// Not breaching — resolve open incident if any
+			// Not breaching — discard pending state and resolve open incident if any.
+			delete(w.pending, pendingKey)
 			if hasIncident {
 				if err := database.DB.Model(&incident).Update("resolved_at", now).Error; err != nil {
-					slog.Error("alert worker: failed to resolve incident",
-						"server_id", server.ID, "metric_type", metricType, "error", err)
+					slog.Error("alert worker: failed to resolve incident", "server_id", server.ID, "metric_type", metricType, "error", err)
 				} else {
 					slog.Info("alert resolved", "server", server.Name, "metric_type", metricType)
 					if incident.Notified {
 						if err := sendResolutionEmail(server, metricType, incident.StartedAt, now, recipient); err != nil {
-							slog.Error("alert worker: failed to send resolution email",
-								"server_id", server.ID, "metric_type", metricType, "error", err)
+							slog.Error("alert worker: failed to send resolution email", "server_id", server.ID, "metric_type", metricType, "error", err)
 						}
 					}
 				}
