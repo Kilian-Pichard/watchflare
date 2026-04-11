@@ -67,10 +67,10 @@ type SensorReadingMinified struct {
 
 // MetricsUpdateMinified is the wire format sent to SSE clients.
 // Short field names reduce bandwidth on high-frequency updates.
-// Format: {"s":"host1","t":1702741200,"c":22.5,"mu":4294967296,"mt":8589934592,...}
-// IMPORTANT: field names must stay in sync with frontend/src/lib/sse.js
+// Format: {"h":"host1","t":1702741200,"c":22.5,"mu":4294967296,"mt":8589934592,...}
+// IMPORTANT: field names must stay in sync with frontend/src/lib/sse/manager.ts
 type MetricsUpdateMinified struct {
-	HostID          string                  `json:"s"`            // host_id
+	HostID          string                  `json:"h"`            // host_id
 	Timestamp       int64                   `json:"t"`            // Unix timestamp
 	CPU             float64                 `json:"c"`            // cpu_usage_percent
 	MemoryUsed      uint64                  `json:"mu"`           // memory_used_bytes
@@ -114,7 +114,7 @@ type ContainerMetricMinified struct {
 
 // ContainerMetricsUpdate represents container metrics for SSE broadcast
 type ContainerMetricsUpdate struct {
-	HostID    string                    `json:"s"`
+	HostID    string                    `json:"h"`
 	Timestamp int64                     `json:"t"`
 	Metrics   []ContainerMetricMinified `json:"m"`
 }

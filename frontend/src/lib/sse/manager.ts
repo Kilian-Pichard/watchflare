@@ -19,7 +19,7 @@ interface MinifiedSensorReading {
  * Minified metrics format from backend SSE
  */
 interface MinifiedMetrics {
-	s: string;       // host_id
+	h: string;       // host_id
 	t: number;       // timestamp (Unix epoch)
 	c: number;       // cpu_usage_percent
 	mu: number;      // memory_used_bytes
@@ -53,7 +53,7 @@ interface MinifiedContainerMetric {
 }
 
 interface MinifiedContainerMetricsUpdate {
-	s: string;   // host_id
+	h: string;   // host_id
 	t: number;   // timestamp (Unix epoch)
 	m: MinifiedContainerMetric[];
 }
@@ -64,10 +64,10 @@ interface MinifiedContainerMetricsUpdate {
 function decodeMinifiedContainerMetrics(minified: MinifiedContainerMetricsUpdate): { host_id: string; metrics: ContainerMetric[] } {
 	const timestamp = new Date(minified.t * 1000).toISOString();
 	return {
-		host_id: minified.s,
+		host_id: minified.h,
 		metrics: minified.m.map(cm => ({
 			id: '',
-			host_id: minified.s,
+			host_id: minified.h,
 			timestamp,
 			container_id: cm.i,
 			container_name: cm.n,
@@ -92,7 +92,7 @@ function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
 
 	return {
 		id: 0,
-		host_id: minified.s,
+		host_id: minified.h,
 		timestamp: new Date(minified.t * 1000).toISOString(),
 		cpu_usage_percent: minified.c,
 		memory_used_bytes: minified.mu,
