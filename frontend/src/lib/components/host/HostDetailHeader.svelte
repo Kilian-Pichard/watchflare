@@ -24,6 +24,7 @@
         ArrowUpCircle,
         Bell,
         MemoryStick,
+        Download,
     } from "lucide-svelte";
     import OsIcon from "$lib/components/icons/OsIcon.svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -40,6 +41,7 @@
         onPause,
         onResume,
         onAlertRules,
+        onUpdateAgent,
         hasActiveAlertRules = false,
     }: {
         host: Host;
@@ -53,6 +55,7 @@
         onPause: () => void;
         onResume: () => void;
         onAlertRules: () => void;
+        onUpdateAgent?: () => void;
     } = $props();
 
     const agentOutdated = $derived(isAgentOutdated(host.agent_version, latestAgentVersion));
@@ -121,6 +124,16 @@
             </span>
         </div>
         <div class="flex items-center gap-1 ml-3">
+            {#if agentOutdated && host.status === 'online' && onUpdateAgent}
+                <button
+                    onclick={onUpdateAgent}
+                    title="Update agent to v{latestAgentVersion}"
+                    class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 dark:text-amber-400 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 transition-colors"
+                >
+                    <Download class="h-3.5 w-3.5" />
+                    Update
+                </button>
+            {/if}
             <button
                 onclick={onAlertRules}
                 class="rounded-lg p-1.5 transition-colors hover:bg-muted {hasActiveAlertRules ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}"

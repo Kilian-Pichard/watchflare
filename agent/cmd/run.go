@@ -100,8 +100,12 @@ func Run() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
+	// Channels for command dispatch from heartbeat
+	forceCollectCh := make(chan struct{}, 1)
+	forceUpdateCh := make(chan struct{}, 1)
+
 	// Start heartbeat in background
-	go runHeartbeat(ctx, grpcClient, cfg)
+	go runHeartbeat(ctx, grpcClient, cfg, forceCollectCh, forceUpdateCh)
 
 	// Start sender in background
 	senderDone := make(chan struct{})
@@ -113,10 +117,10 @@ func Run() {
 	}()
 
 	// Start package collector in background
-	go runPackageCollector(ctx, grpcClient, cfg)
+	go runPackageCollector(ctx, grpcClient, cfg, forceCollectCh)
 
-	// Start update checker in background (check-only, no root available)
-	go runUpdateChecker(ctx)
+	// Start update checker in background
+	go runUpdateChecker(ctx, forceUpdateCh)
 
 	// Wait for signal
 	sig := <-sigCh
@@ -165,8 +169,8 @@ func loadConfig() (*config.Config, error) {
 	return cfg, nil
 }
 
-// runHeartbeat sends periodic heartbeats to the backend
-func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Config) {
+// runHeartbeat sends periodic heartbeats to the backend and dispatches any commands received.
+func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Config, forceCollectCh, forceUpdateCh chan<- struct{}) {
 	ticker := time.NewTicker(time.Duration(cfg.HeartbeatInterval) * time.Second)
 	defer ticker.Stop()
 
@@ -175,10 +179,28 @@ func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Co
 	for {
 		select {
 		case <-ticker.C:
-			if err := grpcClient.Heartbeat(cfg.AgentID, cfg.AgentKey); err != nil {
+			cmds, err := grpcClient.Heartbeat(cfg.AgentID, cfg.AgentKey)
+			if err != nil {
 				slog.Warn("heartbeat failed", "error", errors.FormatError(err, "Heartbeat"))
 			} else {
 				slog.Debug("heartbeat sent")
+				for _, cmd := range cmds {
+					slog.Info("command received", "type", cmd.Type, "id", cmd.CommandId)
+					switch cmd.Type {
+					case "collect_packages":
+						select {
+						case forceCollectCh <- struct{}{}:
+						default: // already pending
+						}
+					case "update_agent":
+						select {
+						case forceUpdateCh <- struct{}{}:
+						default: // already pending
+						}
+					default:
+						slog.Warn("unknown command type", "type", cmd.Type)
+					}
+				}
 			}
 
 		case <-ctx.Done():
@@ -188,8 +210,9 @@ func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Co
 	}
 }
 
-// runPackageCollector collects and sends package inventory
-func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *config.Config) {
+// runPackageCollector collects and sends package inventory.
+// forceCollectCh triggers an immediate full collection when a signal is received.
+func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *config.Config, forceCollectCh <-chan struct{}) {
 	statePath := filepath.Join(config.GetDataDir(), "packages.state.json")
 
 	slog.Info("package collector started")
@@ -198,7 +221,10 @@ func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *co
 	slog.Info("waiting before initial package collection", "delay_sec", 60)
 	select {
 	case <-time.After(60 * time.Second):
-		collectAndSendPackages(ctx, grpcClient, cfg, statePath)
+		collectAndSendPackages(ctx, grpcClient, cfg, statePath, false)
+	case <-forceCollectCh:
+		slog.Info("forced package collection triggered")
+		collectAndSendPackages(ctx, grpcClient, cfg, statePath, true)
 	case <-ctx.Done():
 		slog.Info("package collector stopped before initial collection")
 		return
@@ -222,8 +248,12 @@ func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *co
 	for {
 		select {
 		case <-timer.C:
-			collectAndSendPackages(ctx, grpcClient, cfg, statePath)
+			collectAndSendPackages(ctx, grpcClient, cfg, statePath, false)
 			timer.Reset(24 * time.Hour)
+
+		case <-forceCollectCh:
+			slog.Info("forced package collection triggered")
+			collectAndSendPackages(ctx, grpcClient, cfg, statePath, true)
 
 		case <-ctx.Done():
 			slog.Info("package collector stopped")
@@ -232,10 +262,14 @@ func runPackageCollector(ctx context.Context, grpcClient *client.Client, cfg *co
 	}
 }
 
-// runUpdateChecker periodically checks for available agent updates and logs a notice
-func runUpdateChecker(ctx context.Context) {
+// runUpdateChecker periodically checks for available agent updates.
+// forceUpdateCh triggers an immediate update attempt when a signal is received.
+func runUpdateChecker(ctx context.Context, forceUpdateCh <-chan struct{}) {
 	select {
 	case <-time.After(5 * time.Minute):
+	case <-forceUpdateCh:
+		slog.Info("forced agent update triggered")
+		performUpdate()
 	case <-ctx.Done():
 		return
 	}
@@ -249,6 +283,9 @@ func runUpdateChecker(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			checkAndLogUpdate()
+		case <-forceUpdateCh:
+			slog.Info("forced agent update triggered")
+			performUpdate()
 		case <-ctx.Done():
 			return
 		}
@@ -279,10 +316,36 @@ func checkAndLogUpdate() {
 	}
 }
 
-// collectAndSendPackages performs package collection, delta calculation, and sending
-func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg *config.Config, statePath string) {
+// performUpdate checks for an update and applies it if available.
+func performUpdate() {
+	if AgentVersion == "dev" {
+		slog.Info("skipping update: running dev build")
+		return
+	}
+	if runtime.GOOS == "darwin" {
+		slog.Info("skipping auto-update: use 'brew upgrade watchflare-agent' on macOS")
+		return
+	}
+	info, err := update.CheckForUpdate(AgentVersion)
+	if err != nil {
+		slog.Warn("update check failed", "error", err)
+		return
+	}
+	if !info.UpdateAvailable {
+		slog.Info("agent is already up to date", "version", AgentVersion)
+		return
+	}
+	slog.Info("applying update", "current", info.CurrentVersion, "latest", info.LatestVersion)
+	if err := update.ApplyUpdate(info); err != nil {
+		slog.Error("update failed", "error", err)
+	}
+}
+
+// collectAndSendPackages performs package collection, delta calculation, and sending.
+// When forceFull is true, always sends a full inventory regardless of cached state.
+func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg *config.Config, statePath string, forceFull bool) {
 	startTime := time.Now()
-	slog.Info("starting package collection")
+	slog.Info("starting package collection", "force_full", forceFull)
 
 	allPackages, err := packages.CollectAll()
 	if err != nil {
@@ -306,15 +369,19 @@ func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg 
 	isFirstRun := len(state.Packages) == 0
 	hasChanges := packages.HasChanges(added, removed, updated)
 
-	if !isFirstRun && !hasChanges {
+	if !forceFull && !isFirstRun && !hasChanges {
 		slog.Info("no package changes detected, skipping send")
 		return
 	}
 
 	var inventoryType string
-	if isFirstRun {
+	if isFirstRun || forceFull {
 		inventoryType = inventoryTypeFull
-		slog.Info("first run: sending full inventory", "count", len(allPackages))
+		if forceFull {
+			slog.Info("forced full inventory", "count", len(allPackages))
+		} else {
+			slog.Info("first run: sending full inventory", "count", len(allPackages))
+		}
 	} else {
 		inventoryType = inventoryTypeDelta
 		slog.Info("package changes detected", "added", len(added), "removed", len(removed), "updated", len(updated))

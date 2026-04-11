@@ -43,10 +43,14 @@ func homebrewPrefix() string {
 	}
 	for _, prefix := range []string{"/opt/homebrew", "/usr/local"} {
 		if strings.HasPrefix(exe, prefix+"/opt/watchflare-agent/") ||
-			strings.HasPrefix(exe, prefix+"/Cellar/watchflare-agent/") ||
-			strings.HasPrefix(exe, prefix+"/bin/watchflare-agent") {
+			strings.HasPrefix(exe, prefix+"/Cellar/watchflare-agent/") {
 			return prefix
 		}
+	}
+	// Match /bin/watchflare-agent only for /opt/homebrew (macOS symlink into Cellar).
+	// Do NOT match /usr/local/bin/watchflare-agent — that is the standard Linux system path.
+	if strings.HasPrefix(exe, "/opt/homebrew/bin/watchflare-agent") {
+		return "/opt/homebrew"
 	}
 	return ""
 }

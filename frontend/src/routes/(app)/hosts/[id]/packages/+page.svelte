@@ -18,138 +18,138 @@
         formatDateTime,
     } from "$lib/utils";
     import { userStore } from "$lib/stores/user";
-    import { Filter, ChevronDown, ChevronRight } from "lucide-svelte";
+    import { Filter, ChevronDown, ChevronRight, RefreshCw } from "lucide-svelte";
 
     const timeFormat = $derived(($userStore.user?.time_format ?? '24h') as '12h' | '24h');
 
     type PackagesCache = {
-        packages: Package[]; stats: PackageStats | null; collections: PackageCollection[];
-        totalCount: number; offset: number; searchTerm: string;
-        allManagerKeys: string[]; selectedManagers: string[];
+        allPackages: Package[]; stats: PackageStats | null; collections: PackageCollection[];
+        searchTerm: string; allManagerKeys: string[]; selectedManagers: string[];
     };
     const ctx = getContext<{
         host: Host | null;
         packagesCache: PackagesCache | null;
         setPackagesCache: (data: PackagesCache) => void;
+        packageInventorySignal: number;
     }>('hostDetail');
 
     const cached = ctx.packagesCache;
-    let packages: Package[] = $state(cached?.packages ?? []);
+    // allPackages = full list fetched once from API; all filtering/sorting/pagination is client-side
+    let allPackages: Package[] = $state(cached?.allPackages ?? []);
     let stats: PackageStats | null = $state(cached?.stats ?? null);
     let collections: PackageCollection[] = $state(cached?.collections ?? []);
     let history: PackageHistory[] = $state([]);
     let loading = $state(!cached);
-    let error = $state("");
-    let searchTerm = $state(cached?.searchTerm ?? "");
+    let error = $state('');
+    let searchTerm = $state(cached?.searchTerm ?? '');
     let selectedManagers: Set<string> = $state(new Set(cached?.selectedManagers ?? []));
     let allManagerKeys: string[] = $state(cached?.allManagerKeys ?? []);
-    let totalCount = $state(cached?.totalCount ?? 0);
-    let limit = PACKAGES_PER_PAGE;
-    let offset = $state(cached?.offset ?? 0);
+    let offset = $state(0);
     let showCollections = $state(false);
     let showHistory = $state(false);
 
-    let hostId = $derived($page.params.id);
-    // Filtered = at least one manager is hidden
-    let isFiltered = $derived(
-        allManagerKeys.length > 0 &&
-            selectedManagers.size < allManagerKeys.length,
+    const limit = PACKAGES_PER_PAGE;
+    const hostId = $derived($page.params.id);
+
+    // Client-side filtering
+    const filteredPackages = $derived(() => {
+        let result = allPackages;
+        if (searchTerm) {
+            const q = searchTerm.toLowerCase();
+            result = result.filter(p => p.name.toLowerCase().includes(q));
+        }
+        if (allManagerKeys.length > 0 && selectedManagers.size < allManagerKeys.length) {
+            result = result.filter(p => selectedManagers.has(p.package_manager));
+        }
+        return result;
+    });
+
+    // Client-side sorting
+    let sortColumn = $state('name');
+    let sortOrder = $state<'asc' | 'desc'>('asc');
+
+    const sortedPackages = $derived(() => {
+        return [...filteredPackages()].sort((a, b) => {
+            let valA: string;
+            let valB: string;
+            switch (sortColumn) {
+                case 'version':    valA = a.version || ''; valB = b.version || ''; break;
+                case 'manager':    valA = a.package_manager || ''; valB = b.package_manager || ''; break;
+                case 'arch':       valA = a.architecture || ''; valB = b.architecture || ''; break;
+                case 'first_seen': valA = a.first_seen || ''; valB = b.first_seen || ''; break;
+                case 'last_seen':  valA = a.last_seen || ''; valB = b.last_seen || ''; break;
+                default:           valA = a.name || ''; valB = b.name || ''; break;
+            }
+            if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+            if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
+    });
+
+    // Client-side pagination
+    const paginatedPackages = $derived(() => sortedPackages().slice(offset, offset + limit));
+    const totalCount = $derived(filteredPackages().length);
+    const currentPage = $derived(Math.floor(offset / limit) + 1);
+    const totalPages = $derived(Math.ceil(totalCount / limit));
+    const isFiltered = $derived(allManagerKeys.length > 0 && selectedManagers.size < allManagerKeys.length);
+    const filterLabel = $derived(
+        !isFiltered ? 'All packages'
+        : selectedManagers.size === 1 ? getManagerLabel([...selectedManagers][0])
+        : `${selectedManagers.size} managers`
     );
-    let filterLabel = $derived(
-        !isFiltered
-            ? "All packages"
-            : selectedManagers.size === 1
-              ? getManagerLabel([...selectedManagers][0])
-              : `${selectedManagers.size} managers`,
-    );
-    let currentPage = $derived(Math.floor(offset / limit) + 1);
-    let totalPages = $derived(Math.ceil(totalCount / limit));
 
     onMount(async () => {
         await loadData(!!cached);
     });
 
+    // Reload silently when backend pushes a new package inventory.
+    // seenSignal captures the value at mount time so we only react to signals
+    // that arrive AFTER this component is rendered (not pre-existing ones).
+    let seenSignal = ctx.packageInventorySignal;
+    $effect(() => {
+        const sig = ctx.packageInventorySignal;
+        if (sig > seenSignal) {
+            seenSignal = sig;
+            awaitingInventory = false;
+            loadData(true);
+        }
+    });
+
     function saveToCache() {
         ctx.setPackagesCache({
-            packages, stats, collections, totalCount, offset, searchTerm,
+            allPackages, stats, collections, searchTerm,
             allManagerKeys, selectedManagers: [...selectedManagers],
         });
     }
 
-    // Full load: stats, collections + packages
-    // silent=true → no loading spinner, data updates quietly (used on tab return)
     async function loadData(silent = false) {
         if (!silent) loading = true;
         try {
-            const [packagesData, statsData, collectionsData] =
-                await Promise.all([
-                    api.getHostPackages(hostId, {
-                        limit,
-                        offset,
-                        package_manager: isFiltered
-                            ? [...selectedManagers].join(",")
-                            : undefined,
-                        search: searchTerm || undefined,
-                    }),
-                    api.getPackageStats(hostId),
-                    api.getPackageCollections(hostId, {
-                        limit: COLLECTIONS_PER_PAGE,
-                    }),
-                ]);
+            const [packagesData, statsData, collectionsData] = await Promise.all([
+                api.getHostPackages(hostId),
+                api.getPackageStats(hostId),
+                api.getPackageCollections(hostId, { limit: COLLECTIONS_PER_PAGE }),
+            ]);
 
-            packages = packagesData.packages || [];
-            totalCount = packagesData.total_count || 0;
+            allPackages = packagesData.packages || [];
             stats = statsData;
             collections = collectionsData.collections || [];
 
-            if (
-                allManagerKeys.length === 0 &&
-                statsData.by_package_manager?.length > 0
-            ) {
-                allManagerKeys = statsData.by_package_manager.map(
-                    (pm) => pm.package_manager,
-                );
+            if (allManagerKeys.length === 0 && statsData.by_package_manager?.length > 0) {
+                allManagerKeys = statsData.by_package_manager.map((pm) => pm.package_manager);
                 selectedManagers = new Set(allManagerKeys);
             }
         } catch (err: unknown) {
-            if (!silent) error = err instanceof Error ? err.message : "Failed to load packages";
+            if (!silent) error = err instanceof Error ? err.message : 'Failed to load packages';
         } finally {
             if (!silent) loading = false;
             saveToCache();
         }
     }
 
-    // Partial reload: packages only (search, filter, pagination)
-    let tableLoading = $state(false);
-
-    async function loadPackages() {
-        tableLoading = true;
-        try {
-            const packagesData = await api.getHostPackages(hostId, {
-                limit,
-                offset,
-                package_manager: isFiltered
-                    ? [...selectedManagers].join(",")
-                    : undefined,
-                search: searchTerm || undefined,
-            });
-            packages = packagesData.packages || [];
-            totalCount = packagesData.total_count || 0;
-        } catch (err: unknown) {
-            error =
-                err instanceof Error ? err.message : "Failed to load packages";
-        } finally {
-            tableLoading = false;
-            saveToCache();
-        }
-    }
-
     async function loadHistory() {
         try {
-            const data = await api.getPackageHistory(hostId, {
-                limit: 50,
-                exclude_initial: true,
-            });
+            const data = await api.getPackageHistory(hostId, { limit: 50, exclude_initial: true });
             history = data.history || [];
         } catch {
             // silently ignore — history is non-critical
@@ -161,20 +161,16 @@
     function handleSearchInput() {
         offset = 0;
         clearTimeout(searchDebounce);
-        searchDebounce = setTimeout(() => {
-            loadPackages();
-        }, 300);
+        searchDebounce = setTimeout(() => saveToCache(), 300);
     }
 
     function toggleManager(manager: string) {
         const next = new Set(selectedManagers);
         if (next.has(manager)) {
             next.delete(manager);
-            // Don't allow deselecting the last one — reset to all instead
             if (next.size === 0) {
                 selectedManagers = new Set(allManagerKeys);
                 offset = 0;
-                loadPackages();
                 return;
             }
         } else {
@@ -182,24 +178,52 @@
         }
         selectedManagers = next;
         offset = 0;
-        loadPackages();
     }
 
     function clearFilter() {
         selectedManagers = new Set(allManagerKeys);
         offset = 0;
-        loadPackages();
     }
 
-    function handlePageChange(page: number) {
-        offset = (page - 1) * limit;
-        loadPackages();
+    function handlePageChange(newPage: number) {
+        offset = (newPage - 1) * limit;
+    }
+
+    function handleSort(column: string) {
+        if (sortColumn === column) {
+            sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortColumn = column;
+            sortOrder = 'asc';
+        }
+        offset = 0;
     }
 
     async function toggleHistory() {
         showHistory = !showHistory;
         if (showHistory && history.length === 0) {
             await loadHistory();
+        }
+    }
+
+    let collecting = $state(false);
+    let awaitingInventory = $state(false);
+    let collectError = $state('');
+    let collectErrorTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    async function handleForceCollect() {
+        if (collecting) return;
+        collecting = true;
+        collectError = '';
+        try {
+            await api.triggerPackageCollect(hostId);
+            awaitingInventory = true;
+        } catch (err: unknown) {
+            collectError = err instanceof Error ? err.message : 'Failed to trigger collection';
+            if (collectErrorTimeout) clearTimeout(collectErrorTimeout);
+            collectErrorTimeout = setTimeout(() => { collectError = ''; }, 4000);
+        } finally {
+            collecting = false;
         }
     }
 
@@ -276,6 +300,25 @@
         placeholder="Search packages..."
         class="flex-1 rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     />
+    {#if awaitingInventory}
+        <span class="inline-flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap">
+            <span class="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></span>
+            Waiting for packages...
+        </span>
+    {:else if collectError}
+        <span class="text-xs text-destructive whitespace-nowrap">{collectError}</span>
+    {/if}
+    <button
+        onclick={handleForceCollect}
+        disabled={collecting || awaitingInventory || ctx.host?.status !== 'online'}
+        title={ctx.host?.status !== 'online' ? 'Host must be online to collect packages' : 'Force package collection now'}
+        class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap
+            bg-card text-muted-foreground hover:bg-muted hover:text-foreground
+            disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+        <RefreshCw class="h-3.5 w-3.5 {collecting ? 'animate-spin' : ''}" />
+        Collect Now
+    </button>
     <DropdownMenu.Root>
         <DropdownMenu.Trigger>
             {#snippet child({ props })}
@@ -348,6 +391,22 @@
     </DropdownMenu.Root>
 </div>
 
+{#snippet sortIcon(column: string)}
+    {#if sortColumn === column}
+        <svg class="h-3 w-3 shrink-0" viewBox="0 0 12 12" fill="currentColor">
+            {#if sortOrder === 'asc'}
+                <path d="M6 2l4 5H2z" />
+            {:else}
+                <path d="M6 10l4-5H2z" />
+            {/if}
+        </svg>
+    {:else}
+        <svg class="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M6 10l4-5H2z" />
+        </svg>
+    {/if}
+{/snippet}
+
 <!-- Packages Table -->
 <div class="rounded-xl border bg-card overflow-hidden mb-6">
     {#if loading}
@@ -356,44 +415,56 @@
         </div>
     {:else}
         <div class="overflow-x-auto">
-            <table class="w-full">
+            <table class="w-full min-w-[480px]">
                 <thead>
                     <tr class="border-b bg-muted/30">
-                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Name</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Version</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground">Manager</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground hidden lg:table-cell">Architecture</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground hidden xl:table-cell">Description</th>
-                        <th scope="col" class="px-4 py-2.5 text-right text-sm font-semibold text-muted-foreground hidden md:table-cell">First Seen</th>
-                        <th scope="col" class="px-4 py-2.5 text-right text-sm font-semibold text-muted-foreground">Last Seen</th>
+                        <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground" onclick={() => handleSort('name')}>
+                            <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">Name {@render sortIcon('name')}</span>
+                        </th>
+                        <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground w-40" onclick={() => handleSort('version')}>
+                            <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">Version {@render sortIcon('version')}</span>
+                        </th>
+                        <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground w-px whitespace-nowrap" onclick={() => handleSort('manager')}>
+                            <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">Manager {@render sortIcon('manager')}</span>
+                        </th>
+                        <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground w-24 hidden lg:table-cell" onclick={() => handleSort('arch')}>
+                            <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">Arch {@render sortIcon('arch')}</span>
+                        </th>
+                        <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground w-64 hidden xl:table-cell">Description</th>
+                        <th scope="col" class="px-4 py-2 text-right text-sm font-semibold text-muted-foreground w-36 hidden md:table-cell" onclick={() => handleSort('first_seen')}>
+                            <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground ml-auto">First Seen {@render sortIcon('first_seen')}</span>
+                        </th>
+                        <th scope="col" class="px-4 py-2 text-right text-sm font-semibold text-muted-foreground w-36" onclick={() => handleSort('last_seen')}>
+                            <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground ml-auto">Last Seen {@render sortIcon('last_seen')}</span>
+                        </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-border transition-opacity {tableLoading ? 'opacity-50 pointer-events-none' : ''}">
-                    {#each packages as pkg}
+                <tbody class="divide-y divide-border">
+                    {#each paginatedPackages() as pkg}
                         <tr class="hover:bg-muted/20 transition-colors">
                             <td class="px-4 py-3 text-sm font-medium text-foreground">{pkg.name}</td>
-                            <td class="px-4 py-3 text-sm font-mono text-muted-foreground">{pkg.version || "-"}</td>
-                            <td class="px-4 py-3">
+                            <td class="px-4 py-3 text-sm font-mono text-muted-foreground whitespace-nowrap">{pkg.version || "-"}</td>
+                            <td class="px-4 py-3 w-px whitespace-nowrap">
                                 <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {getManagerColor(pkg.package_manager)}">
                                     {getManagerLabel(pkg.package_manager)}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">{pkg.architecture || "-"}</td>
-                            <td class="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate hidden xl:table-cell">{pkg.description || "-"}</td>
-                            <td class="px-4 py-3 text-right text-sm text-muted-foreground hidden md:table-cell">{formatDateTime(pkg.first_seen, timeFormat)}</td>
-                            <td class="px-4 py-3 text-right text-sm text-muted-foreground">{formatDateTime(pkg.last_seen, timeFormat)}</td>
+                            <td class="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap hidden lg:table-cell">{pkg.architecture || "-"}</td>
+                            <td class="px-4 py-3 hidden xl:table-cell">
+                                <span class="block text-sm text-muted-foreground truncate max-w-64" title={pkg.description || ''}>{pkg.description || "-"}</span>
+                            </td>
+                            <td class="px-4 py-3 text-right text-sm text-muted-foreground whitespace-nowrap hidden md:table-cell">{formatDateTime(pkg.first_seen, timeFormat)}</td>
+                            <td class="px-4 py-3 text-right text-sm text-muted-foreground whitespace-nowrap">{formatDateTime(pkg.last_seen, timeFormat)}</td>
                         </tr>
                     {:else}
-                        {#if !tableLoading}
-                            <tr>
-                                <td colspan="7" class="py-16 text-center">
-                                    <svg class="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                    </svg>
-                                    <p class="text-sm text-muted-foreground">No packages found</p>
-                                </td>
-                            </tr>
-                        {/if}
+                        <tr>
+                            <td colspan="7" class="py-16 text-center">
+                                <svg class="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                                <p class="text-sm text-muted-foreground">No packages found</p>
+                            </td>
+                        </tr>
                     {/each}
                 </tbody>
             </table>

@@ -66,10 +66,17 @@ message HeartbeatRequest {
   int64 timestamp = 5;      // Unix timestamp in seconds (for anti-replay)
 }
 
-// HeartbeatResponse acknowledges the heartbeat
+// HeartbeatResponse acknowledges the heartbeat and may carry pending commands
 message HeartbeatResponse {
   bool success = 1;
   string message = 2;
+  repeated PendingCommand commands = 3;  // Commands to execute (empty if none)
+}
+
+// PendingCommand represents a command dispatched from the backend to the agent
+message PendingCommand {
+  string command_id = 1;  // UUID for deduplication
+  string type = 2;        // "collect_packages" | "update_agent"
 }
 
 // Metrics contains system performance data

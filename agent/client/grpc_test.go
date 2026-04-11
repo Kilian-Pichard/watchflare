@@ -299,7 +299,7 @@ func TestHeartbeat_DelegatesToSendHeartbeat(t *testing.T) {
 
 	c := startMockServer(t, mock)
 
-	if err := c.Heartbeat("agent-1", "key-1"); err != nil {
+	if _, err := c.Heartbeat("agent-1", "key-1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if receivedIPv4 != "" {
@@ -322,7 +322,7 @@ func TestSendHeartbeat_Success(t *testing.T) {
 
 	c := startMockServer(t, mock)
 
-	if err := c.SendHeartbeat("agent-1", "key-1", "1.2.3.4", "::1"); err != nil {
+	if _, err := c.SendHeartbeat("agent-1", "key-1", "1.2.3.4", "::1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -336,9 +336,39 @@ func TestSendHeartbeat_Rejected(t *testing.T) {
 
 	c := startMockServer(t, mock)
 
-	err := c.SendHeartbeat("agent-1", "key-1", "", "")
+	_, err := c.SendHeartbeat("agent-1", "key-1", "", "")
 	if err == nil {
 		t.Fatal("expected error for rejected heartbeat, got nil")
+	}
+}
+
+func TestSendHeartbeat_ReturnsPendingCommands(t *testing.T) {
+	mock := &mockAgentServer{
+		heartbeatFn: func(_ *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
+			return &pb.HeartbeatResponse{
+				Success: true,
+				Commands: []*pb.PendingCommand{
+					{CommandId: "cmd-1", Type: "collect_packages"},
+					{CommandId: "cmd-2", Type: "update_agent"},
+				},
+			}, nil
+		},
+	}
+
+	c := startMockServer(t, mock)
+
+	cmds, err := c.SendHeartbeat("agent-1", "key-1", "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cmds) != 2 {
+		t.Fatalf("expected 2 commands, got %d", len(cmds))
+	}
+	if cmds[0].Type != "collect_packages" {
+		t.Errorf("commands[0].Type: got %q, want %q", cmds[0].Type, "collect_packages")
+	}
+	if cmds[1].Type != "update_agent" {
+		t.Errorf("commands[1].Type: got %q, want %q", cmds[1].Type, "update_agent")
 	}
 }
 

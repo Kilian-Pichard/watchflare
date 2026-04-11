@@ -71,7 +71,7 @@ func createPendingHost(t *testing.T, token string) *models.Host {
 	host := &models.Host{
 		ID:                     uuid.New().String(),
 		AgentID:                uuid.New().String(),
-		Name:                   "test-host-" + token[:8],
+		DisplayName: "test-host-" + token[:8],
 		Status:                 models.StatusPending,
 		RegistrationToken:      strPtr(hashTestToken(token)),
 		ExpiresAt:              &expiry,
@@ -113,7 +113,7 @@ func TestRegisterHost_AlreadyRegistered(t *testing.T) {
 	host := &models.Host{
 		ID:                     uuid.New().String(),
 		AgentID:                uuid.New().String(),
-		Name:                   "already-registered",
+		DisplayName: "already-registered",
 		Status:                 models.StatusOnline,
 		RegistrationToken:      strPtr(hashTestToken(token)),
 		ExpiresAt:              &expiry,
@@ -142,7 +142,7 @@ func TestRegisterHost_ExpiredToken(t *testing.T) {
 	host := &models.Host{
 		ID:                     uuid.New().String(),
 		AgentID:                uuid.New().String(),
-		Name:                   "expired-host",
+		DisplayName: "expired-host",
 		Status:                 models.StatusPending,
 		RegistrationToken:      strPtr(hashTestToken(token)),
 		ExpiresAt:              &expiry,
@@ -212,7 +212,7 @@ func TestSendMetrics_PausedHost(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "paused-host",
+		DisplayName: "paused-host",
 		Status:   models.StatusPaused,
 		AgentKey: "paused-agent-key-abc123",
 	}
@@ -237,7 +237,7 @@ func TestSendMetrics_NilMetrics(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "online-host",
+		DisplayName: "online-host",
 		Status:   models.StatusOnline,
 		AgentKey: "online-agent-key-abc123",
 	}
@@ -276,7 +276,7 @@ func TestHeartbeat_PausedHost(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "paused-hb-host",
+		DisplayName: "paused-hb-host",
 		Status:   models.StatusPaused,
 		AgentKey: "paused-hb-key-abc123",
 	}
@@ -300,7 +300,7 @@ func TestHeartbeat_Online(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "online-hb-host",
+		DisplayName: "online-hb-host",
 		Status:   models.StatusOnline,
 		AgentKey: "online-hb-key-abc123",
 	}
@@ -337,7 +337,7 @@ func TestReportDroppedMetrics_Success(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "drop-host",
+		DisplayName: "drop-host",
 		Status:   models.StatusOnline,
 		AgentKey: "drop-agent-key-abc123",
 	}
@@ -377,7 +377,7 @@ func TestProcessPackageInventory_UnknownType(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "pkg-inv-host",
+		DisplayName: "pkg-inv-host",
 		Status:   models.StatusOnline,
 		AgentKey: "pkg-inv-key-abc123",
 	}
@@ -400,7 +400,7 @@ func TestProcessPackageInventory_FullInventory(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "pkg-full-host",
+		DisplayName: "pkg-full-host",
 		Status:   models.StatusOnline,
 		AgentKey: "pkg-full-key-abc123",
 	}
@@ -427,7 +427,7 @@ func TestProcessPackageInventory_DeltaInventory(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "pkg-delta-host",
+		DisplayName: "pkg-delta-host",
 		Status:   models.StatusOnline,
 		AgentKey: "pkg-delta-key-abc123",
 	}

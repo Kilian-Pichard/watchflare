@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
+	"watchflare/backend/cache"
 	"watchflare/backend/database"
 	"watchflare/backend/models"
 
@@ -21,15 +21,13 @@ func GetHostPackages(c *gin.Context) {
 	hostID := c.Param("id")
 
 	// Query parameters
-	searchQuery := c.Query("search")
-	packageManager := c.Query("package_manager")
-	limitStr := c.DefaultQuery("limit", "1000")
+	limitStr := c.DefaultQuery("limit", "10000")
 	offsetStr := c.DefaultQuery("offset", "0")
 
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
-	if limit <= 0 || limit > 1000 {
-		limit = 1000
+	if limit <= 0 || limit > 10000 {
+		limit = 10000
 	}
 	if offset < 0 {
 		offset = 0
@@ -37,15 +35,6 @@ func GetHostPackages(c *gin.Context) {
 
 	// Build query
 	query := database.DB.Where("host_id = ?", hostID)
-
-	if searchQuery != "" {
-		query = query.Where("name ILIKE ?", "%"+searchQuery+"%")
-	}
-
-	if packageManager != "" {
-		managers := strings.Split(packageManager, ",")
-		query = query.Where("package_manager IN ?", managers)
-	}
 
 	// Get total count
 	var totalCount int64
@@ -192,6 +181,36 @@ func GetHostPackageCollections(c *gin.Context) {
 		"limit":       limit,
 		"offset":      offset,
 	})
+}
+
+// TriggerPackageCollect enqueues a "collect_packages" command for the agent.
+// The command is delivered on the agent's next heartbeat (within ~5s).
+// POST /api/v1/hosts/:id/packages/collect
+func TriggerPackageCollect(c *gin.Context) {
+	hostID := c.Param("id")
+
+	var host models.Host
+	if err := database.DB.Select("id, agent_id, status").Where("id = ?", hostID).First(&host).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "host not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch host"})
+		}
+		return
+	}
+
+	heartbeatCache := cache.GetCache()
+	cacheEntry, inCache := heartbeatCache.Get(host.AgentID)
+	isOnline := inCache && cacheEntry.Status == models.StatusOnline
+	if !isOnline {
+		c.JSON(http.StatusConflict, gin.H{"error": "host is not online"})
+		return
+	}
+
+	cmdID := heartbeatCache.EnqueueCommand(host.AgentID, models.CommandCollectPackages)
+	slog.Info("package collect command enqueued", "host_id", hostID, "command_id", cmdID)
+
+	c.JSON(http.StatusAccepted, gin.H{"message": "collection requested", "command_id": cmdID})
 }
 
 // GetPackageStats returns aggregated package statistics

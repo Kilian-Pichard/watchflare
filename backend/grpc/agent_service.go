@@ -229,6 +229,16 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	heartbeatCache := cache.GetCache()
 	heartbeatCache.Update(req.AgentId, req.IpAddressV4, req.IpAddressV6)
 
+	// Consume any pending commands for this agent
+	pending := heartbeatCache.ConsumeCommands(req.AgentId)
+	var protoCommands []*pb.PendingCommand
+	for _, cmd := range pending {
+		protoCommands = append(protoCommands, &pb.PendingCommand{
+			CommandId: cmd.CommandID,
+			Type:      cmd.Type,
+		})
+	}
+
 	// Broadcast SSE event for real-time dashboard
 	broker := sse.GetBroker()
 	configuredIP := ""
@@ -246,8 +256,9 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	})
 
 	return &pb.HeartbeatResponse{
-		Success: true,
-		Message: "Heartbeat acknowledged",
+		Success:  true,
+		Message:  "Heartbeat acknowledged",
+		Commands: protoCommands,
 	}, nil
 }
 
@@ -505,6 +516,13 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPack
 		"type", req.InventoryType,
 		"duration_ms", req.CollectionDurationMs,
 	)
+
+	sse.GetBroker().BroadcastPackageInventoryUpdate(sse.PackageInventoryUpdate{
+		HostID:         host.ID,
+		CollectionType: req.InventoryType,
+		PackagesCount:  packagesProcessed,
+		ChangesCount:   changesDetected,
+	})
 
 	return &pb.SendPackageInventoryResponse{
 		Success:           true,

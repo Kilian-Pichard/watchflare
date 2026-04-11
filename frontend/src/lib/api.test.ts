@@ -191,7 +191,7 @@ describe('createHost', () => {
 			'/api/v1/hosts',
 			expect.objectContaining({
 				method: 'POST',
-				body: JSON.stringify({ name: 'web-01', configured_ip: '192.168.1.1', allow_any_ip: false })
+				body: JSON.stringify({ display_name: 'web-01', configured_ip: '192.168.1.1', allow_any_ip: false })
 			})
 		);
 	});

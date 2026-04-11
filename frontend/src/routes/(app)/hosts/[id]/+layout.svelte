@@ -28,8 +28,11 @@
 
     // Tab data caches — persist between tab switches for the duration of the host detail session
     let overviewCache: { metrics: Metric[]; containerMetrics: ContainerMetric[]; timeRange: TimeRange } | null = $state(null);
-    let packagesCache: { packages: Package[]; stats: PackageStats | null; collections: PackageCollection[]; totalCount: number; offset: number; searchTerm: string; allManagerKeys: string[]; selectedManagers: string[] } | null = $state(null);
+    let packagesCache: { allPackages: Package[]; stats: PackageStats | null; collections: PackageCollection[]; searchTerm: string; allManagerKeys: string[]; selectedManagers: string[] } | null = $state(null);
     let incidentsCache: { incidents: HostIncident[]; totalCount: number; offset: number; statusFilter: IncidentStatusFilter } | null = $state(null);
+
+    // Incremented each time a package_inventory_update SSE event arrives for this host
+    let packageInventorySignal = $state(0);
 
     // Modals
     let showDeleteConfirm = $state(false);
@@ -52,6 +55,7 @@
         setOverviewCache: (data: typeof overviewCache) => { overviewCache = data; },
         get packagesCache() { return packagesCache; },
         setPackagesCache: (data: typeof packagesCache) => { packagesCache = data; },
+        get packageInventorySignal() { return packageInventorySignal; },
         get incidentsCache() { return incidentsCache; },
         setIncidentsCache: (data: typeof incidentsCache) => { incidentsCache = data; },
     });
@@ -107,6 +111,12 @@
             const metric = event.data;
             if (host && metric.host_id === host.id) {
                 latestMetric = metric;
+            }
+        }
+        if (event.type === 'package_inventory_update') {
+            const update = event.data as { host_id: string };
+            if (host && update.host_id === host.id) {
+                packageInventorySignal++;
             }
         }
     }
@@ -234,6 +244,22 @@
         }
     }
 
+    let updateAgentMessage = $state('');
+    let updateAgentMessageTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    async function handleUpdateAgent() {
+        if (!host) return;
+        updateAgentMessage = '';
+        try {
+            await api.triggerAgentUpdate(host.id);
+            updateAgentMessage = 'Update requested';
+        } catch (err: unknown) {
+            updateAgentMessage = err instanceof Error ? err.message : 'Failed to request update';
+        }
+        if (updateAgentMessageTimeout) clearTimeout(updateAgentMessageTimeout);
+        updateAgentMessageTimeout = setTimeout(() => { updateAgentMessage = ''; }, 4000);
+    }
+
     let copyError = $state(false);
 
     async function handleCopy(text: string) {
@@ -276,7 +302,11 @@
         onPause={handlePause}
         onResume={handleResume}
         onAlertRules={() => { showAlertRules = true; }}
+        onUpdateAgent={handleUpdateAgent}
     />
+    {#if updateAgentMessage}
+        <p class="mb-3 text-xs text-muted-foreground">{updateAgentMessage}</p>
+    {/if}
 
     {#if regeneratedToken}
         <div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 space-y-3">

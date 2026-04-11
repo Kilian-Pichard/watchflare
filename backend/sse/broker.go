@@ -14,6 +14,7 @@ const (
 	EventTypeMetricsUpdate           = "metrics_update"
 	EventTypeAggregatedMetricsUpdate = "aggregated_metrics_update"
 	EventTypeContainerMetricsUpdate  = "container_metrics_update"
+	EventTypePackageInventoryUpdate  = "package_inventory_update"
 )
 
 // Event represents a host event
@@ -119,6 +120,14 @@ type ContainerMetricsUpdate struct {
 	Metrics   []ContainerMetricMinified `json:"m"`
 }
 
+// PackageInventoryUpdate notifies the frontend that a new package inventory was received
+type PackageInventoryUpdate struct {
+	HostID         string `json:"host_id"`
+	CollectionType string `json:"collection_type"`
+	PackagesCount  int    `json:"packages_count"`
+	ChangesCount   int    `json:"changes_count"`
+}
+
 // Client represents an SSE client connection
 type Client struct {
 	ID      string
@@ -211,6 +220,10 @@ func (b *Broker) BroadcastAggregatedMetricsUpdate(update AggregatedMetricsUpdate
 
 func (b *Broker) BroadcastContainerMetricsUpdate(update ContainerMetricsUpdate) {
 	b.Broadcast(Event{Type: EventTypeContainerMetricsUpdate, Data: update})
+}
+
+func (b *Broker) BroadcastPackageInventoryUpdate(update PackageInventoryUpdate) {
+	b.Broadcast(Event{Type: EventTypePackageInventoryUpdate, Data: update})
 }
 
 // toMinifiedMetrics converts a MetricsUpdate to the compact wire format.

@@ -16,6 +16,12 @@ const (
 	StatusExpired = "expired"
 )
 
+// Agent command types dispatched via HeartbeatResponse.
+const (
+	CommandCollectPackages = "collect_packages"
+	CommandUpdateAgent     = "update_agent"
+)
+
 type Host struct {
 	ID        string `gorm:"type:char(36);primarykey" json:"id"`
 	AgentID   string `gorm:"unique;not null" json:"agent_id"`

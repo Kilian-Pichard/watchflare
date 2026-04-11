@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -297,6 +298,32 @@ func DeleteHost(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Host deleted successfully",
 	})
+}
+
+// TriggerAgentUpdate enqueues an "update_agent" command for the agent.
+// The command is delivered on the agent's next heartbeat (within ~5s).
+// POST /api/v1/hosts/:id/agent/update
+func TriggerAgentUpdate(c *gin.Context) {
+	hostID := c.Param("id")
+
+	host, err := services.GetHost(hostID)
+	if err != nil {
+		hostError(c, err)
+		return
+	}
+
+	heartbeatCache := cache.GetCache()
+	cacheEntry, inCache := heartbeatCache.Get(host.AgentID)
+	isOnline := inCache && cacheEntry.Status == models.StatusOnline
+	if !isOnline {
+		c.JSON(http.StatusConflict, gin.H{"error": "host is not online"})
+		return
+	}
+
+	cmdID := heartbeatCache.EnqueueCommand(host.AgentID, models.CommandUpdateAgent)
+	slog.Info("agent update command enqueued", "host_id", hostID, "command_id", cmdID)
+
+	c.JSON(http.StatusAccepted, gin.H{"message": "update requested", "command_id": cmdID})
 }
 
 // GetDroppedMetrics returns summary of dropped metrics for the last 24 hours

@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"watchflare/backend/models"
 )
 
@@ -18,10 +20,17 @@ type HeartbeatData struct {
 	ClockDesync  bool // true if agent's timestamp was rejected (clock out of sync)
 }
 
+// PendingCommand represents a command to be dispatched to an agent on next heartbeat.
+type PendingCommand struct {
+	CommandID string // UUID for deduplication
+	Type      string // "collect_packages" | "update_agent"
+}
+
 // HeartbeatCache is an in-memory store for agent heartbeat state.
 type HeartbeatCache struct {
-	mu    sync.RWMutex
-	cache map[string]*HeartbeatData // key: agent_id
+	mu       sync.RWMutex
+	cache    map[string]*HeartbeatData   // key: agent_id
+	commands map[string][]PendingCommand // key: agent_id
 }
 
 var (
@@ -33,10 +42,38 @@ var (
 func GetCache() *HeartbeatCache {
 	once.Do(func() {
 		globalCache = &HeartbeatCache{
-			cache: make(map[string]*HeartbeatData),
+			cache:    make(map[string]*HeartbeatData),
+			commands: make(map[string][]PendingCommand),
 		}
 	})
 	return globalCache
+}
+
+// EnqueueCommand adds a command to the pending queue for the given agent.
+// Returns the generated command ID.
+func (c *HeartbeatCache) EnqueueCommand(agentID, commandType string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	cmd := PendingCommand{
+		CommandID: uuid.New().String(),
+		Type:      commandType,
+	}
+	c.commands[agentID] = append(c.commands[agentID], cmd)
+	return cmd.CommandID
+}
+
+// ConsumeCommands atomically returns and clears all pending commands for the given agent.
+func (c *HeartbeatCache) ConsumeCommands(agentID string) []PendingCommand {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	cmds := c.commands[agentID]
+	if len(cmds) == 0 {
+		return nil
+	}
+	delete(c.commands, agentID)
+	return cmds
 }
 
 func (c *HeartbeatCache) Update(agentID, ipv4, ipv6 string) {

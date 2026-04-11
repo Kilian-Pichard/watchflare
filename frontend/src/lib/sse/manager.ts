@@ -263,6 +263,11 @@ export class SSEManager {
 			this.bufferEvent({ type: 'container_metrics_update', data });
 		});
 
+		this.eventSource.addEventListener('package_inventory_update', (e: MessageEvent) => {
+			const data = JSON.parse(e.data);
+			this.bufferEvent({ type: 'package_inventory_update', data });
+		});
+
 		this.eventSource.onerror = (error: Event) => {
 			logger.error('SSE error:', error);
 			this.handleError(error);

@@ -95,7 +95,7 @@ func TestInterceptor_TimestampTooOld(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "intercept-ts-host",
+		DisplayName: "intercept-ts-host",
 		Status:   models.StatusOnline,
 		AgentKey: "intercept-ts-key-abc",
 	}
@@ -123,7 +123,7 @@ func TestInterceptor_InvalidHMAC(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "intercept-hmac-host",
+		DisplayName: "intercept-hmac-host",
 		Status:   models.StatusOnline,
 		AgentKey: "intercept-hmac-key-abc",
 	}
@@ -154,7 +154,7 @@ func TestInterceptor_ValidHMAC(t *testing.T) {
 	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "intercept-valid-host",
+		DisplayName: "intercept-valid-host",
 		Status:   models.StatusOnline,
 		AgentKey: "intercept-valid-key-abc",
 	}

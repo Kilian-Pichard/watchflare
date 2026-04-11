@@ -93,20 +93,20 @@ func (c *Client) Close() error {
 
 // RegisterRequest contains all parameters needed to register the agent
 type RegisterRequest struct {
-	Token             string
-	Hostname          string
-	IPv4              string
-	IPv6              string
-	Platform          string
-	PlatformVersion   string
-	PlatformFamily    string
-	Architecture      string
-	Kernel            string
-	EnvironmentType   string
-	Hypervisor        string
-	ContainerRuntime  string
-	ExistingUUID      string
-	AgentVersion      string
+	Token            string
+	Hostname         string
+	IPv4             string
+	IPv6             string
+	Platform         string
+	PlatformVersion  string
+	PlatformFamily   string
+	Architecture     string
+	Kernel           string
+	EnvironmentType  string
+	Hypervisor       string
+	ContainerRuntime string
+	ExistingUUID     string
+	AgentVersion     string
 }
 
 // RegistrationResponse contains the result of a successful registration
@@ -180,12 +180,12 @@ func SaveCACertificate(caCertPEM, certPath string) error {
 }
 
 // Heartbeat sends a simple heartbeat (wrapper for SendHeartbeat with empty IPs)
-func (c *Client) Heartbeat(agentID, agentKey string) error {
+func (c *Client) Heartbeat(agentID, agentKey string) ([]*pb.PendingCommand, error) {
 	return c.SendHeartbeat(agentID, agentKey, "", "")
 }
 
-// SendHeartbeat sends a heartbeat to the backend
-func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) error {
+// SendHeartbeat sends a heartbeat to the backend and returns any pending commands.
+func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) ([]*pb.PendingCommand, error) {
 	timestamp := time.Now().Unix()
 
 	req := &pb.HeartbeatRequest{
@@ -200,7 +200,7 @@ func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) error {
 	ctx := context.Background()
 	ctx, err := security.AttachAuthMetadata(ctx, agentID, agentKey, timestamp, req)
 	if err != nil {
-		return fmt.Errorf("failed to attach auth metadata: %w", err)
+		return nil, fmt.Errorf("failed to attach auth metadata: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -208,14 +208,14 @@ func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) error {
 
 	resp, err := c.client.Heartbeat(ctx, req)
 	if err != nil {
-		return fmt.Errorf("heartbeat failed: %w", err)
+		return nil, fmt.Errorf("heartbeat failed: %w", err)
 	}
 
 	if !resp.Success {
-		return fmt.Errorf("heartbeat rejected: %s", resp.Message)
+		return nil, fmt.Errorf("heartbeat rejected: %s", resp.Message)
 	}
 
-	return nil
+	return resp.Commands, nil
 }
 
 // SendMetrics sends system metrics to the backend

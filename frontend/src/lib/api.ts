@@ -452,8 +452,6 @@ export async function getAggregatedMetrics(
 interface PackageQueryParams {
   limit?: number;
   offset?: number;
-  package_manager?: string;
-  search?: string;
 }
 
 export async function getHostPackages(
@@ -463,8 +461,6 @@ export async function getHostPackages(
   const query = buildQueryString({
     limit: params.limit,
     offset: params.offset,
-    package_manager: params.package_manager,
-    search: params.search,
   });
   return apiRequest<GetPackagesResponse>(
     `/hosts/${hostId}/packages${query}`,
@@ -519,6 +515,24 @@ export async function getLatestAgentVersion(): Promise<{
   latest_version: string;
 }> {
   return apiRequest<{ latest_version: string }>("/agent/latest-version");
+}
+
+export async function triggerPackageCollect(
+  hostId: string,
+): Promise<{ message: string; command_id: string }> {
+  return apiRequest<{ message: string; command_id: string }>(
+    `/hosts/${hostId}/packages/collect`,
+    { method: 'POST' },
+  );
+}
+
+export async function triggerAgentUpdate(
+  hostId: string,
+): Promise<{ message: string; command_id: string }> {
+  return apiRequest<{ message: string; command_id: string }>(
+    `/hosts/${hostId}/agent/update`,
+    { method: 'POST' },
+  );
 }
 
 // Settings API calls
