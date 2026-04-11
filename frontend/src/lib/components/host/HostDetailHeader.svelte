@@ -25,6 +25,7 @@
         Bell,
         MemoryStick,
     } from "lucide-svelte";
+    import OsIcon from "$lib/components/icons/OsIcon.svelte";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
     import type { Host, Metric } from "$lib/types";
 
@@ -216,7 +217,12 @@
                 <span>·</span>
             {/if}
             <span class="inline-flex items-center gap-1">
-                <detail.icon class="h-3.5 w-3.5" />{detail.text}{#if agentOutdated && detail.type === 'agent_version'}&nbsp;<span class="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"><ArrowUpCircle class="h-3 w-3" />v{latestAgentVersion}</span>{/if}
+                {#if detail.type === 'platform'}
+                    <OsIcon os={host.platform} class="h-3.5 w-3.5 shrink-0" />
+                {:else}
+                    <detail.icon class="h-3.5 w-3.5" />
+                {/if}
+                {detail.text}{#if agentOutdated && detail.type === 'agent_version'}&nbsp;<span class="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"><ArrowUpCircle class="h-3 w-3" />v{latestAgentVersion}</span>{/if}
             </span>
         {/each}
     </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import OsIcon from '$lib/components/icons/OsIcon.svelte';
 	import * as api from '$lib/api.js';
 	import { logger } from '$lib/utils';
 	import { AGENT_STATUS_POLL_INTERVAL } from '$lib/constants';
@@ -66,140 +67,70 @@
 </script>
 
 {#if hostStatus === 'online'}
-	<!-- Success State -->
-	<div class="flex items-center gap-4 bg-success text-white p-8 rounded-xl mb-8 shadow-md">
-		<span class="text-5xl">🎉</span>
+	<div class="flex items-center gap-3 rounded-lg border border-success bg-success/10 p-4">
+		<svg class="h-4 w-4 shrink-0 text-success" fill="currentColor" viewBox="0 0 20 20">
+			<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+		</svg>
 		<div>
-			<h3 class="text-2xl font-semibold mb-1">Agent Connected Successfully!</h3>
-			<p class="opacity-90">Your host is now online and sending heartbeats</p>
+			<p class="text-sm font-medium text-success">Agent connected</p>
+			<p class="text-xs text-muted-foreground mt-0.5">Your host is now online and sending metrics</p>
 		</div>
 	</div>
 {:else}
-	<!-- Installation Instructions -->
-	<div class="mt-8">
-		<h3 class="text-xl font-semibold text-foreground mb-6">📦 Installation Instructions</h3>
+	<div class="rounded-lg border bg-card p-4 sm:p-6">
+		<h3 class="text-sm font-semibold text-foreground mb-4">Installation</h3>
 
 		<!-- OS Tabs -->
-		<div class="bg-card border-2 rounded-lg p-6 mb-6">
-			<div class="flex gap-2 mb-6 border-b-2 border-border">
-				<button
-					class="px-4 py-3 bg-transparent border-b-2 -mb-0.5 font-medium transition-colors {selectedOS === 'linux'
-						? 'text-primary border-primary'
-						: 'text-muted-foreground border-transparent hover:text-primary'}"
-					onclick={() => (selectedOS = 'linux')}
-				>
-					🐧 Linux
-				</button>
-				<button
-					class="px-4 py-3 bg-transparent border-b-2 -mb-0.5 font-medium transition-colors {selectedOS === 'macos'
-						? 'text-primary border-primary'
-						: 'text-muted-foreground border-transparent hover:text-primary'}"
-					onclick={() => (selectedOS = 'macos')}
-				>
-					🍎 macOS
-				</button>
-				<button
-					class="px-4 py-3 bg-transparent border-b-2 -mb-0.5 font-medium opacity-50 cursor-not-allowed text-muted-foreground border-transparent"
-					disabled
-				>
-					🪟 Windows <span class="text-[0.7rem] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded ml-1">Soon</span>
-				</button>
-				<button
-					class="px-4 py-3 bg-transparent border-b-2 -mb-0.5 font-medium opacity-50 cursor-not-allowed text-muted-foreground border-transparent"
-					disabled
-				>
-					🐳 Docker <span class="text-[0.7rem] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded ml-1">Soon</span>
-				</button>
-			</div>
-
-			<div class="mt-4">
-				{#if selectedOS === 'linux'}
-					<div>
-						<h5 class="text-base font-semibold text-foreground mb-4">🐧 Linux Installation</h5>
-
-						<div class="relative mb-4">
-							<pre class="bg-foreground text-background p-4 rounded-md font-mono text-sm leading-relaxed overflow-x-auto">{linuxCmd}</pre>
-							<button
-								class="absolute top-2 right-2 px-3 py-2 bg-muted-foreground/30 text-white rounded text-xs font-medium cursor-pointer transition-colors hover:bg-muted-foreground/50"
-								onclick={() => handleCopy(linuxCmd)}
-							>
-								{copied ? '✓ Copied!' : 'Copy'}
-							</button>
-						</div>
-
-						<div class="mt-4">
-							<p class="text-sm font-semibold text-muted-foreground mb-2">Supported distributions:</p>
-							<div class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
-								<span class="text-success text-sm">✓ Ubuntu 18.04+</span>
-								<span class="text-success text-sm">✓ Debian 10+</span>
-								<span class="text-success text-sm">✓ CentOS 7+</span>
-								<span class="text-success text-sm">✓ RHEL 7+</span>
-								<span class="text-success text-sm">✓ Fedora 30+</span>
-								<span class="text-success text-sm">✓ Amazon Linux 2</span>
-							</div>
-						</div>
-					</div>
-				{:else if selectedOS === 'macos'}
-					<div>
-						<h5 class="text-base font-semibold text-foreground mb-4">🍎 macOS Installation</h5>
-
-						<div class="relative mb-4">
-							<pre class="bg-foreground text-background p-4 rounded-md font-mono text-sm leading-relaxed overflow-x-auto">{macosCmd}</pre>
-							<button
-								class="absolute top-2 right-2 px-3 py-2 bg-muted-foreground/30 text-white rounded text-xs font-medium cursor-pointer transition-colors hover:bg-muted-foreground/50"
-								onclick={() => handleCopy(macosCmd)}
-							>
-								{copied ? '✓ Copied!' : 'Copy'}
-							</button>
-						</div>
-
-						<div class="mt-4">
-							<p class="text-sm font-semibold text-muted-foreground mb-2">Supported versions:</p>
-							<div class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
-								<span class="text-success text-sm">✓ macOS 11 (Big Sur) and later</span>
-								<span class="text-success text-sm">✓ Intel and Apple Silicon (M1/M2/M3)</span>
-							</div>
-						</div>
-					</div>
-				{/if}
-			</div>
+		<div class="flex gap-1 border-b mb-4">
+			<button
+				class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {selectedOS === 'linux'
+					? 'border-primary text-foreground'
+					: 'border-transparent text-muted-foreground hover:text-foreground'}"
+				onclick={() => (selectedOS = 'linux')}
+			>
+				<OsIcon os="linux" class="h-4 w-4 shrink-0" />
+				Linux
+			</button>
+			<button
+				class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {selectedOS === 'macos'
+					? 'border-primary text-foreground'
+					: 'border-transparent text-muted-foreground hover:text-foreground'}"
+				onclick={() => (selectedOS = 'macos')}
+			>
+				<OsIcon os="macos" class="h-4 w-4 shrink-0" />
+				macOS
+			</button>
+			<button class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted-foreground opacity-40 cursor-not-allowed" disabled>
+				<OsIcon os="windows" class="h-4 w-4 shrink-0" />
+				Windows
+			</button>
+			<button class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted-foreground opacity-40 cursor-not-allowed" disabled>
+				<OsIcon os="docker" class="h-4 w-4 shrink-0" />
+				Docker
+			</button>
 		</div>
 
+		<!-- Command -->
+		<div class="relative">
+			<pre class="bg-foreground text-background px-4 py-3 rounded-lg font-mono text-xs leading-relaxed overflow-x-auto pr-20">{selectedOS === 'linux' ? linuxCmd : macosCmd}</pre>
+			<button
+				class="absolute top-2 right-2 px-2.5 py-1.5 bg-muted-foreground/30 text-white rounded text-xs font-medium transition-colors hover:bg-muted-foreground/50"
+				onclick={() => handleCopy(selectedOS === 'linux' ? linuxCmd : macosCmd)}
+			>
+				{copied ? 'Copied!' : 'Copy'}
+			</button>
+		</div>
+
+		<!-- Waiting indicator -->
 		{#if hostStatus === 'offline'}
-			<!-- Agent registered, service not started yet -->
-			<div class="bg-warning/10 border-l-4 border-warning p-6 rounded-md">
-				<h4 class="text-base font-semibold text-foreground mb-2">✅ Agent registered — start the service</h4>
-				<p class="text-sm text-muted-foreground mb-4">The agent is installed and configured. Start the service to go online:</p>
-				{#if selectedOS === 'linux'}
-					<pre class="bg-foreground text-background p-3 rounded-md font-mono text-sm">sudo systemctl enable --now watchflare-agent</pre>
-				{:else if selectedOS === 'macos'}
-					<pre class="bg-foreground text-background p-3 rounded-md font-mono text-sm">brew services start watchflare-agent</pre>
-				{/if}
-				<div class="flex items-center gap-3 p-4 bg-card rounded-md mt-4">
-					<div class="h-5 w-5 border-2 border-border border-t-warning rounded-full animate-spin"></div>
-					<span class="text-sm font-medium text-muted-foreground">Waiting for service to start...</span>
-				</div>
+			<div class="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+				<div class="h-4 w-4 border-2 border-border border-t-warning rounded-full animate-spin shrink-0"></div>
+				Agent registered — waiting for service to start
 			</div>
 		{:else}
-			<!-- What Happens Next -->
-			<div class="bg-primary/5 border-l-4 border-primary p-6 rounded-md">
-				<h4 class="text-base font-semibold text-foreground mb-4">📖 What happens next?</h4>
-				<ol class="list-decimal pl-6 text-muted-foreground mb-4">
-					<li class="mb-2 text-sm leading-relaxed">Run the installation command above</li>
-					<li class="mb-2 text-sm leading-relaxed">
-						Status will change from <span class="text-warning font-semibold">"pending"</span> to
-						<span class="text-success font-semibold">"online"</span>
-					</li>
-					<li class="mb-2 text-sm leading-relaxed">You'll start receiving metrics and heartbeats</li>
-					<li class="mb-2 text-sm leading-relaxed">This page will update automatically when connected</li>
-				</ol>
-
-				{#if hostStatus === 'pending'}
-					<div class="flex items-center gap-3 p-4 bg-card rounded-md mt-4">
-						<div class="h-5 w-5 border-2 border-border border-t-primary rounded-full animate-spin"></div>
-						<span class="text-sm font-medium text-muted-foreground">Waiting for agent to connect...</span>
-					</div>
-				{/if}
+			<div class="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+				<div class="h-4 w-4 border-2 border-border border-t-primary rounded-full animate-spin shrink-0"></div>
+				Waiting for agent to connect...
 			</div>
 		{/if}
 	</div>

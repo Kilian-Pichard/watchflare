@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { goto } from "$app/navigation";
+    import { page } from "$app/stores";
     import * as api from "$lib/api.js";
     import { handleSSEReactivation, logger } from "$lib/utils";
     import { HOSTS_PER_PAGE, SEARCH_DEBOUNCE_MS } from "$lib/constants";
@@ -10,16 +10,24 @@
     import Pagination from "$lib/components/Pagination.svelte";
     import HostFilters from "$lib/components/host/HostFilters.svelte";
     import HostListTable from "$lib/components/host/HostListTable.svelte";
+    import AddHostModal from "$lib/components/host/AddHostModal.svelte";
 
     const PER_PAGE = HOSTS_PER_PAGE;
 
     let hosts: Host[] = $state([]);
     let total = $state(0);
-    let page = $state(1);
+    let currentPage = $state(1);
     let initialLoading = $state(true);
     let loading = $state(false);
     let latestAgentVersion: string | null = $state(null);
     let error = $state("");
+    let showAddHost = $state(false);
+
+    $effect(() => {
+        if (($page.state as { openAddHost?: boolean }).openAddHost) {
+            showAddHost = true;
+        }
+    });
     let showDeleteConfirm = $state(false);
     let hostToDelete: Host | null = $state(null);
     let sseUnsubscribe: (() => void) | null = null;
@@ -52,7 +60,7 @@
             ]);
             hosts = response.hosts || [];
             total = response.total || 0;
-            page = p;
+            currentPage = p;
             if (latestAgentVersion === null) latestAgentVersion = versionResponse.latest_version || null;
         } catch (err: unknown) {
             error =
@@ -70,7 +78,7 @@
             sortColumn = column;
             sortOrder = "desc";
         }
-        loadPage(page);
+        loadPage(currentPage);
     }
 
     function handleSearchInput(e: Event) {
@@ -90,7 +98,7 @@
     async function handleDismissReactivation(hostId: string) {
         try {
             await api.dismissReactivation(hostId);
-            await loadPage(page);
+            await loadPage(currentPage);
         } catch (err) {
             logger.error("Failed to dismiss reactivation:", err);
         }
@@ -146,7 +154,7 @@
 
         try {
             await api.deleteHost(hostToDelete.id);
-            await loadPage(page);
+            await loadPage(currentPage);
             showDeleteConfirm = false;
             hostToDelete = null;
         } catch (err: unknown) {
@@ -186,7 +194,7 @@
     <div class="rounded-lg border border-destructive bg-destructive/10 p-4">
         <p class="text-sm text-destructive">{error}</p>
     </div>
-{:else if hosts.length === 0 && page === 1 && !searchQuery && !statusFilter}
+{:else if hosts.length === 0 && currentPage === 1 && !searchQuery && !statusFilter}
     <div
         class="flex flex-col items-center justify-center rounded-lg border bg-card py-20 text-center"
     >
@@ -210,7 +218,7 @@
             Add your first host to start monitoring
         </p>
         <button
-            onclick={() => goto("/hosts/new")}
+            onclick={() => (showAddHost = true)}
             class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
             Add Your First Host
@@ -237,9 +245,11 @@
         />
 
         <!-- Pagination -->
-        <Pagination currentPage={page} {totalPages} totalItems={total} pageSize={PER_PAGE} itemLabel="hosts" onPageChange={loadPage} />
+        <Pagination currentPage={currentPage} {totalPages} totalItems={total} pageSize={PER_PAGE} itemLabel="hosts" onPageChange={loadPage} />
     </div>
 {/if}
+<AddHostModal open={showAddHost} onClose={() => (showAddHost = false)} />
+
 <!-- Delete Confirmation Modal -->
 <ConfirmDialog
     open={showDeleteConfirm}

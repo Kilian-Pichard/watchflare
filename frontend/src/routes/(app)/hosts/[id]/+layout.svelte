@@ -75,6 +75,11 @@
     onMount(() => {
         sseUnsubscribe = sseStore.connect(handleSSEMessage);
         loadHost();
+        const state = $page.state as { newHostToken?: string };
+        if (state.newHostToken) {
+            regeneratedToken = state.newHostToken;
+            backendHost = window.location.host;
+        }
     });
 
     onDestroy(() => {
