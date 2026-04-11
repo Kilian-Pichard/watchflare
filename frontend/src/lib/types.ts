@@ -40,9 +40,9 @@ export interface ChangePasswordRequest {
   new_password: string;
 }
 
-// ===== Server =====
+// ===== Host =====
 
-export type ServerStatus =
+export type HostStatus =
   | "online"
   | "offline"
   | "pending"
@@ -54,7 +54,7 @@ export type EnvironmentType =
   | "vm"
   | "vm_with_containers";
 
-export interface Server {
+export interface Host {
   id: string;
   name: string;
   hostname: string;
@@ -67,7 +67,7 @@ export interface Server {
   ip_address_v6: string | null;
   configured_ip: string;
   ignore_ip_mismatch: boolean;
-  status: ServerStatus;
+  status: HostStatus;
   last_seen: string | null;
   created_at: string;
   environment_type: EnvironmentType;
@@ -75,15 +75,15 @@ export interface Server {
   hypervisor: string | null;
   reactivated_at: string | null;
   agent_version: string | null;
-  server_uuid: string;
+  agent_uuid: string;
 }
 
-export interface ServerWithMetrics {
-  server: Server;
+export interface HostWithMetrics {
+  host: Host;
   latestMetric?: Metric;
 }
 
-export interface CreateServerRequest {
+export interface CreateHostRequest {
   name: string;
   configured_ip?: string;
   allow_any_ip?: boolean;
@@ -109,7 +109,7 @@ export interface SensorDataPoint {
 
 export interface Metric {
   id: number;
-  server_id: string;
+  host_id: string;
   timestamp: string;
   cpu_usage_percent: number;
   memory_used_bytes: number;
@@ -145,12 +145,12 @@ export interface AggregatedMetric {
   network_rx_bytes_per_sec: number;
   network_tx_bytes_per_sec: number;
   cpu_temperature_celsius: number;
-  server_count: number;
+  host_count: number;
 }
 
 export interface ContainerMetric {
   id: string;
-  server_id: string;
+  host_id: string;
   timestamp: string;
   container_id: string;
   container_name: string;
@@ -182,7 +182,7 @@ export interface DroppedMetric {
 
 export interface Package {
   id: number;
-  server_id: string;
+  host_id: string;
   name: string;
   version: string;
   architecture: string;
@@ -208,7 +208,7 @@ export interface PackageStats {
 
 export interface PackageCollection {
   id: number;
-  server_id: string;
+  host_id: string;
   timestamp: string;
   collection_type: string;
   package_count: number;
@@ -220,7 +220,7 @@ export interface PackageCollection {
 
 export interface PackageHistory {
   id: number;
-  server_id: string;
+  host_id: string;
   timestamp: string;
   name: string;
   version: string;
@@ -236,7 +236,7 @@ export interface PackageHistory {
 
 export type SSEEventType =
   | "connected"
-  | "server_update"
+  | "host_update"
   | "metrics_update"
   | "aggregated_metrics_update"
   | "container_metrics_update";
@@ -246,9 +246,9 @@ export interface SSEEvent {
   data: unknown;
 }
 
-export interface ServerUpdateEvent {
+export interface HostUpdateEvent {
   id: string;
-  status: ServerStatus;
+  status: HostStatus;
   last_seen: string;
   ip_address_v4?: string;
   ip_address_v6?: string;
@@ -259,7 +259,7 @@ export interface ServerUpdateEvent {
 }
 
 export interface MetricsUpdateEvent extends Metric {
-  server_id: string;
+  host_id: string;
 }
 
 export interface AggregatedMetricsUpdateEvent extends AggregatedMetric {
@@ -285,9 +285,9 @@ export interface RegisterResponse {
   user: User;
 }
 
-export interface CreateServerResponse {
+export interface CreateHostResponse {
   message: string;
-  server: Server;
+  host: Host;
   token: string;
   agent_key: string;
   backend_host: string;
@@ -298,13 +298,13 @@ export interface RegenerateTokenResponse {
   token: string;
 }
 
-export interface GetServerResponse {
-  server: Server;
+export interface GetHostResponse {
+  host: Host;
   clock_desync: boolean;
 }
 
-export interface ListServersResponse {
-  servers: Server[];
+export interface ListHostsResponse {
+  hosts: Host[];
   total: number;
   page: number;
   per_page: number;
@@ -397,7 +397,7 @@ export interface GetSMTPSettingsResponse {
 // ===== Alert Rules =====
 
 export type AlertMetricType =
-  | 'server_down'
+  | 'host_down'
   | 'cpu_usage'
   | 'memory_usage'
   | 'disk_usage'
@@ -407,7 +407,7 @@ export type AlertMetricType =
   | 'temperature';
 
 export const ALERT_METRIC_TYPES: AlertMetricType[] = [
-  'server_down',
+  'host_down',
   'cpu_usage',
   'memory_usage',
   'disk_usage',
@@ -418,7 +418,7 @@ export const ALERT_METRIC_TYPES: AlertMetricType[] = [
 ];
 
 export const ALERT_METRIC_LABELS: Record<AlertMetricType, string> = {
-  server_down: 'Server offline',
+  host_down: 'Host offline',
   cpu_usage: 'CPU usage',
   memory_usage: 'Memory usage',
   disk_usage: 'Disk usage',
@@ -448,14 +448,14 @@ export interface GetAlertRulesResponse {
   rules: AlertRule[];
 }
 
-export interface GetServerAlertRulesResponse {
+export interface GetHostAlertRulesResponse {
   rules: EffectiveAlertRule[];
 }
 
 export interface ActiveIncident {
   id: string;
-  server_id: string;
-  server_name: string;
+  host_id: string;
+  host_name: string;
   metric_type: AlertMetricType;
   started_at: string;
   threshold_value: number;
@@ -466,7 +466,7 @@ export interface GetActiveIncidentsResponse {
   incidents: ActiveIncident[];
 }
 
-export interface ServerIncident {
+export interface HostIncident {
   id: string;
   metric_type: AlertMetricType;
   started_at: string;
@@ -477,8 +477,8 @@ export interface ServerIncident {
 
 export type IncidentStatusFilter = 'all' | 'active' | 'resolved';
 
-export interface GetServerIncidentsResponse {
-  incidents: ServerIncident[];
+export interface GetHostIncidentsResponse {
+  incidents: HostIncident[];
   total_count: number;
   limit: number;
   offset: number;
@@ -507,7 +507,7 @@ export interface ChartProps {
   data: Metric[] | AggregatedMetric[];
 }
 
-export interface ServerTableProps {
-  servers: ServerWithMetrics[];
+export interface HostTableProps {
+  hosts: HostWithMetrics[];
   metricsData: Record<string, Metric[]>;
 }

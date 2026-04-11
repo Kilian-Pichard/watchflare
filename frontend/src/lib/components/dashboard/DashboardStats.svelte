@@ -2,9 +2,9 @@
     import { Server, Cpu, MemoryStick, HardDrive } from "lucide-svelte";
 
     interface Stats {
-        totalServers: number;
-        onlineServers: number;
-        offlineServers: number;
+        totalHosts: number;
+        onlineHosts: number;
+        offlineHosts: number;
         avgCPU: number;
         avgMemory: number;
         avgDisk: number;
@@ -26,9 +26,9 @@
             <Server class="h-4 w-4" />
         </div>
         <div class="min-w-0">
-            <p class="text-xs text-muted-foreground truncate">Servers</p>
+            <p class="text-xs text-muted-foreground truncate">Hosts</p>
             <p class="text-sm font-semibold text-foreground">
-                {stats.onlineServers}/{stats.totalServers}
+                {stats.onlineHosts}/{stats.totalHosts}
             </p>
         </div>
     </div>

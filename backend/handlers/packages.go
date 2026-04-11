@@ -15,10 +15,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetServerPackages returns current packages for a server
-// GET /api/servers/:id/packages
-func GetServerPackages(c *gin.Context) {
-	serverID := c.Param("id")
+// GetHostPackages returns current packages for a host
+// GET /api/v1/hosts/:id/packages
+func GetHostPackages(c *gin.Context) {
+	hostID := c.Param("id")
 
 	// Query parameters
 	searchQuery := c.Query("search")
@@ -36,7 +36,7 @@ func GetServerPackages(c *gin.Context) {
 	}
 
 	// Build query
-	query := database.DB.Where("server_id = ?", serverID)
+	query := database.DB.Where("host_id = ?", hostID)
 
 	if searchQuery != "" {
 		query = query.Where("name ILIKE ?", "%"+searchQuery+"%")
@@ -69,10 +69,10 @@ func GetServerPackages(c *gin.Context) {
 	})
 }
 
-// GetServerPackageHistory returns package history for a server
-// GET /api/servers/:id/packages/history
-func GetServerPackageHistory(c *gin.Context) {
-	serverID := c.Param("id")
+// GetHostPackageHistory returns package history for a host
+// GET /api/v1/hosts/:id/packages/history
+func GetHostPackageHistory(c *gin.Context) {
+	hostID := c.Param("id")
 
 	// Query parameters
 	changeType := c.Query("change_type") // 'added', 'removed', 'updated', 'initial'
@@ -103,7 +103,7 @@ func GetServerPackageHistory(c *gin.Context) {
 	}
 
 	// Build query
-	query := database.DB.Where("server_id = ?", serverID)
+	query := database.DB.Where("host_id = ?", hostID)
 
 	if changeType != "" {
 		query = query.Where("change_type = ?", changeType)
@@ -149,10 +149,10 @@ func GetServerPackageHistory(c *gin.Context) {
 	})
 }
 
-// GetServerPackageCollections returns package collection metadata
-// GET /api/servers/:id/packages/collections
-func GetServerPackageCollections(c *gin.Context) {
-	serverID := c.Param("id")
+// GetHostPackageCollections returns package collection metadata
+// GET /api/v1/hosts/:id/packages/collections
+func GetHostPackageCollections(c *gin.Context) {
+	hostID := c.Param("id")
 
 	limitStr := c.DefaultQuery("limit", "50")
 	offsetStr := c.DefaultQuery("offset", "0")
@@ -169,7 +169,7 @@ func GetServerPackageCollections(c *gin.Context) {
 	// Get total count
 	var totalCount int64
 	if err := database.DB.Model(&models.PackageCollection{}).
-		Where("server_id = ?", serverID).
+		Where("host_id = ?", hostID).
 		Count(&totalCount).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count collections"})
 		return
@@ -177,7 +177,7 @@ func GetServerPackageCollections(c *gin.Context) {
 
 	// Get collections
 	var collections []models.PackageCollection
-	if err := database.DB.Where("server_id = ?", serverID).
+	if err := database.DB.Where("host_id = ?", hostID).
 		Order("timestamp DESC").
 		Limit(limit).
 		Offset(offset).
@@ -195,9 +195,9 @@ func GetServerPackageCollections(c *gin.Context) {
 }
 
 // GetPackageStats returns aggregated package statistics
-// GET /api/servers/:id/packages/stats
+// GET /api/v1/hosts/:id/packages/stats
 func GetPackageStats(c *gin.Context) {
-	serverID := c.Param("id")
+	hostID := c.Param("id")
 
 	// Package count by package manager
 	var managerStats []struct {
@@ -207,7 +207,7 @@ func GetPackageStats(c *gin.Context) {
 
 	if err := database.DB.Model(&models.Package{}).
 		Select("package_manager, COUNT(*) as count").
-		Where("server_id = ?", serverID).
+		Where("host_id = ?", hostID).
 		Group("package_manager").
 		Scan(&managerStats).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch stats"})
@@ -216,7 +216,7 @@ func GetPackageStats(c *gin.Context) {
 
 	// Total packages
 	var totalPackages int64
-	if err := database.DB.Model(&models.Package{}).Where("server_id = ?", serverID).Count(&totalPackages).Error; err != nil {
+	if err := database.DB.Model(&models.Package{}).Where("host_id = ?", hostID).Count(&totalPackages).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count packages"})
 		return
 	}
@@ -225,7 +225,7 @@ func GetPackageStats(c *gin.Context) {
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
 	var recentChanges int64
 	if err := database.DB.Model(&models.PackageHistory{}).
-		Where("server_id = ? AND timestamp >= ? AND change_type != ?", serverID, thirtyDaysAgo, models.ChangeTypeInitial).
+		Where("host_id = ? AND timestamp >= ? AND change_type != ?", hostID, thirtyDaysAgo, models.ChangeTypeInitial).
 		Count(&recentChanges).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count recent changes"})
 		return
@@ -233,8 +233,8 @@ func GetPackageStats(c *gin.Context) {
 
 	// Last collection (zero value is fine if none exists yet)
 	var lastCollection models.PackageCollection
-	if err := database.DB.Where("server_id = ?", serverID).Order("timestamp DESC").First(&lastCollection).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		slog.Warn("failed to fetch last collection", "server_id", serverID, "error", err)
+	if err := database.DB.Where("host_id = ?", hostID).Order("timestamp DESC").First(&lastCollection).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		slog.Warn("failed to fetch last collection", "host_id", hostID, "error", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

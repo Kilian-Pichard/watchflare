@@ -77,28 +77,28 @@ func UpdateAlertRules(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "alert rules updated"})
 }
 
-// GetServerAlertRules returns the effective alert rules for a specific server.
-func GetServerAlertRules(c *gin.Context) {
-	serverID := c.Param("id")
-	rules, err := services.GetServerAlertRules(serverID)
+// GetHostAlertRules returns the effective alert rules for a specific host.
+func GetHostAlertRules(c *gin.Context) {
+	hostID := c.Param("id")
+	rules, err := services.GetHostAlertRules(hostID)
 	if err != nil {
-		slog.Error("failed to get server alert rules", "server_id", serverID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get server alert rules"})
+		slog.Error("failed to get host alert rules", "host_id", hostID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get host alert rules"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"rules": rules})
 }
 
-// UpsertServerAlertRuleRequest is the body for PUT /servers/:id/alerts/:metric_type.
-type UpsertServerAlertRuleRequest struct {
+// UpsertHostAlertRuleRequest is the body for PUT /hosts/:id/alerts/:metric_type.
+type UpsertHostAlertRuleRequest struct {
 	Enabled         bool    `json:"enabled"`
 	Threshold       float64 `json:"threshold"`
 	DurationMinutes int     `json:"duration_minutes"`
 }
 
-// UpsertServerAlertRule creates or updates a per-server alert rule override.
-func UpsertServerAlertRule(c *gin.Context) {
-	serverID := c.Param("id")
+// UpsertHostAlertRule creates or updates a per-host alert rule override.
+func UpsertHostAlertRule(c *gin.Context) {
+	hostID := c.Param("id")
 	metricType := c.Param("metric_type")
 
 	if !isValidMetricType(metricType) {
@@ -106,7 +106,7 @@ func UpsertServerAlertRule(c *gin.Context) {
 		return
 	}
 
-	var req UpsertServerAlertRuleRequest
+	var req UpsertHostAlertRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -120,22 +120,22 @@ func UpsertServerAlertRule(c *gin.Context) {
 		return
 	}
 
-	if err := services.UpsertServerAlertRule(serverID, metricType, services.AlertRuleInput{
+	if err := services.UpsertHostAlertRule(hostID, metricType, services.AlertRuleInput{
 		MetricType:      metricType,
 		Enabled:         req.Enabled,
 		Threshold:       req.Threshold,
 		DurationMinutes: req.DurationMinutes,
 	}); err != nil {
-		slog.Error("failed to upsert server alert rule", "server_id", serverID, "metric_type", metricType, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save server alert rule"})
+		slog.Error("failed to upsert host alert rule", "host_id", hostID, "metric_type", metricType, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save host alert rule"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "server alert rule saved"})
+	c.JSON(http.StatusOK, gin.H{"message": "host alert rule saved"})
 }
 
-// DeleteServerAlertRule removes a per-server override, reverting to the global default.
-func DeleteServerAlertRule(c *gin.Context) {
-	serverID := c.Param("id")
+// DeleteHostAlertRule removes a per-host override, reverting to the global default.
+func DeleteHostAlertRule(c *gin.Context) {
+	hostID := c.Param("id")
 	metricType := c.Param("metric_type")
 
 	if !isValidMetricType(metricType) {
@@ -143,31 +143,31 @@ func DeleteServerAlertRule(c *gin.Context) {
 		return
 	}
 
-	if err := services.DeleteServerAlertRule(serverID, metricType); err != nil {
-		slog.Error("failed to delete server alert rule", "server_id", serverID, "metric_type", metricType, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete server alert rule"})
+	if err := services.DeleteHostAlertRule(hostID, metricType); err != nil {
+		slog.Error("failed to delete host alert rule", "host_id", hostID, "metric_type", metricType, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete host alert rule"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "server alert rule deleted"})
+	c.JSON(http.StatusOK, gin.H{"message": "host alert rule deleted"})
 }
 
 // ActiveIncidentItem is the response shape for GET /alerts/active.
 type ActiveIncidentItem struct {
 	ID             string    `json:"id"`
-	ServerID       string    `json:"server_id"`
-	ServerName     string    `json:"server_name"`
+	HostID         string    `json:"host_id"`
+	HostName       string    `json:"host_name"`
 	MetricType     string    `json:"metric_type"`
 	StartedAt      time.Time `json:"started_at"`
 	ThresholdValue float64   `json:"threshold_value"`
 	CurrentValue   float64   `json:"current_value"`
 }
 
-// GetActiveIncidents returns all unresolved alert incidents with their server name.
+// GetActiveIncidents returns all unresolved alert incidents with their host name.
 func GetActiveIncidents(c *gin.Context) {
 	var items []ActiveIncidentItem
 	err := database.DB.Table("alert_incidents").
-		Select("alert_incidents.id, alert_incidents.server_id, servers.name AS server_name, alert_incidents.metric_type, alert_incidents.started_at, alert_incidents.threshold_value, alert_incidents.current_value").
-		Joins("JOIN servers ON servers.id = alert_incidents.server_id").
+		Select("alert_incidents.id, alert_incidents.host_id, hosts.name AS host_name, alert_incidents.metric_type, alert_incidents.started_at, alert_incidents.threshold_value, alert_incidents.current_value").
+		Joins("JOIN hosts ON hosts.id = alert_incidents.host_id").
 		Where("alert_incidents.resolved_at IS NULL").
 		Order("alert_incidents.started_at DESC").
 		Scan(&items).Error
@@ -182,8 +182,8 @@ func GetActiveIncidents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"incidents": items})
 }
 
-// ServerIncidentItem is the response shape for GET /servers/:id/incidents.
-type ServerIncidentItem struct {
+// HostIncidentItem is the response shape for GET /hosts/:id/incidents.
+type HostIncidentItem struct {
 	ID             string     `json:"id"`
 	MetricType     string     `json:"metric_type"`
 	StartedAt      time.Time  `json:"started_at"`
@@ -192,10 +192,10 @@ type ServerIncidentItem struct {
 	CurrentValue   float64    `json:"current_value"`
 }
 
-// GetServerIncidents returns the incident history for a specific server (paginated).
+// GetHostIncidents returns the incident history for a specific host (paginated).
 // Query params: status=all|active|resolved (default: all), limit (default: 20, max: 100), offset (default: 0).
-func GetServerIncidents(c *gin.Context) {
-	serverID := c.Param("id")
+func GetHostIncidents(c *gin.Context) {
+	hostID := c.Param("id")
 
 	limitStr := c.DefaultQuery("limit", "20")
 	offsetStr := c.DefaultQuery("offset", "0")
@@ -210,7 +210,7 @@ func GetServerIncidents(c *gin.Context) {
 		offset = 0
 	}
 
-	query := database.DB.Model(&models.AlertIncident{}).Where("server_id = ?", serverID)
+	query := database.DB.Model(&models.AlertIncident{}).Where("host_id = ?", hostID)
 	switch statusFilter {
 	case "active":
 		query = query.Where("resolved_at IS NULL")
@@ -220,21 +220,21 @@ func GetServerIncidents(c *gin.Context) {
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		slog.Error("failed to count server incidents", "server_id", serverID, "error", err)
+		slog.Error("failed to count host incidents", "host_id", hostID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get incidents"})
 		return
 	}
 
 	var incidents []models.AlertIncident
 	if err := query.Order("started_at DESC").Limit(limit).Offset(offset).Find(&incidents).Error; err != nil {
-		slog.Error("failed to get server incidents", "server_id", serverID, "error", err)
+		slog.Error("failed to get host incidents", "host_id", hostID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get incidents"})
 		return
 	}
 
-	items := make([]ServerIncidentItem, len(incidents))
+	items := make([]HostIncidentItem, len(incidents))
 	for i, inc := range incidents {
-		items[i] = ServerIncidentItem{
+		items[i] = HostIncidentItem{
 			ID:             inc.ID,
 			MetricType:     inc.MetricType,
 			StartedAt:      inc.StartedAt,
@@ -262,10 +262,10 @@ func isValidMetricType(mt string) bool {
 }
 
 // isValidThreshold checks that a threshold value is within a sensible range for the given metric type.
-// server_down has no threshold (ignored). Percentages must be 0-100. Temperature 0-150. Load avg > 0.
+// host_down has no threshold (ignored). Percentages must be 0-100. Temperature 0-150. Load avg > 0.
 func isValidThreshold(metricType string, threshold float64) bool {
 	switch metricType {
-	case models.MetricTypeServerDown:
+	case models.MetricTypeHostDown:
 		return true
 	case models.MetricTypeCPUUsage, models.MetricTypeMemoryUsage, models.MetricTypeDiskUsage:
 		return threshold >= 0 && threshold <= 100

@@ -3,12 +3,12 @@
     import { Command, Dialog } from "bits-ui";
     import { Search, Server } from "lucide-svelte";
     import * as api from "$lib/api.js";
-    import type { Server as ServerType } from "$lib/types";
+    import type { Host as HostType } from "$lib/types";
 
     let { open = $bindable(false) } = $props();
 
     let query = $state("");
-    let results: ServerType[] = $state([]);
+    let results: HostType[] = $state([]);
     let loading = $state(false);
     let searchTimeout: ReturnType<typeof setTimeout> | null = $state(null);
 
@@ -23,8 +23,8 @@
         loading = true;
         searchTimeout = setTimeout(async () => {
             try {
-                const response = await api.listServers({ search: value, perPage: 10 });
-                results = response.servers || [];
+                const response = await api.listHosts({ search: value, perPage: 10 });
+                results = response.hosts || [];
             } catch {
                 results = [];
             } finally {
@@ -33,11 +33,11 @@
         }, 200);
     }
 
-    function handleSelect(serverId: string) {
+    function handleSelect(hostId: string) {
         open = false;
         query = "";
         results = [];
-        goto(`/servers/${serverId}`);
+        goto(`/hosts/${hostId}`);
     }
 
     function getStatusDot(status: string): string {
@@ -61,7 +61,7 @@
                 <div class="flex items-center border-b px-4">
                     <Search class="h-4 w-4 shrink-0 text-muted-foreground" />
                     <Command.Input
-                        placeholder="Search servers..."
+                        placeholder="Search hosts..."
                         class="flex-1 bg-transparent px-3 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                         value={query}
                         onValueChange={handleInputChange}
@@ -73,7 +73,7 @@
                 <Command.List class="max-h-72 overflow-y-auto p-2">
                     {#if !query.trim()}
                         <div class="py-8 text-center text-sm text-muted-foreground">
-                            Type to search servers...
+                            Type to search hosts...
                         </div>
                     {:else if loading}
                         <div class="py-8 text-center text-sm text-muted-foreground">
@@ -81,23 +81,23 @@
                         </div>
                     {:else if results.length === 0}
                         <Command.Empty class="py-8 text-center text-sm text-muted-foreground">
-                            No servers found
+                            No hosts found
                         </Command.Empty>
                     {:else}
-                        {#each results as server}
+                        {#each results as host}
                             <Command.Item
-                                value={server.id}
-                                onSelect={() => handleSelect(server.id)}
+                                value={host.id}
+                                onSelect={() => handleSelect(host.id)}
                                 class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer outline-none data-highlighted:bg-muted transition-colors"
                             >
                                 <Server class="h-4 w-4 shrink-0 text-muted-foreground" />
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center gap-2">
-                                        <span class="font-medium text-foreground truncate">{server.name}</span>
-                                        <span class="h-1.5 w-1.5 shrink-0 rounded-full {getStatusDot(server.status)}"></span>
+                                        <span class="font-medium text-foreground truncate">{host.name}</span>
+                                        <span class="h-1.5 w-1.5 shrink-0 rounded-full {getStatusDot(host.status)}"></span>
                                     </div>
-                                    {#if server.hostname}
-                                        <p class="text-xs text-muted-foreground truncate">{server.hostname}{#if server.ip_address_v4} · {server.ip_address_v4}{/if}</p>
+                                    {#if host.hostname}
+                                        <p class="text-xs text-muted-foreground truncate">{host.hostname}{#if host.ip_address_v4} · {host.ip_address_v4}{/if}</p>
                                     {/if}
                                 </div>
                             </Command.Item>

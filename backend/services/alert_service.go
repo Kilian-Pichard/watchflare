@@ -18,13 +18,13 @@ type AlertRuleInput struct {
 	DurationMinutes int
 }
 
-// EffectiveAlertRule is the merged view of a rule for a specific server.
+// EffectiveAlertRule is the merged view of a rule for a specific host.
 type EffectiveAlertRule struct {
 	MetricType      string  `json:"metric_type"`
 	Enabled         bool    `json:"enabled"`
 	Threshold       float64 `json:"threshold"`
 	DurationMinutes int     `json:"duration_minutes"`
-	IsOverride      bool    `json:"is_override"` // true when a server-level rule exists
+	IsOverride      bool    `json:"is_override"` // true when a host-level rule exists
 }
 
 // GetAlertRules returns all global alert rules in canonical order.
@@ -65,19 +65,19 @@ func UpdateAlertRules(inputs []AlertRuleInput) error {
 	return nil
 }
 
-// GetServerAlertRules returns the effective (merged) rules for a server,
-// indicating which ones have a server-level override.
-func GetServerAlertRules(serverID string) ([]EffectiveAlertRule, error) {
+// GetHostAlertRules returns the effective (merged) rules for a host,
+// indicating which ones have a host-level override.
+func GetHostAlertRules(hostID string) ([]EffectiveAlertRule, error) {
 	globals, err := GetAlertRules()
 	if err != nil {
 		return nil, err
 	}
 
-	var overrides []models.ServerAlertRule
-	if err := database.DB.Where("server_id = ?", serverID).Find(&overrides).Error; err != nil {
+	var overrides []models.HostAlertRule
+	if err := database.DB.Where("host_id = ?", hostID).Find(&overrides).Error; err != nil {
 		return nil, err
 	}
-	overrideMap := make(map[string]models.ServerAlertRule, len(overrides))
+	overrideMap := make(map[string]models.HostAlertRule, len(overrides))
 	for _, o := range overrides {
 		overrideMap[o.MetricType] = o
 	}
@@ -105,10 +105,10 @@ func GetServerAlertRules(serverID string) ([]EffectiveAlertRule, error) {
 	return result, nil
 }
 
-// UpsertServerAlertRule creates or updates a per-server alert rule override.
-func UpsertServerAlertRule(serverID, metricType string, input AlertRuleInput) error {
-	rule := models.ServerAlertRule{
-		ServerID:        serverID,
+// UpsertHostAlertRule creates or updates a per-host alert rule override.
+func UpsertHostAlertRule(hostID, metricType string, input AlertRuleInput) error {
+	rule := models.HostAlertRule{
+		HostID:          hostID,
 		MetricType:      metricType,
 		Enabled:         input.Enabled,
 		Threshold:       input.Threshold,
@@ -118,11 +118,11 @@ func UpsertServerAlertRule(serverID, metricType string, input AlertRuleInput) er
 	return database.DB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&rule).Error
 }
 
-// DeleteServerAlertRule removes a per-server override, reverting to the global default.
-func DeleteServerAlertRule(serverID, metricType string) error {
+// DeleteHostAlertRule removes a per-host override, reverting to the global default.
+func DeleteHostAlertRule(hostID, metricType string) error {
 	err := database.DB.
-		Where("server_id = ? AND metric_type = ?", serverID, metricType).
-		Delete(&models.ServerAlertRule{}).Error
+		Where("host_id = ? AND metric_type = ?", hostID, metricType).
+		Delete(&models.HostAlertRule{}).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
 	}

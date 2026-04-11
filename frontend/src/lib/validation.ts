@@ -33,7 +33,7 @@ export const registerSchema = z
 		path: ['confirmPassword']
 	});
 
-export const createServerSchema = z
+export const createHostSchema = z
 	.object({
 		name: z
 			.string()

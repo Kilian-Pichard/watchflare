@@ -39,8 +39,9 @@ func Connect(dsn string) error {
 		slog.Info("timescaledb extension enabled")
 	}
 
-	// AutoMigrate core tables (users, servers)
-	if err := DB.AutoMigrate(&models.User{}, &models.Server{}); err != nil {
+	// AutoMigrate core tables — hosts and users must exist before goose runs
+	// since several migrations reference hosts(id) and users(id) via FK.
+	if err := DB.AutoMigrate(&models.User{}, &models.Host{}); err != nil {
 		return fmt.Errorf("failed to migrate core tables: %w", err)
 	}
 	slog.Info("core tables ready")
@@ -51,7 +52,7 @@ func Connect(dsn string) error {
 		return fmt.Errorf("failed to initialize metrics table: %w", err)
 	}
 
-	// Run SQL migrations with goose
+	// Run SQL migrations
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get raw DB connection: %w", err)
@@ -75,26 +76,26 @@ func Connect(dsn string) error {
 func initMetricsTable() error {
 	if err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS metrics (
-			id CHAR(36) NOT NULL,
-			server_id CHAR(36) NOT NULL,
-			timestamp TIMESTAMPTZ NOT NULL,
-			cpu_usage_percent DOUBLE PRECISION,
-			memory_total_bytes BIGINT,
-			memory_used_bytes BIGINT,
-			memory_available_bytes BIGINT,
-			load_avg1_min DOUBLE PRECISION,
-			load_avg5_min DOUBLE PRECISION,
-			load_avg15_min DOUBLE PRECISION,
-			disk_total_bytes BIGINT,
-			disk_used_bytes BIGINT,
-			disk_read_bytes_per_sec BIGINT DEFAULT 0,
+			id                       CHAR(36) NOT NULL,
+			host_id                  CHAR(36) NOT NULL,
+			timestamp                TIMESTAMPTZ NOT NULL,
+			cpu_usage_percent        DOUBLE PRECISION,
+			memory_total_bytes       BIGINT,
+			memory_used_bytes        BIGINT,
+			memory_available_bytes   BIGINT,
+			load_avg1_min            DOUBLE PRECISION,
+			load_avg5_min            DOUBLE PRECISION,
+			load_avg15_min           DOUBLE PRECISION,
+			disk_total_bytes         BIGINT,
+			disk_used_bytes          BIGINT,
+			disk_read_bytes_per_sec  BIGINT DEFAULT 0,
 			disk_write_bytes_per_sec BIGINT DEFAULT 0,
 			network_rx_bytes_per_sec BIGINT DEFAULT 0,
 			network_tx_bytes_per_sec BIGINT DEFAULT 0,
-			cpu_temperature_celsius DOUBLE PRECISION DEFAULT 0,
-			sensor_readings JSONB,
-			uptime_seconds BIGINT,
-			created_at TIMESTAMPTZ DEFAULT NOW(),
+			cpu_temperature_celsius  DOUBLE PRECISION DEFAULT 0,
+			sensor_readings          JSONB,
+			uptime_seconds           BIGINT,
+			created_at               TIMESTAMPTZ DEFAULT NOW(),
 			PRIMARY KEY (id, timestamp)
 		)
 	`).Error; err != nil {

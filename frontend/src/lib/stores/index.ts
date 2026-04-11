@@ -4,7 +4,7 @@
  * Store categories:
  *
  * DATA STORES — { subscribe, load(), clear(), ...methods }
- *   user, servers, metrics, aggregated, alerts
+ *   user, hosts, metrics, aggregated, alerts
  *
  * UTILITY STORES — specialized patterns
  *   sidebar: raw writables + toggleSidebarWithTransition + resetSidebar
@@ -17,14 +17,14 @@
 // User store
 export { userStore, currentUser, userLoading } from './user';
 
-// Servers store
+// Hosts store
 export {
-	serversStore,
-	servers,
-	onlineServers,
-	offlineServers,
-	serversLoading,
-} from './servers';
+	hostsStore,
+	hosts,
+	onlineHosts,
+	offlineHosts,
+	hostsLoading,
+} from './hosts';
 
 // Metrics store
 export { metricsStore, metricsData, latestMetrics } from './metrics';

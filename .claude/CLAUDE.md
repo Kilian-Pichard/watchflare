@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Watchflare — self-hosted server monitoring: **Backend** (Go, gRPC + HTTP), **Agent** (Go), **Frontend** (SvelteKit 5, SSE).
+Watchflare — self-hosted host monitoring: **Backend** (Go, gRPC + HTTP), **Agent** (Go), **Frontend** (SvelteKit 5, SSE).
 Data flow: Agents → gRPC/TLS 1.3 → Backend → PostgreSQL/TimescaleDB → SSE → Frontend
 
 ## Versioning
@@ -90,7 +90,7 @@ Connection: `postgresql://watchflare:watchflare_dev@localhost:5433/watchflare`
 | Backend bootstrap | `backend/main.go` | HTTP + gRPC + 3 background workers |
 | Agent bootstrap | `agent/main.go` | register vs run mode |
 | gRPC handlers | `backend/grpc/agent_service.go` | Register, Heartbeat, SendMetrics, SendPackageInventory |
-| HTTP handlers | `backend/handlers/` | auth, servers, metrics, packages, sse |
+| HTTP handlers | `backend/handlers/` | auth, hosts, metrics, packages, sse |
 | Metrics loop | `agent/wal/sender.go:Run()` | Collect → WAL → Send |
 | Cache | `backend/cache/heartbeat.go` | In-memory heartbeat state |
 | SSE broker | `backend/sse/broker.go` | Event broadcasting |

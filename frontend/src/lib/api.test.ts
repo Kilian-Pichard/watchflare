@@ -90,7 +90,7 @@ describe('login', () => {
 		await login('test@example.com', 'password123');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/auth/login',
+			'/api/v1/auth/login',
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
@@ -137,7 +137,7 @@ describe('register', () => {
 		await register('new@example.com', 'longpassword12');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/auth/register',
+			'/api/v1/auth/register',
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify({ email: 'new@example.com', password: 'longpassword12', username: '' })
@@ -154,41 +154,41 @@ describe('register', () => {
 	});
 });
 
-describe('listServers', () => {
-	it('fetches servers without params', async () => {
-		mockFetch.mockReturnValueOnce(jsonResponse({ servers: [], total: 0 }));
-		const { listServers } = await import('./api');
+describe('listHosts', () => {
+	it('fetches hosts without params', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ hosts: [], total: 0 }));
+		const { listHosts } = await import('./api');
 
-		await listServers();
+		await listHosts();
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/servers',
+			'/api/v1/hosts',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
 
 	it('adds pagination query params', async () => {
-		mockFetch.mockReturnValueOnce(jsonResponse({ servers: [], total: 0 }));
-		const { listServers } = await import('./api');
+		mockFetch.mockReturnValueOnce(jsonResponse({ hosts: [], total: 0 }));
+		const { listHosts } = await import('./api');
 
-		await listServers({ page: 2, perPage: 10 });
+		await listHosts({ page: 2, perPage: 10 });
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/servers?page=2&per_page=10',
+			'/api/v1/hosts?page=2&per_page=10',
 			expect.anything()
 		);
 	});
 });
 
-describe('createServer', () => {
-	it('sends POST with server data', async () => {
-		mockFetch.mockReturnValueOnce(jsonResponse({ server: { id: '1' }, token: 'wf_reg_...' }));
-		const { createServer } = await import('./api');
+describe('createHost', () => {
+	it('sends POST with host data', async () => {
+		mockFetch.mockReturnValueOnce(jsonResponse({ host: { id: '1' }, token: 'wf_reg_...' }));
+		const { createHost } = await import('./api');
 
-		await createServer('web-01', '192.168.1.1', false);
+		await createHost('web-01', '192.168.1.1', false);
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/servers',
+			'/api/v1/hosts',
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify({ name: 'web-01', configured_ip: '192.168.1.1', allow_any_ip: false })
@@ -197,15 +197,15 @@ describe('createServer', () => {
 	});
 });
 
-describe('deleteServer', () => {
+describe('deleteHost', () => {
 	it('sends DELETE request', async () => {
 		mockFetch.mockReturnValueOnce(jsonResponse({ message: 'deleted' }));
-		const { deleteServer } = await import('./api');
+		const { deleteHost } = await import('./api');
 
-		await deleteServer('abc-123');
+		await deleteHost('abc-123');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/servers/abc-123',
+			'/api/v1/hosts/abc-123',
 			expect.objectContaining({ method: 'DELETE' })
 		);
 	});
@@ -219,7 +219,7 @@ describe('changePassword', () => {
 		await changePassword('oldpass', 'newpass12345');
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/auth/change-password',
+			'/api/v1/auth/change-password',
 			expect.objectContaining({
 				method: 'PUT',
 				body: JSON.stringify({ current_password: 'oldpass', new_password: 'newpass12345' })
@@ -228,15 +228,15 @@ describe('changePassword', () => {
 	});
 });
 
-describe('getServerMetrics', () => {
+describe('getHostMetrics', () => {
 	it('fetches metrics with time_range param', async () => {
 		mockFetch.mockReturnValueOnce(jsonResponse({ metrics: [] }));
-		const { getServerMetrics } = await import('./api');
+		const { getHostMetrics } = await import('./api');
 
-		await getServerMetrics('srv-1', { time_range: '24h' });
+		await getHostMetrics('srv-1', { time_range: '24h' });
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'http://localhost:8080/api/servers/srv-1/metrics?time_range=24h',
+			'/api/v1/hosts/srv-1/metrics?time_range=24h',
 			expect.anything()
 		);
 	});

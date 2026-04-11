@@ -209,7 +209,7 @@
 
         <!-- Footer -->
         <p class="mt-6 text-center text-xs text-muted-foreground">
-            Watchflare Server Monitoring
+            Watchflare Host Monitoring
         </p>
     </div>
 </div>

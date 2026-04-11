@@ -66,7 +66,7 @@ brews:
       name: watchflare-bot
       email: bot@watchflare.io
     homepage: "https://watchflare.io"
-    description: "Watchflare server monitoring agent"
+    description: "Watchflare host monitoring agent"
     license: "MIT"
     skip_upload: auto
     extra_install: |

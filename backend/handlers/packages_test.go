@@ -16,38 +16,38 @@ import (
 func setupPackagesRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	group := router.Group("/servers")
+	group := router.Group("/hosts")
 	group.Use(middleware.AuthMiddleware())
 	{
-		group.GET("/:id/packages", GetServerPackages)
-		group.GET("/:id/packages/history", GetServerPackageHistory)
-		group.GET("/:id/packages/collections", GetServerPackageCollections)
+		group.GET("/:id/packages", GetHostPackages)
+		group.GET("/:id/packages/history", GetHostPackageHistory)
+		group.GET("/:id/packages/collections", GetHostPackageCollections)
 		group.GET("/:id/packages/stats", GetPackageStats)
 	}
 	return router
 }
 
-func TestGetServerPackages_Unauthenticated(t *testing.T) {
+func TestGetHostPackages_Unauthenticated(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
 	router := setupPackagesRouter()
-	req, _ := http.NewRequest("GET", "/servers/some-id/packages", nil)
+	req, _ := http.NewRequest("GET", "/hosts/some-id/packages", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestGetServerPackages_ReturnsEmptyList(t *testing.T) {
+func TestGetHostPackages_ReturnsEmptyList(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
 	router := setupPackagesRouter()
 	cookie := createTestUser(t)
 
-	server, _, _, _ := services.CreateAgent("pkg-server", "10.0.0.1", false)
+	host, _, _, _ := services.CreateAgent("pkg-host", "10.0.0.1", false)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/servers/%s/packages", server.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/hosts/%s/packages", host.ID), nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -59,17 +59,17 @@ func TestGetServerPackages_ReturnsEmptyList(t *testing.T) {
 	assert.Equal(t, float64(0), resp["total_count"])
 }
 
-func TestGetServerPackages_LimitClamped(t *testing.T) {
+func TestGetHostPackages_LimitClamped(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
 	router := setupPackagesRouter()
 	cookie := createTestUser(t)
 
-	server, _, _, _ := services.CreateAgent("pkg-server", "10.0.0.1", false)
+	host, _, _, _ := services.CreateAgent("pkg-host", "10.0.0.1", false)
 
 	// limit=0 → clamped to 1000
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/servers/%s/packages?limit=0", server.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/hosts/%s/packages?limit=0", host.ID), nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -79,16 +79,16 @@ func TestGetServerPackages_LimitClamped(t *testing.T) {
 	assert.Equal(t, float64(1000), resp["limit"])
 }
 
-func TestGetServerPackageHistory_InvalidChangeType(t *testing.T) {
+func TestGetHostPackageHistory_InvalidChangeType(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
 	router := setupPackagesRouter()
 	cookie := createTestUser(t)
 
-	server, _, _, _ := services.CreateAgent("pkg-server", "10.0.0.1", false)
+	host, _, _, _ := services.CreateAgent("pkg-host", "10.0.0.1", false)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/servers/%s/packages/history?change_type=invalid", server.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/hosts/%s/packages/history?change_type=invalid", host.ID), nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -99,18 +99,18 @@ func TestGetServerPackageHistory_InvalidChangeType(t *testing.T) {
 	assert.Contains(t, resp["error"], "invalid change_type")
 }
 
-func TestGetServerPackageHistory_ValidChangeTypes(t *testing.T) {
+func TestGetHostPackageHistory_ValidChangeTypes(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
 	router := setupPackagesRouter()
 	cookie := createTestUser(t)
 
-	server, _, _, _ := services.CreateAgent("pkg-server", "10.0.0.1", false)
+	host, _, _, _ := services.CreateAgent("pkg-host", "10.0.0.1", false)
 
 	for _, ct := range []string{"added", "removed", "updated", "initial"} {
 		t.Run(ct, func(t *testing.T) {
-			req, _ := http.NewRequest("GET", fmt.Sprintf("/servers/%s/packages/history?change_type=%s", server.ID, ct), nil)
+			req, _ := http.NewRequest("GET", fmt.Sprintf("/hosts/%s/packages/history?change_type=%s", host.ID, ct), nil)
 			req.AddCookie(cookie)
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
@@ -119,17 +119,17 @@ func TestGetServerPackageHistory_ValidChangeTypes(t *testing.T) {
 	}
 }
 
-func TestGetServerPackageCollections_OffsetClamped(t *testing.T) {
+func TestGetHostPackageCollections_OffsetClamped(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 
 	router := setupPackagesRouter()
 	cookie := createTestUser(t)
 
-	server, _, _, _ := services.CreateAgent("pkg-server", "10.0.0.1", false)
+	host, _, _, _ := services.CreateAgent("pkg-host", "10.0.0.1", false)
 
 	// offset=-5 should not cause an error
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/servers/%s/packages/collections?offset=-5", server.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/hosts/%s/packages/collections?offset=-5", host.ID), nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -146,9 +146,9 @@ func TestGetPackageStats_ReturnsStats(t *testing.T) {
 	router := setupPackagesRouter()
 	cookie := createTestUser(t)
 
-	server, _, _, _ := services.CreateAgent("pkg-server", "10.0.0.1", false)
+	host, _, _, _ := services.CreateAgent("pkg-host", "10.0.0.1", false)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/servers/%s/packages/stats", server.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/hosts/%s/packages/stats", host.ID), nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)

@@ -10,7 +10,7 @@ import (
 )
 
 func teardownAlertRules() {
-	database.DB.Exec("DELETE FROM server_alert_rules")
+	database.DB.Exec("DELETE FROM host_alert_rules")
 	database.DB.Exec("DELETE FROM alert_rules")
 }
 
@@ -106,14 +106,14 @@ func TestUpdateAlertRules(t *testing.T) {
 	assert.Equal(t, 10, cpuRule.DurationMinutes)
 }
 
-func TestGetServerAlertRules_GlobalFallback(t *testing.T) {
+func TestGetHostAlertRules_GlobalFallback(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 	defer teardownAlertRules()
 
 	seedGlobalRules(t)
 
-	rules, err := GetServerAlertRules("server-no-overrides")
+	rules, err := GetHostAlertRules("host-no-overrides")
 	require.NoError(t, err)
 
 	found := make(map[string]EffectiveAlertRule)
@@ -132,22 +132,22 @@ func TestGetServerAlertRules_GlobalFallback(t *testing.T) {
 	assert.False(t, mem.IsOverride)
 }
 
-func TestGetServerAlertRules_ServerOverrideMerged(t *testing.T) {
+func TestGetHostAlertRules_HostOverrideMerged(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 	defer teardownAlertRules()
 
 	seedGlobalRules(t)
 
-	serverID := "server-with-override"
-	require.NoError(t, UpsertServerAlertRule(serverID, models.MetricTypeCPUUsage, AlertRuleInput{
+	hostID := "host-with-override"
+	require.NoError(t, UpsertHostAlertRule(hostID, models.MetricTypeCPUUsage, AlertRuleInput{
 		MetricType:      models.MetricTypeCPUUsage,
 		Enabled:         true,
 		Threshold:       95.0,
 		DurationMinutes: 2,
 	}))
 
-	rules, err := GetServerAlertRules(serverID)
+	rules, err := GetHostAlertRules(hostID)
 	require.NoError(t, err)
 
 	found := make(map[string]EffectiveAlertRule)
@@ -169,53 +169,53 @@ func TestGetServerAlertRules_ServerOverrideMerged(t *testing.T) {
 	assert.False(t, mem.IsOverride)
 }
 
-func TestUpsertServerAlertRule_CreateAndUpdate(t *testing.T) {
+func TestUpsertHostAlertRule_CreateAndUpdate(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 	defer teardownAlertRules()
 
 	seedGlobalRules(t)
 
-	serverID := "server-upsert"
+	hostID := "host-upsert"
 
 	// Create override.
-	require.NoError(t, UpsertServerAlertRule(serverID, models.MetricTypeCPUUsage, AlertRuleInput{
+	require.NoError(t, UpsertHostAlertRule(hostID, models.MetricTypeCPUUsage, AlertRuleInput{
 		MetricType:      models.MetricTypeCPUUsage,
 		Enabled:         true,
 		Threshold:       70.0,
 		DurationMinutes: 3,
 	}))
 
-	var rule models.ServerAlertRule
-	require.NoError(t, database.DB.Where("server_id = ? AND metric_type = ?", serverID, models.MetricTypeCPUUsage).First(&rule).Error)
+	var rule models.HostAlertRule
+	require.NoError(t, database.DB.Where("host_id = ? AND metric_type = ?", hostID, models.MetricTypeCPUUsage).First(&rule).Error)
 	assert.Equal(t, 70.0, rule.Threshold)
 	assert.Equal(t, 3, rule.DurationMinutes)
 
 	// Update override.
-	require.NoError(t, UpsertServerAlertRule(serverID, models.MetricTypeCPUUsage, AlertRuleInput{
+	require.NoError(t, UpsertHostAlertRule(hostID, models.MetricTypeCPUUsage, AlertRuleInput{
 		MetricType:      models.MetricTypeCPUUsage,
 		Enabled:         false,
 		Threshold:       99.0,
 		DurationMinutes: 15,
 	}))
 
-	require.NoError(t, database.DB.Where("server_id = ? AND metric_type = ?", serverID, models.MetricTypeCPUUsage).First(&rule).Error)
+	require.NoError(t, database.DB.Where("host_id = ? AND metric_type = ?", hostID, models.MetricTypeCPUUsage).First(&rule).Error)
 	assert.Equal(t, 99.0, rule.Threshold)
 	assert.Equal(t, 15, rule.DurationMinutes)
 	assert.False(t, rule.Enabled)
 }
 
-func TestDeleteServerAlertRule(t *testing.T) {
+func TestDeleteHostAlertRule(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 	defer teardownAlertRules()
 
 	seedGlobalRules(t)
 
-	serverID := "server-delete"
+	hostID := "host-delete"
 
 	// Create override.
-	require.NoError(t, UpsertServerAlertRule(serverID, models.MetricTypeCPUUsage, AlertRuleInput{
+	require.NoError(t, UpsertHostAlertRule(hostID, models.MetricTypeCPUUsage, AlertRuleInput{
 		MetricType:      models.MetricTypeCPUUsage,
 		Enabled:         true,
 		Threshold:       70.0,
@@ -223,21 +223,21 @@ func TestDeleteServerAlertRule(t *testing.T) {
 	}))
 
 	// Delete it.
-	require.NoError(t, DeleteServerAlertRule(serverID, models.MetricTypeCPUUsage))
+	require.NoError(t, DeleteHostAlertRule(hostID, models.MetricTypeCPUUsage))
 
 	var count int64
-	database.DB.Model(&models.ServerAlertRule{}).
-		Where("server_id = ? AND metric_type = ?", serverID, models.MetricTypeCPUUsage).
+	database.DB.Model(&models.HostAlertRule{}).
+		Where("host_id = ? AND metric_type = ?", hostID, models.MetricTypeCPUUsage).
 		Count(&count)
 	assert.Equal(t, int64(0), count)
 }
 
-func TestDeleteServerAlertRule_NoOp(t *testing.T) {
+func TestDeleteHostAlertRule_NoOp(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB()
 	defer teardownAlertRules()
 
 	// Deleting a non-existent override must not return an error.
-	err := DeleteServerAlertRule("server-nonexistent", models.MetricTypeCPUUsage)
+	err := DeleteHostAlertRule("host-nonexistent", models.MetricTypeCPUUsage)
 	assert.NoError(t, err)
 }

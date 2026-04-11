@@ -16,7 +16,7 @@ import (
 func setupSSERouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.GET("/events", ServerEvents)
+	router.GET("/events", HostEvents)
 	return router
 }
 
@@ -41,7 +41,7 @@ func runSSE(t *testing.T, req *http.Request, cancel context.CancelFunc) *httptes
 	return w
 }
 
-func TestServerEvents_CORSAllowedOrigin(t *testing.T) {
+func TestHostEvents_CORSAllowedOrigin(t *testing.T) {
 	config.AppConfig = &config.Config{
 		CORSOrigins: []string{"http://localhost:5173"},
 		JWTSecret:   "test-secret-key-must-be-32-chars!!",
@@ -57,7 +57,7 @@ func TestServerEvents_CORSAllowedOrigin(t *testing.T) {
 	assert.Equal(t, "true", w.Header().Get("Access-Control-Allow-Credentials"))
 }
 
-func TestServerEvents_CORSUnknownOrigin(t *testing.T) {
+func TestHostEvents_CORSUnknownOrigin(t *testing.T) {
 	config.AppConfig = &config.Config{
 		CORSOrigins: []string{"http://localhost:5173"},
 		JWTSecret:   "test-secret-key-must-be-32-chars!!",
@@ -73,7 +73,7 @@ func TestServerEvents_CORSUnknownOrigin(t *testing.T) {
 	assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
 }
 
-func TestServerEvents_CORSNoOrigin(t *testing.T) {
+func TestHostEvents_CORSNoOrigin(t *testing.T) {
 	config.AppConfig = &config.Config{
 		CORSOrigins: []string{"http://localhost:5173"},
 		JWTSecret:   "test-secret-key-must-be-32-chars!!",
@@ -88,7 +88,7 @@ func TestServerEvents_CORSNoOrigin(t *testing.T) {
 	assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
 }
 
-func TestServerEvents_SSEHeaders(t *testing.T) {
+func TestHostEvents_SSEHeaders(t *testing.T) {
 	config.AppConfig = &config.Config{
 		CORSOrigins: []string{"http://localhost:5173"},
 		JWTSecret:   "test-secret-key-must-be-32-chars!!",
@@ -104,7 +104,7 @@ func TestServerEvents_SSEHeaders(t *testing.T) {
 	assert.Equal(t, "no", w.Header().Get("X-Accel-Buffering"))
 }
 
-func TestServerEvents_ConnectedEvent(t *testing.T) {
+func TestHostEvents_ConnectedEvent(t *testing.T) {
 	config.AppConfig = &config.Config{
 		CORSOrigins: []string{"http://localhost:5173"},
 		JWTSecret:   "test-secret-key-must-be-32-chars!!",
@@ -120,7 +120,7 @@ func TestServerEvents_ConnectedEvent(t *testing.T) {
 	assert.Contains(t, body, "client_id")
 }
 
-func TestServerEvents_DisconnectsCleanly(t *testing.T) {
+func TestHostEvents_DisconnectsCleanly(t *testing.T) {
 	config.AppConfig = &config.Config{
 		CORSOrigins: []string{},
 		JWTSecret:   "test-secret-key-must-be-32-chars!!",

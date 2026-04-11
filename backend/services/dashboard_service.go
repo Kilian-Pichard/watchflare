@@ -13,7 +13,7 @@ var ErrInvalidTimeRange = errors.New("invalid time_range")
 
 // DroppedMetricsAlert represents a dropped metrics alert for the dashboard.
 type DroppedMetricsAlert struct {
-	AgentID          string        `json:"agent_id"`
+	HostID           string        `json:"host_id"`
 	Hostname         string        `json:"hostname"`
 	TotalDropped     int           `json:"total_dropped"`
 	FirstDroppedAt   time.Time     `json:"first_dropped_at"`
@@ -22,7 +22,7 @@ type DroppedMetricsAlert struct {
 	DowntimeDuration time.Duration `json:"downtime_duration"`
 }
 
-// AggregatedPoint represents one cross-server aggregated metrics data point.
+// AggregatedPoint represents one cross-host aggregated metrics data point.
 type AggregatedPoint struct {
 	Timestamp            time.Time `json:"timestamp"`
 	CPUUsagePercent      float64   `json:"cpu_usage_percent"`
@@ -49,7 +49,7 @@ var aggregateConfigs = map[string]aggregateConfig{
 	"30d": {30 * 24 * time.Hour, 8 * time.Hour, "metrics_8h", "8 hours"},
 }
 
-// buildAggregatedQuery builds a cross-server aggregation query that combines
+// buildAggregatedQuery builds a cross-host aggregation query that combines
 // data from a continuous aggregate with raw metrics for the recent gap period.
 // Timestamps are shifted by +bucketInterval so they represent the END of each bucket
 // (e.g. label "08:40" = average of data from 08:30 to 08:40).
@@ -57,8 +57,8 @@ var aggregateConfigs = map[string]aggregateConfig{
 // aggregateTable and bucketInterval come from the hardcoded aggregateConfigs map — no SQL injection risk.
 func buildAggregatedQuery(aggregateTable, bucketInterval string) string {
 	return fmt.Sprintf(`
-		WITH per_server_data AS (
-			SELECT m.bucket + INTERVAL '%s' as ts, m.server_id, m.cpu_usage_percent,
+		WITH per_host_data AS (
+			SELECT m.bucket + INTERVAL '%s' as ts, m.host_id, m.cpu_usage_percent,
 				   m.memory_total_bytes, m.memory_used_bytes,
 				   m.disk_total_bytes, m.disk_used_bytes
 			FROM %s m
@@ -66,7 +66,7 @@ func buildAggregatedQuery(aggregateTable, bucketInterval string) string {
 
 			UNION ALL
 
-			SELECT time_bucket('%s', m.timestamp) + INTERVAL '%s' as ts, m.server_id,
+			SELECT time_bucket('%s', m.timestamp) + INTERVAL '%s' as ts, m.host_id,
 				   AVG(m.cpu_usage_percent) as cpu_usage_percent,
 				   AVG(m.memory_total_bytes) as memory_total_bytes,
 				   AVG(m.memory_used_bytes) as memory_used_bytes,
@@ -74,7 +74,7 @@ func buildAggregatedQuery(aggregateTable, bucketInterval string) string {
 				   AVG(m.disk_used_bytes) as disk_used_bytes
 			FROM metrics m
 			WHERE m.timestamp >= $3 AND m.timestamp < $4
-			GROUP BY time_bucket('%s', m.timestamp), m.server_id
+			GROUP BY time_bucket('%s', m.timestamp), m.host_id
 		)
 		SELECT
 			d.ts as timestamp,
@@ -83,8 +83,8 @@ func buildAggregatedQuery(aggregateTable, bucketInterval string) string {
 			COALESCE(SUM(d.memory_used_bytes), 0)::BIGINT as memory_used_bytes,
 			COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN d.disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
 			COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN d.disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
-		FROM per_server_data d
-		JOIN servers s ON d.server_id = s.id
+		FROM per_host_data d
+		JOIN hosts s ON d.host_id = s.id
 		WHERE s.status NOT IN ('expired', 'pending')
 		GROUP BY d.ts
 		ORDER BY d.ts ASC
@@ -94,7 +94,7 @@ func buildAggregatedQuery(aggregateTable, bucketInterval string) string {
 // GetDroppedMetrics returns a summary of dropped metrics from the last 24 hours.
 func GetDroppedMetrics() ([]DroppedMetricsAlert, error) {
 	rows, err := database.DB.Raw(`
-		SELECT agent_id, hostname, total_dropped,
+		SELECT host_id, hostname, total_dropped,
 		       first_dropped_at, last_dropped_at, last_reported_at
 		FROM agent_dropped_metrics_summary
 		ORDER BY total_dropped DESC
@@ -108,7 +108,7 @@ func GetDroppedMetrics() ([]DroppedMetricsAlert, error) {
 	for rows.Next() {
 		var alert DroppedMetricsAlert
 		if err := rows.Scan(
-			&alert.AgentID,
+			&alert.HostID,
 			&alert.Hostname,
 			&alert.TotalDropped,
 			&alert.FirstDroppedAt,
@@ -130,7 +130,7 @@ func GetDroppedMetrics() ([]DroppedMetricsAlert, error) {
 	return alerts, nil
 }
 
-// GetAggregatedMetrics returns cross-server aggregated metrics for the given time range.
+// GetAggregatedMetrics returns cross-host aggregated metrics for the given time range.
 // Returns ErrInvalidTimeRange if timeRange is not a recognised value.
 func GetAggregatedMetrics(timeRange string) ([]AggregatedPoint, error) {
 	var query string
@@ -142,7 +142,7 @@ func GetAggregatedMetrics(timeRange string) ([]AggregatedPoint, error) {
 		query = `
 			WITH time_buckets AS (
 				SELECT time_bucket('30 seconds'::interval, m.timestamp) as bucket,
-					   m.server_id,
+					   m.host_id,
 					   m.cpu_usage_percent,
 					   m.memory_total_bytes,
 					   m.memory_used_bytes,
@@ -150,15 +150,15 @@ func GetAggregatedMetrics(timeRange string) ([]AggregatedPoint, error) {
 					   m.disk_used_bytes,
 					   s.environment_type
 				FROM metrics m
-				JOIN servers s ON m.server_id = s.id
+				JOIN hosts s ON m.host_id = s.id
 				WHERE s.status NOT IN ('expired', 'pending')
 				  AND m.timestamp > $1
 				  AND m.timestamp <= $2
 			),
-			server_aggregates AS (
+			host_aggregates AS (
 				SELECT
 					bucket,
-					server_id,
+					host_id,
 					COALESCE(AVG(cpu_usage_percent), 0) as cpu_usage_percent,
 					COALESCE(AVG(memory_total_bytes), 0) as memory_total_bytes,
 					COALESCE(AVG(memory_used_bytes), 0) as memory_used_bytes,
@@ -166,7 +166,7 @@ func GetAggregatedMetrics(timeRange string) ([]AggregatedPoint, error) {
 					COALESCE(AVG(disk_used_bytes), 0) as disk_used_bytes,
 					MAX(environment_type) as environment_type
 				FROM time_buckets
-				GROUP BY bucket, server_id
+				GROUP BY bucket, host_id
 			)
 			SELECT
 				bucket as timestamp,
@@ -175,7 +175,7 @@ func GetAggregatedMetrics(timeRange string) ([]AggregatedPoint, error) {
 				COALESCE(SUM(memory_used_bytes), 0)::BIGINT as memory_used_bytes,
 				COALESCE(SUM(CASE WHEN environment_type != 'container' THEN disk_total_bytes ELSE 0 END), 0)::BIGINT as disk_total_bytes,
 				COALESCE(SUM(CASE WHEN environment_type != 'container' THEN disk_used_bytes ELSE 0 END), 0)::BIGINT as disk_used_bytes
-			FROM server_aggregates
+			FROM host_aggregates
 			GROUP BY bucket
 			ORDER BY bucket ASC
 		`

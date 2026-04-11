@@ -145,7 +145,7 @@
     <!-- Default Time Range -->
     <div class="mb-6">
         <p class="block text-sm font-medium text-foreground mb-1">Default Time Range</p>
-        <p class="text-xs text-muted-foreground mb-3">Default range for dashboard and server metrics charts</p>
+        <p class="text-xs text-muted-foreground mb-3">Default range for dashboard and host metrics charts</p>
         <div class="w-48">
             <Select.Root
                 type="single"

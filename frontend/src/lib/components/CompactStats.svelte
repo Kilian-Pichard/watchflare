@@ -3,8 +3,8 @@
 
     const { stats }: {
         stats: {
-            onlineServers: number;
-            totalServers: number;
+            onlineHosts: number;
+            totalHosts: number;
             avgCPU: number;
             usedMemory: number;
             usedDisk: number;
@@ -15,7 +15,7 @@
 <div
     class="flex flex-wrap items-center gap-6 rounded-lg border bg-card px-6 py-4"
 >
-    <!-- Servers -->
+    <!-- Hosts -->
     <div class="flex items-center gap-3">
         <div
             class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10"
@@ -35,9 +35,9 @@
             </svg>
         </div>
         <div>
-            <p class="text-sm text-muted-foreground">Servers</p>
+            <p class="text-sm text-muted-foreground">Hosts</p>
             <p class="text-lg font-semibold">
-                {stats.onlineServers}/{stats.totalServers}
+                {stats.onlineHosts}/{stats.totalHosts}
             </p>
         </div>
     </div>

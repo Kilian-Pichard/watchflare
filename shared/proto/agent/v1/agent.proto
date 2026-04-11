@@ -6,8 +6,8 @@ option go_package = "watchflare/shared/proto/agent/v1;proto";
 
 // AgentService handles agent registration and heartbeats
 service AgentService {
-  // RegisterServer is called when an agent first connects
-  rpc RegisterServer(RegisterServerRequest) returns (RegisterServerResponse);
+  // RegisterHost is called when an agent first connects
+  rpc RegisterHost(RegisterHostRequest) returns (RegisterHostResponse);
 
   // Heartbeat is called every 5 seconds by the agent
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -22,8 +22,8 @@ service AgentService {
   rpc SendPackageInventory(SendPackageInventoryRequest) returns (SendPackageInventoryResponse);
 }
 
-// RegisterServerRequest contains information sent during initial registration
-message RegisterServerRequest {
+// RegisterHostRequest contains information sent during initial registration
+message RegisterHostRequest {
   string registration_token = 1;   // The registration token from CreateAgent
   string hostname = 2;
   string ip_address_v4 = 3;
@@ -46,20 +46,20 @@ message RegisterServerRequest {
   string agent_version = 15;        // Agent binary version (e.g. "0.27.3"), set via ldflags
 }
 
-// RegisterServerResponse is sent back after successful registration
-message RegisterServerResponse {
+// RegisterHostResponse is sent back after successful registration
+message RegisterHostResponse {
   bool success = 1;
   string message = 2;
-  string agent_id = 3;      // UUID of the server
+  string agent_id = 3;      // UUID of the host
   string agent_key = 4;     // Key for authenticating future requests
   string ca_cert = 5;       // CA certificate in PEM format for TLS verification
-  string server_name = 6;   // Server name for TLS SNI verification (e.g., "watchflare-backend")
+  string server_name = 6;   // TLS SNI server name for backend verification (e.g., "watchflare")
   bool reactivated = 7;     // True if existing agent was reactivated (UUID reused), false if new registration
 }
 
 // HeartbeatRequest contains info sent with each heartbeat
 message HeartbeatRequest {
-  string agent_id = 1;      // UUID of the server
+  string agent_id = 1;      // UUID of the host
   string agent_key = 2;     // Authentication key
   string ip_address_v4 = 3; // Current IPv4 (may change)
   string ip_address_v6 = 4; // Current IPv6 (may change)
@@ -121,7 +121,7 @@ message ContainerMetric {
 
 // SendMetricsRequest contains authentication and metrics data
 message SendMetricsRequest {
-  string agent_id = 1;   // UUID of the server
+  string agent_id = 1;   // UUID of the host
   string agent_key = 2;  // Authentication key
   Metrics metrics = 3;   // System metrics
   int64 timestamp = 4;   // Unix timestamp in seconds (for anti-replay)
@@ -180,7 +180,7 @@ message Package {
 
 // SendPackageInventoryRequest sends package inventory (delta or full) to backend
 message SendPackageInventoryRequest {
-  string agent_id = 1;               // UUID of the server
+  string agent_id = 1;               // UUID of the host
   string agent_key = 2;              // Authentication key
   int64 timestamp = 3;               // Request timestamp (for anti-replay)
 

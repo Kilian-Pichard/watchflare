@@ -140,24 +140,24 @@ func TestBroadcast_NoClients(t *testing.T) {
 	b.Broadcast(Event{Type: "test", Data: "x"})
 }
 
-// --- BroadcastServerUpdate ---
+// --- BroadcastHostUpdate ---
 
-func TestBroadcastServerUpdate(t *testing.T) {
+func TestBroadcastHostUpdate(t *testing.T) {
 	b := newTestBroker()
 	c := b.AddClient("c1")
 
-	b.BroadcastServerUpdate(ServerUpdate{ID: "srv1", Status: "online"})
+	b.BroadcastHostUpdate(HostUpdate{ID: "srv1", Status: "online"})
 
 	got := <-c.Channel
-	if got.Type != EventTypeServerUpdate {
-		t.Errorf("event type: got %s, want %s", got.Type, EventTypeServerUpdate)
+	if got.Type != EventTypeHostUpdate {
+		t.Errorf("event type: got %s, want %s", got.Type, EventTypeHostUpdate)
 	}
-	update, ok := got.Data.(ServerUpdate)
+	update, ok := got.Data.(HostUpdate)
 	if !ok {
-		t.Fatal("expected Data to be ServerUpdate")
+		t.Fatal("expected Data to be HostUpdate")
 	}
 	if update.ID != "srv1" {
-		t.Errorf("server id: got %s, want srv1", update.ID)
+		t.Errorf("host id: got %s, want srv1", update.ID)
 	}
 }
 
@@ -168,7 +168,7 @@ func TestBroadcastMetricsUpdate_Minified(t *testing.T) {
 	c := b.AddClient("c1")
 
 	b.BroadcastMetricsUpdate(MetricsUpdate{
-		ServerID:        "srv1",
+		HostID:          "srv1",
 		Timestamp:       "2024-01-01T00:00:00Z",
 		CPUUsagePercent: 42.5,
 		MemoryUsedBytes: 1024,
@@ -182,8 +182,8 @@ func TestBroadcastMetricsUpdate_Minified(t *testing.T) {
 	if !ok {
 		t.Fatal("expected Data to be MetricsUpdateMinified")
 	}
-	if minified.ServerID != "srv1" {
-		t.Errorf("server id: got %s, want srv1", minified.ServerID)
+	if minified.HostID != "srv1" {
+		t.Errorf("host id: got %s, want srv1", minified.HostID)
 	}
 	if minified.CPU != 42.5 {
 		t.Errorf("cpu: got %f, want 42.5", minified.CPU)
@@ -213,7 +213,7 @@ func TestBroadcastContainerMetricsUpdate(t *testing.T) {
 	b := newTestBroker()
 	c := b.AddClient("c1")
 
-	b.BroadcastContainerMetricsUpdate(ContainerMetricsUpdate{ServerID: "srv1"})
+	b.BroadcastContainerMetricsUpdate(ContainerMetricsUpdate{HostID: "srv1"})
 
 	got := <-c.Channel
 	if got.Type != EventTypeContainerMetricsUpdate {
@@ -225,7 +225,7 @@ func TestBroadcastContainerMetricsUpdate(t *testing.T) {
 
 func TestToMinifiedMetrics(t *testing.T) {
 	input := MetricsUpdate{
-		ServerID:             "srv1",
+		HostID:               "srv1",
 		Timestamp:            "2024-01-15T12:00:00Z",
 		CPUUsagePercent:      55.5,
 		MemoryTotalBytes:     8000,
@@ -247,8 +247,8 @@ func TestToMinifiedMetrics(t *testing.T) {
 
 	got := toMinifiedMetrics(input)
 
-	if got.ServerID != "srv1" {
-		t.Errorf("ServerID: got %s, want srv1", got.ServerID)
+	if got.HostID != "srv1" {
+		t.Errorf("HostID: got %s, want srv1", got.HostID)
 	}
 	expectedTS, _ := time.Parse(time.RFC3339, "2024-01-15T12:00:00Z")
 	if got.Timestamp != expectedTS.Unix() {
@@ -314,10 +314,10 @@ func TestToMinifiedMetrics_InvalidTimestamp(t *testing.T) {
 // --- FormatSSE ---
 
 func TestFormatSSE(t *testing.T) {
-	event := Event{Type: "server_update", Data: map[string]string{"id": "srv1"}}
+	event := Event{Type: "host_update", Data: map[string]string{"id": "srv1"}}
 	result := FormatSSE(event)
 
-	if !strings.HasPrefix(result, "event: server_update\n") {
+	if !strings.HasPrefix(result, "event: host_update\n") {
 		t.Errorf("unexpected format: %q", result)
 	}
 	if !strings.Contains(result, "data: ") {

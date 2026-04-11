@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	loginSchema,
 	registerSchema,
-	createServerSchema,
+	createHostSchema,
 	changePasswordSchema,
 	updateIPSchema,
 	validateForm
@@ -74,9 +74,9 @@ describe('registerSchema', () => {
 	});
 });
 
-describe('createServerSchema', () => {
-	it('accepts valid server with IP', () => {
-		const result = createServerSchema.safeParse({
+describe('createHostSchema', () => {
+	it('accepts valid host with IP', () => {
+		const result = createHostSchema.safeParse({
 			name: 'web-server-01',
 			configuredIP: '192.168.1.100',
 			allowAnyIP: false
@@ -84,8 +84,8 @@ describe('createServerSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts server with allowAnyIP and no IP', () => {
-		const result = createServerSchema.safeParse({
+	it('accepts host with allowAnyIP and no IP', () => {
+		const result = createHostSchema.safeParse({
 			name: 'web-server-01',
 			configuredIP: '',
 			allowAnyIP: true
@@ -94,7 +94,7 @@ describe('createServerSchema', () => {
 	});
 
 	it('rejects name shorter than 2 characters', () => {
-		const result = validateForm(createServerSchema, {
+		const result = validateForm(createHostSchema, {
 			name: 'a',
 			configuredIP: '192.168.1.1',
 			allowAnyIP: false
@@ -104,7 +104,7 @@ describe('createServerSchema', () => {
 	});
 
 	it('rejects name longer than 64 characters', () => {
-		const result = validateForm(createServerSchema, {
+		const result = validateForm(createHostSchema, {
 			name: 'a'.repeat(65),
 			configuredIP: '192.168.1.1',
 			allowAnyIP: false
@@ -114,7 +114,7 @@ describe('createServerSchema', () => {
 	});
 
 	it('rejects empty IP when allowAnyIP is false', () => {
-		const result = validateForm(createServerSchema, {
+		const result = validateForm(createHostSchema, {
 			name: 'web-server',
 			configuredIP: '',
 			allowAnyIP: false
@@ -124,7 +124,7 @@ describe('createServerSchema', () => {
 	});
 
 	it('rejects invalid IP format', () => {
-		const result = validateForm(createServerSchema, {
+		const result = validateForm(createHostSchema, {
 			name: 'web-server',
 			configuredIP: '999.999.999.999',
 			allowAnyIP: false
@@ -134,7 +134,7 @@ describe('createServerSchema', () => {
 	});
 
 	it('rejects non-IP string', () => {
-		const result = validateForm(createServerSchema, {
+		const result = validateForm(createHostSchema, {
 			name: 'web-server',
 			configuredIP: 'not-an-ip',
 			allowAnyIP: false

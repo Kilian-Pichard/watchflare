@@ -35,12 +35,12 @@ func grpcCode(err error) codes.Code {
 	return status.Code(err)
 }
 
-// TestInterceptor_SkipsRegisterServer verifies that RegisterServer bypasses HMAC auth.
-func TestInterceptor_SkipsRegisterServer(t *testing.T) {
+// TestInterceptor_SkipsRegisterHost verifies that RegisterHost bypasses HMAC auth.
+func TestInterceptor_SkipsRegisterHost(t *testing.T) {
 	interceptor := AuthInterceptor(300)
 
-	req := &pb.RegisterServerRequest{RegistrationToken: "wf_reg_test"}
-	info := unaryInfo("/agent.v1.AgentService/RegisterServer")
+	req := &pb.RegisterHostRequest{RegistrationToken: "wf_reg_test"}
+	info := unaryInfo("/agent.v1.AgentService/RegisterHost")
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	assert.NoError(t, err)
@@ -92,21 +92,21 @@ func TestInterceptor_AgentNotFound(t *testing.T) {
 func TestInterceptor_TimestampTooOld(t *testing.T) {
 	setupGRPCTestDB(t)
 
-	server := &models.Server{
+	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "intercept-ts-server",
+		Name:     "intercept-ts-host",
 		Status:   models.StatusOnline,
 		AgentKey: "intercept-ts-key-abc",
 	}
-	require.NoError(t, database.DB.Create(server).Error)
-	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+	require.NoError(t, database.DB.Create(host).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(host) })
 
 	interceptor := AuthInterceptor(300)
 
 	staleTS := time.Now().Add(-10 * time.Minute).Unix()
 	req := &pb.HeartbeatRequest{
-		AgentId:   server.AgentID,
+		AgentId:   host.AgentID,
 		Timestamp: staleTS,
 	}
 	info := unaryInfo("/agent.v1.AgentService/Heartbeat")
@@ -120,21 +120,21 @@ func TestInterceptor_TimestampTooOld(t *testing.T) {
 func TestInterceptor_InvalidHMAC(t *testing.T) {
 	setupGRPCTestDB(t)
 
-	server := &models.Server{
+	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "intercept-hmac-server",
+		Name:     "intercept-hmac-host",
 		Status:   models.StatusOnline,
 		AgentKey: "intercept-hmac-key-abc",
 	}
-	require.NoError(t, database.DB.Create(server).Error)
-	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+	require.NoError(t, database.DB.Create(host).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(host) })
 
 	interceptor := AuthInterceptor(300)
 
 	ts := time.Now().Unix()
 	req := &pb.HeartbeatRequest{
-		AgentId:   server.AgentID,
+		AgentId:   host.AgentID,
 		Timestamp: ts,
 	}
 	info := unaryInfo("/agent.v1.AgentService/Heartbeat")
@@ -151,25 +151,25 @@ func TestInterceptor_InvalidHMAC(t *testing.T) {
 func TestInterceptor_ValidHMAC(t *testing.T) {
 	setupGRPCTestDB(t)
 
-	server := &models.Server{
+	host := &models.Host{
 		ID:       uuid.New().String(),
 		AgentID:  uuid.New().String(),
-		Name:     "intercept-valid-server",
+		Name:     "intercept-valid-host",
 		Status:   models.StatusOnline,
 		AgentKey: "intercept-valid-key-abc",
 	}
-	require.NoError(t, database.DB.Create(server).Error)
-	t.Cleanup(func() { database.DB.Unscoped().Delete(server) })
+	require.NoError(t, database.DB.Create(host).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(host) })
 
 	interceptor := AuthInterceptor(300)
 
 	ts := time.Now().Unix()
 	req := &pb.HeartbeatRequest{
-		AgentId:   server.AgentID,
+		AgentId:   host.AgentID,
 		Timestamp: ts,
 	}
 
-	sig, err := computeHMAC(server.AgentKey, ts, server.AgentID, req)
+	sig, err := computeHMAC(host.AgentKey, ts, host.AgentID, req)
 	require.NoError(t, err)
 
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(

@@ -9,7 +9,7 @@ import (
 
 // Alert metric type constants.
 const (
-	MetricTypeServerDown  = "server_down"
+	MetricTypeHostDown    = "host_down"
 	MetricTypeCPUUsage    = "cpu_usage"
 	MetricTypeMemoryUsage = "memory_usage"
 	MetricTypeDiskUsage   = "disk_usage"
@@ -21,7 +21,7 @@ const (
 
 // AllMetricTypes lists all valid metric types in display order.
 var AllMetricTypes = []string{
-	MetricTypeServerDown,
+	MetricTypeHostDown,
 	MetricTypeCPUUsage,
 	MetricTypeMemoryUsage,
 	MetricTypeDiskUsage,
@@ -40,9 +40,9 @@ type AlertRule struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// ServerAlertRule is a per-server override of a global alert rule.
-type ServerAlertRule struct {
-	ServerID        string    `gorm:"type:char(36);primaryKey" json:"server_id"`
+// HostAlertRule is a per-host override of a global alert rule.
+type HostAlertRule struct {
+	HostID          string    `gorm:"type:char(36);primaryKey" json:"host_id"`
 	MetricType      string    `gorm:"type:varchar(20);primaryKey" json:"metric_type"`
 	Enabled         bool      `gorm:"not null;default:false" json:"enabled"`
 	Threshold       float64   `gorm:"not null;default:0" json:"threshold"`
@@ -50,10 +50,10 @@ type ServerAlertRule struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// AlertIncident tracks an active or resolved alert for a server.
+// AlertIncident tracks an active or resolved alert for a host.
 type AlertIncident struct {
 	ID             string     `gorm:"type:char(36);primaryKey" json:"id"`
-	ServerID       string     `gorm:"type:char(36);not null;index:idx_alert_incidents_server" json:"server_id"`
+	HostID         string     `gorm:"type:char(36);not null;index:idx_alert_incidents_host" json:"host_id"`
 	MetricType     string     `gorm:"type:varchar(20);not null" json:"metric_type"`
 	StartedAt      time.Time  `gorm:"not null" json:"started_at"`
 	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`

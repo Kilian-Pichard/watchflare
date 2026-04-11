@@ -46,7 +46,7 @@ func Register() {
 	if reactivated {
 		fmt.Println("⚠️  NOTICE: This agent was merged with an existing agent in the system")
 		fmt.Printf("   Reason: Agent UUID was found on disk (%s)\n", uuid.GetUUIDPath())
-		fmt.Println("   This is the same physical server reconnecting, so the existing agent was reactivated")
+		fmt.Println("   This is the same physical host reconnecting, so the existing agent was reactivated")
 		fmt.Println("   If you intended to create a NEW agent, uninstall with data cleanup first")
 	}
 
@@ -62,6 +62,10 @@ func Register() {
 // runRegistration performs agent registration with the backend.
 // Called by Register() (standalone command) and Install() (inline during installation).
 func runRegistration(token, host, port string) (bool, error) {
+	if err := config.EnsureDirectories(); err != nil {
+		return false, fmt.Errorf("failed to create directories: %w", err)
+	}
+
 	slog.Info("collecting system information")
 	info, err := sysinfo.Collect()
 	if err != nil {

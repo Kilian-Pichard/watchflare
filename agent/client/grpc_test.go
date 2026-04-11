@@ -20,13 +20,13 @@ import (
 type mockAgentServer struct {
 	pb.UnimplementedAgentServiceServer
 
-	registerFn         func(*pb.RegisterServerRequest) (*pb.RegisterServerResponse, error)
+	registerFn         func(*pb.RegisterHostRequest) (*pb.RegisterHostResponse, error)
 	heartbeatFn        func(*pb.HeartbeatRequest) (*pb.HeartbeatResponse, error)
 	sendMetricsFn      func(*pb.SendMetricsRequest) (*pb.SendMetricsResponse, error)
 	sendPackageInvFn   func(*pb.SendPackageInventoryRequest) (*pb.SendPackageInventoryResponse, error)
 }
 
-func (m *mockAgentServer) RegisterServer(_ context.Context, req *pb.RegisterServerRequest) (*pb.RegisterServerResponse, error) {
+func (m *mockAgentServer) RegisterHost(_ context.Context, req *pb.RegisterHostRequest) (*pb.RegisterHostResponse, error) {
 	if m.registerFn != nil {
 		return m.registerFn(req)
 	}
@@ -153,11 +153,11 @@ func TestNewForRegistration_Succeeds(t *testing.T) {
 
 func TestRegister_Success(t *testing.T) {
 	mock := &mockAgentServer{
-		registerFn: func(req *pb.RegisterServerRequest) (*pb.RegisterServerResponse, error) {
+		registerFn: func(req *pb.RegisterHostRequest) (*pb.RegisterHostResponse, error) {
 			if req.RegistrationToken != "tok" {
 				return nil, status.Error(codes.InvalidArgument, "bad token")
 			}
-			return &pb.RegisterServerResponse{
+			return &pb.RegisterHostResponse{
 				Success:    true,
 				AgentId:    "agent-1",
 				AgentKey:   "key-1",
@@ -194,8 +194,8 @@ func TestRegister_Success(t *testing.T) {
 
 func TestRegister_Rejected(t *testing.T) {
 	mock := &mockAgentServer{
-		registerFn: func(_ *pb.RegisterServerRequest) (*pb.RegisterServerResponse, error) {
-			return &pb.RegisterServerResponse{
+		registerFn: func(_ *pb.RegisterHostRequest) (*pb.RegisterHostResponse, error) {
+			return &pb.RegisterHostResponse{
 				Success: false,
 				Message: "token expired",
 			}, nil
@@ -212,7 +212,7 @@ func TestRegister_Rejected(t *testing.T) {
 
 func TestRegister_ServerError(t *testing.T) {
 	mock := &mockAgentServer{
-		registerFn: func(_ *pb.RegisterServerRequest) (*pb.RegisterServerResponse, error) {
+		registerFn: func(_ *pb.RegisterHostRequest) (*pb.RegisterHostResponse, error) {
 			return nil, status.Error(codes.Internal, "internal error")
 		},
 	}
@@ -226,12 +226,12 @@ func TestRegister_ServerError(t *testing.T) {
 }
 
 func TestRegister_FieldsMapping(t *testing.T) {
-	var received *pb.RegisterServerRequest
+	var received *pb.RegisterHostRequest
 
 	mock := &mockAgentServer{
-		registerFn: func(req *pb.RegisterServerRequest) (*pb.RegisterServerResponse, error) {
+		registerFn: func(req *pb.RegisterHostRequest) (*pb.RegisterHostResponse, error) {
 			received = req
-			return &pb.RegisterServerResponse{Success: true, AgentId: "x", AgentKey: "y"}, nil
+			return &pb.RegisterHostResponse{Success: true, AgentId: "x", AgentKey: "y"}, nil
 		},
 	}
 

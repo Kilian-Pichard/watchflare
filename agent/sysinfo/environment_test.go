@@ -46,8 +46,8 @@ func TestEnvironmentString(t *testing.T) {
 		env  *Environment
 		want string
 	}{
-		{&Environment{Type: EnvPhysical}, "Physical Server"},
-		{&Environment{Type: EnvPhysicalWithContainers}, "Physical Server with Docker"},
+		{&Environment{Type: EnvPhysical}, "Physical Host"},
+		{&Environment{Type: EnvPhysicalWithContainers}, "Physical Host with Docker"},
 		{&Environment{Type: EnvVM, Hypervisor: "kvm"}, "Virtual Machine (kvm)"},
 		{&Environment{Type: EnvVMWithContainers, Hypervisor: "vmware"}, "Virtual Machine with Docker (vmware)"},
 		{&Environment{Type: EnvContainer, ContainerRuntime: "docker"}, "Container (docker)"},

@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 
 // Mock the api module before importing the store
 vi.mock('$lib/api', () => ({
-	getServerMetrics: vi.fn()
+	getHostMetrics: vi.fn()
 }));
 
 // Mock the constants module
@@ -18,9 +18,9 @@ vi.mock('$lib/utils', () => ({
 
 import { metricsStore, metricsData } from './metrics';
 
-function fakeMetric(serverId: string, cpu: number) {
+function fakeMetric(hostId: string, cpu: number) {
 	return {
-		server_id: serverId,
+		host_id: hostId,
 		timestamp: new Date().toISOString(),
 		cpu_usage_percent: cpu,
 		memory_total_bytes: 1000,
@@ -42,9 +42,9 @@ describe('metricsStore', () => {
 		expect(state.error).toBeNull();
 	});
 
-	it('updates server metrics via updateServerMetrics', () => {
+	it('updates host metrics via updateHostMetrics', () => {
 		const metric = fakeMetric('s1', 50);
-		metricsStore.updateServerMetrics('s1', metric);
+		metricsStore.updateHostMetrics('s1', metric);
 		const data = get(metricsData);
 		expect(data['s1']).toHaveLength(1);
 		expect(data['s1'][0].cpu_usage_percent).toBe(50);
@@ -53,7 +53,7 @@ describe('metricsStore', () => {
 	it('caps metrics at MAX_METRICS_POINTS_DASHBOARD', () => {
 		// MAX is mocked to 5
 		for (let i = 0; i < 8; i++) {
-			metricsStore.updateServerMetrics('s1', fakeMetric('s1', i * 10));
+			metricsStore.updateHostMetrics('s1', fakeMetric('s1', i * 10));
 		}
 		const data = get(metricsData);
 		expect(data['s1']).toHaveLength(5);
@@ -62,9 +62,9 @@ describe('metricsStore', () => {
 		expect(data['s1'][4].cpu_usage_percent).toBe(70);
 	});
 
-	it('keeps metrics separate per server', () => {
-		metricsStore.updateServerMetrics('s1', fakeMetric('s1', 10));
-		metricsStore.updateServerMetrics('s2', fakeMetric('s2', 20));
+	it('keeps metrics separate per host', () => {
+		metricsStore.updateHostMetrics('s1', fakeMetric('s1', 10));
+		metricsStore.updateHostMetrics('s2', fakeMetric('s2', 20));
 		const data = get(metricsData);
 		expect(data['s1']).toHaveLength(1);
 		expect(data['s2']).toHaveLength(1);
@@ -72,23 +72,23 @@ describe('metricsStore', () => {
 		expect(data['s2'][0].cpu_usage_percent).toBe(20);
 	});
 
-	it('clears metrics for a specific server', () => {
-		metricsStore.updateServerMetrics('s1', fakeMetric('s1', 10));
-		metricsStore.updateServerMetrics('s2', fakeMetric('s2', 20));
-		metricsStore.clearForServer('s1');
+	it('clears metrics for a specific host', () => {
+		metricsStore.updateHostMetrics('s1', fakeMetric('s1', 10));
+		metricsStore.updateHostMetrics('s2', fakeMetric('s2', 20));
+		metricsStore.clearForHost('s1');
 		const data = get(metricsData);
 		expect(data['s1']).toBeUndefined();
 		expect(data['s2']).toHaveLength(1);
 	});
 
 	it('clears all metrics', () => {
-		metricsStore.updateServerMetrics('s1', fakeMetric('s1', 10));
-		metricsStore.updateServerMetrics('s2', fakeMetric('s2', 20));
+		metricsStore.updateHostMetrics('s1', fakeMetric('s1', 10));
+		metricsStore.updateHostMetrics('s2', fakeMetric('s2', 20));
 		metricsStore.clear();
 		expect(get(metricsData)).toEqual({});
 	});
 
-	it('getForServer returns empty array for unknown server', () => {
-		expect(metricsStore.getForServer('unknown')).toEqual([]);
+	it('getForHost returns empty array for unknown host', () => {
+		expect(metricsStore.getForHost('unknown')).toEqual([]);
 	});
 });

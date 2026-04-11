@@ -3,10 +3,10 @@
 	import * as api from '$lib/api.js';
 	import { logger } from '$lib/utils';
 	import { AGENT_STATUS_POLL_INTERVAL } from '$lib/constants';
-	import type { Server } from '$lib/types';
+	import type { Host } from '$lib/types';
 
-	const { server, token, agentKey = '', backendHost }: {
-		server: Server;
+	const { host, token, agentKey = '', backendHost }: {
+		host: Host;
 		token: string;
 		agentKey?: string;
 		backendHost: string;
@@ -16,7 +16,7 @@
 	let copied = $state(false);
 	let copyTimeout: ReturnType<typeof setTimeout> | null = $state(null);
 	let polledStatus: string | null = $state(null);
-	let serverStatus = $derived(polledStatus ?? server.status);
+	let hostStatus = $derived(polledStatus ?? host.status);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 	// Instructions for each OS
@@ -40,22 +40,22 @@
 		}, 2000);
 	}
 
-	async function pollServerStatus() {
+	async function pollHostStatus() {
 		try {
-			const response = await api.getServer(server.id);
+			const response = await api.getHost(host.id);
 			polledStatus = response.status;
 
-			if (serverStatus === 'online') {
+			if (hostStatus === 'online') {
 				if (pollInterval) clearInterval(pollInterval);
 			}
 		} catch (err) {
-			logger.error('Failed to poll server status:', err);
+			logger.error('Failed to poll host status:', err);
 		}
 	}
 
 	onMount(() => {
-		if (serverStatus !== 'online') {
-			pollInterval = setInterval(pollServerStatus, AGENT_STATUS_POLL_INTERVAL);
+		if (hostStatus !== 'online') {
+			pollInterval = setInterval(pollHostStatus, AGENT_STATUS_POLL_INTERVAL);
 		}
 	});
 
@@ -65,13 +65,13 @@
 	});
 </script>
 
-{#if serverStatus === 'online'}
+{#if hostStatus === 'online'}
 	<!-- Success State -->
 	<div class="flex items-center gap-4 bg-success text-white p-8 rounded-xl mb-8 shadow-md">
 		<span class="text-5xl">🎉</span>
 		<div>
 			<h3 class="text-2xl font-semibold mb-1">Agent Connected Successfully!</h3>
-			<p class="opacity-90">Your server is now online and sending heartbeats</p>
+			<p class="opacity-90">Your host is now online and sending heartbeats</p>
 		</div>
 	</div>
 {:else}
@@ -165,7 +165,7 @@
 			</div>
 		</div>
 
-		{#if serverStatus === 'offline'}
+		{#if hostStatus === 'offline'}
 			<!-- Agent registered, service not started yet -->
 			<div class="bg-warning/10 border-l-4 border-warning p-6 rounded-md">
 				<h4 class="text-base font-semibold text-foreground mb-2">✅ Agent registered — start the service</h4>
@@ -194,7 +194,7 @@
 					<li class="mb-2 text-sm leading-relaxed">This page will update automatically when connected</li>
 				</ol>
 
-				{#if serverStatus === 'pending'}
+				{#if hostStatus === 'pending'}
 					<div class="flex items-center gap-3 p-4 bg-card rounded-md mt-4">
 						<div class="h-5 w-5 border-2 border-border border-t-primary rounded-full animate-spin"></div>
 						<span class="text-sm font-medium text-muted-foreground">Waiting for agent to connect...</span>

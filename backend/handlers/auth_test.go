@@ -44,7 +44,7 @@ func setupTestDB(t *testing.T) {
 
 // teardownTestDB cleans up the test database
 func teardownTestDB() {
-	database.DB.Exec("DELETE FROM servers")
+	database.DB.Exec("DELETE FROM hosts")
 	database.DB.Exec("DELETE FROM users")
 }
 

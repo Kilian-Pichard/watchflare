@@ -10,20 +10,20 @@ import (
 
 const (
 	EventTypeConnected               = "connected"
-	EventTypeServerUpdate            = "server_update"
+	EventTypeHostUpdate              = "host_update"
 	EventTypeMetricsUpdate           = "metrics_update"
 	EventTypeAggregatedMetricsUpdate = "aggregated_metrics_update"
 	EventTypeContainerMetricsUpdate  = "container_metrics_update"
 )
 
-// Event represents a server event
+// Event represents a host event
 type Event struct {
 	Type string `json:"type"`
 	Data any    `json:"data"`
 }
 
-// ServerUpdate represents a server status update
-type ServerUpdate struct {
+// HostUpdate represents a host status update
+type HostUpdate struct {
 	ID               string `json:"id"`
 	Status           string `json:"status"`
 	IPv4Address      string `json:"ip_address_v4,omitempty"`
@@ -39,7 +39,7 @@ type ServerUpdate struct {
 // MetricsUpdate is the input struct for BroadcastMetricsUpdate.
 // It is converted to MetricsUpdateMinified before being sent to clients.
 type MetricsUpdate struct {
-	ServerID              string                  `json:"server_id"`
+	HostID                string                  `json:"host_id"`
 	Timestamp             string                  `json:"timestamp"`
 	CPUUsagePercent       float64                 `json:"cpu_usage_percent"`
 	MemoryTotalBytes      uint64                  `json:"memory_total_bytes"`
@@ -67,10 +67,10 @@ type SensorReadingMinified struct {
 
 // MetricsUpdateMinified is the wire format sent to SSE clients.
 // Short field names reduce bandwidth on high-frequency updates.
-// Format: {"s":"srv1","t":1702741200,"c":22.5,"mu":4294967296,"mt":8589934592,...}
+// Format: {"s":"host1","t":1702741200,"c":22.5,"mu":4294967296,"mt":8589934592,...}
 // IMPORTANT: field names must stay in sync with frontend/src/lib/sse.js
 type MetricsUpdateMinified struct {
-	ServerID        string                  `json:"s"`            // server_id
+	HostID          string                  `json:"s"`            // host_id
 	Timestamp       int64                   `json:"t"`            // Unix timestamp
 	CPU             float64                 `json:"c"`            // cpu_usage_percent
 	MemoryUsed      uint64                  `json:"mu"`           // memory_used_bytes
@@ -90,7 +90,7 @@ type MetricsUpdateMinified struct {
 	SensorReadings  []SensorReadingMinified `json:"sr,omitempty"` // all sensor readings
 }
 
-// AggregatedMetricsUpdate represents aggregated metrics from all online servers
+// AggregatedMetricsUpdate represents aggregated metrics from all online hosts
 type AggregatedMetricsUpdate struct {
 	Timestamp            string  `json:"timestamp"`
 	CPUUsagePercent      float64 `json:"cpu_usage_percent"`
@@ -114,7 +114,7 @@ type ContainerMetricMinified struct {
 
 // ContainerMetricsUpdate represents container metrics for SSE broadcast
 type ContainerMetricsUpdate struct {
-	ServerID  string                    `json:"s"`
+	HostID    string                    `json:"s"`
 	Timestamp int64                     `json:"t"`
 	Metrics   []ContainerMetricMinified `json:"m"`
 }
@@ -197,8 +197,8 @@ func (b *Broker) Broadcast(event Event) {
 	}
 }
 
-func (b *Broker) BroadcastServerUpdate(update ServerUpdate) {
-	b.Broadcast(Event{Type: EventTypeServerUpdate, Data: update})
+func (b *Broker) BroadcastHostUpdate(update HostUpdate) {
+	b.Broadcast(Event{Type: EventTypeHostUpdate, Data: update})
 }
 
 func (b *Broker) BroadcastMetricsUpdate(update MetricsUpdate) {
@@ -222,7 +222,7 @@ func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
 	}
 
 	return MetricsUpdateMinified{
-		ServerID:        update.ServerID,
+		HostID:          update.HostID,
 		Timestamp:       timestamp,
 		CPU:             update.CPUUsagePercent,
 		MemoryUsed:      update.MemoryUsedBytes,

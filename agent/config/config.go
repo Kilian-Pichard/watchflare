@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -28,29 +29,60 @@ const (
 	DefaultWALMaxSizeMB = 10
 )
 
-// GetConfigDir returns the configuration directory
-// Priority: WATCHFLARE_CONFIG_DIR env var > default system path
+// homebrewPrefix returns the Homebrew prefix if the binary is running from a
+// Homebrew installation (opt/, Cellar/, or bin/ symlink), or "".
+func homebrewPrefix() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	// EvalSymlinks resolves the full chain (os.Executable may return the unresolved
+	// symlink path when launched via /opt/homebrew/bin/ depending on macOS version).
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	for _, prefix := range []string{"/opt/homebrew", "/usr/local"} {
+		if strings.HasPrefix(exe, prefix+"/opt/watchflare-agent/") ||
+			strings.HasPrefix(exe, prefix+"/Cellar/watchflare-agent/") ||
+			strings.HasPrefix(exe, prefix+"/bin/watchflare-agent") {
+			return prefix
+		}
+	}
+	return ""
+}
+
+// GetConfigDir returns the configuration directory.
+// Priority: WATCHFLARE_CONFIG_DIR env var > Homebrew prefix > default system path
 func GetConfigDir() string {
 	if dir := os.Getenv("WATCHFLARE_CONFIG_DIR"); dir != "" {
 		return dir
 	}
+	if prefix := homebrewPrefix(); prefix != "" {
+		return filepath.Join(prefix, "etc/watchflare")
+	}
 	return DefaultConfigDir
 }
 
-// GetDataDir returns the data directory
-// Priority: WATCHFLARE_DATA_DIR env var > default system path
+// GetDataDir returns the data directory.
+// Priority: WATCHFLARE_DATA_DIR env var > Homebrew prefix > default system path
 func GetDataDir() string {
 	if dir := os.Getenv("WATCHFLARE_DATA_DIR"); dir != "" {
 		return dir
 	}
+	if prefix := homebrewPrefix(); prefix != "" {
+		return filepath.Join(prefix, "var/watchflare")
+	}
 	return DefaultDataDir
 }
 
-// GetLogFile returns the log file path
-// Priority: WATCHFLARE_LOG_FILE env var > default system path
+// GetLogFile returns the log file path.
+// Priority: WATCHFLARE_LOG_FILE env var > Homebrew prefix > default system path
 func GetLogFile() string {
 	if f := os.Getenv("WATCHFLARE_LOG_FILE"); f != "" {
 		return f
+	}
+	if prefix := homebrewPrefix(); prefix != "" {
+		return filepath.Join(prefix, "var/log/watchflare-agent.log")
 	}
 	return DefaultLogFile
 }
@@ -183,7 +215,10 @@ func Exists() bool {
 	return err == nil
 }
 
-// EnsureDirectories creates all required directories with proper permissions
+// EnsureDirectories creates all required directories with proper permissions.
+// On macOS when running as root (e.g. sudo register), directories under a
+// Homebrew prefix are chowned to SUDO_USER so the unprivileged service process
+// can write to them.
 func EnsureDirectories() error {
 	directories := map[string]os.FileMode{
 		GetConfigDir(): 0750,
@@ -193,6 +228,25 @@ func EnsureDirectories() error {
 	for dir, perm := range directories {
 		if err := os.MkdirAll(dir, perm); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+
+	// On macOS Homebrew the service runs as the invoking user, not root.
+	// When registration is run with sudo, chown data/config dirs to SUDO_USER
+	// so the service process can read/write them.
+	if runtime.GOOS == "darwin" && os.Geteuid() == 0 && homebrewPrefix() != "" {
+		sudoUser := os.Getenv("SUDO_USER")
+		if sudoUser != "" {
+			u, err := user.Lookup(sudoUser)
+			if err == nil {
+				uid, _ := strconv.Atoi(u.Uid)
+				gid, _ := strconv.Atoi(u.Gid)
+				for dir := range directories {
+					if err := os.Chown(dir, uid, gid); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to set ownership on %s: %v\n", dir, err)
+					}
+				}
+			}
 		}
 	}
 

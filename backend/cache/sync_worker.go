@@ -61,8 +61,8 @@ func (w *SyncWorker) syncToDatabase() {
 			continue
 		}
 
-		var server models.Server
-		result := database.DB.Where("agent_id = ?", data.AgentID).First(&server)
+		var host models.Host
+		result := database.DB.Where("agent_id = ?", data.AgentID).First(&host)
 		if result.Error != nil {
 			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 				slog.Warn("agent not found in database, skipping sync", "agent_id", data.AgentID)
@@ -79,7 +79,7 @@ func (w *SyncWorker) syncToDatabase() {
 			"ip_address_v6": data.IPv6Address,
 		}
 
-		if err := database.DB.Model(&server).Updates(updates).Error; err != nil {
+		if err := database.DB.Model(&models.Host{}).Where("agent_id = ?", data.AgentID).Updates(updates).Error; err != nil {
 			slog.Error("failed to sync heartbeat", "agent_id", data.AgentID, "error", err)
 			continue
 		}
@@ -143,8 +143,8 @@ func (c *StaleChecker) checkStaleAgents() {
 	}
 
 	for _, agentID := range staleAgents {
-		var server models.Server
-		if err := database.DB.Where("agent_id = ?", agentID).First(&server).Error; err != nil {
+		var host models.Host
+		if err := database.DB.Where("agent_id = ?", agentID).First(&host).Error; err != nil {
 			slog.Warn("stale agent not found in database", "agent_id", agentID)
 			continue
 		}
@@ -155,17 +155,17 @@ func (c *StaleChecker) checkStaleAgents() {
 		}
 
 		configuredIP := ""
-		if server.ConfiguredIP != nil {
-			configuredIP = *server.ConfiguredIP
+		if host.ConfiguredIP != nil {
+			configuredIP = *host.ConfiguredIP
 		}
 
-		sse.GetBroker().BroadcastServerUpdate(sse.ServerUpdate{
-			ID:               server.ID,
+		sse.GetBroker().BroadcastHostUpdate(sse.HostUpdate{
+			ID:               host.ID,
 			Status:           models.StatusOffline,
 			IPv4Address:      data.IPv4Address,
 			IPv6Address:      data.IPv6Address,
 			ConfiguredIP:     configuredIP,
-			IgnoreIPMismatch: server.IgnoreIPMismatch,
+			IgnoreIPMismatch: host.IgnoreIPMismatch,
 			LastSeen:         data.LastSeen.Format(time.RFC3339),
 			ClockDesync:      data.ClockDesync,
 		})

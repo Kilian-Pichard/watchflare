@@ -1,7 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import type { AggregatedMetric, TimeRange } from '$lib/types';
 import { getAggregatedMetrics } from '$lib/api';
-import { serversStore } from './servers';
+import { hostsStore } from './hosts';
 import { logger } from '$lib/utils';
 import { MAX_AGGREGATED_POINTS } from '$lib/constants';
 
@@ -161,8 +161,8 @@ let cachedTotalCount = -1;
 function computeStats(
 	lastPoint: AggregatedMetric | null,
 	firstPoint24h: AggregatedMetric | null,
-	totalServers: number,
-	onlineServers: number
+	totalHosts: number,
+	onlineHosts: number
 ) {
 	const avgCPU = lastPoint?.cpu_usage_percent || 0;
 	const totalMemory = lastPoint?.memory_total_bytes || 0;
@@ -197,9 +197,9 @@ function computeStats(
 			: 0;
 
 	return {
-		totalServers,
-		onlineServers,
-		offlineServers: totalServers - onlineServers,
+		totalHosts,
+		onlineHosts,
+		offlineHosts: totalHosts - onlineHosts,
 		avgCPU,
 		avgMemory: memoryPercent,
 		avgDisk: diskPercent,
@@ -214,16 +214,16 @@ function computeStats(
 }
 
 export const dashboardStats = derived(
-	[aggregatedStore, serversStore],
-	([$aggregated, $servers]) => {
+	[aggregatedStore, hostsStore],
+	([$aggregated, $hosts]) => {
 		// Use latestMetric (real-time SSE) for stats cards, independent of time range
 		const lastPoint = $aggregated.latestMetric;
 		const firstPoint24h =
 			$aggregated.metrics24h.length > 0 ? $aggregated.metrics24h[0] : null;
 
-		const activeServers = $servers.servers.filter(s => s.server.status !== 'pending');
-		const onlineCount = activeServers.filter(s => s.server.status === 'online').length;
-		const totalCount = activeServers.length;
+		const activeHosts = $hosts.hosts.filter(s => s.host.status !== 'pending');
+		const onlineCount = activeHosts.filter(s => s.host.status === 'online').length;
+		const totalCount = activeHosts.length;
 
 		// Skip recalculation if inputs haven't changed (compare by value for SSE objects)
 		if (

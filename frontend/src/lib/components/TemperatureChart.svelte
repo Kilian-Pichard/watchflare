@@ -5,9 +5,9 @@
 	import type { Metric, SensorDataPoint, TimeRange } from '$lib/types';
 	import type uPlot from 'uplot';
 
-	let { data = [], serverID, timeRange }: {
+	let { data = [], hostId, timeRange }: {
 		data: Metric[];
-		serverID: string;
+		hostId: string;
 		timeRange?: TimeRange;
 	} = $props();
 
@@ -39,11 +39,11 @@
 	let fetchedSensorData: SensorDataPoint[] | null = $state(null);
 
 	$effect(() => {
-		if (!serverID || !timeRange || timeRange === '1h') {
+		if (!hostId || !timeRange || timeRange === '1h') {
 			fetchedSensorData = null;
 			return;
 		}
-		api.getSensorReadings(serverID, timeRange).then(res => {
+		api.getSensorReadings(hostId, timeRange).then(res => {
 			fetchedSensorData = res.data ?? null;
 		}).catch(() => {
 			fetchedSensorData = null;

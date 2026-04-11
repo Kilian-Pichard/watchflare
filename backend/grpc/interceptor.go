@@ -16,7 +16,7 @@ import (
 )
 
 // AuthInterceptor creates a gRPC unary interceptor for authentication and validation
-// HMAC authentication is mandatory for all requests (except RegisterServer)
+// HMAC authentication is mandatory for all requests (except RegisterHost)
 func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -24,8 +24,8 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		// Skip authentication for RegisterServer (uses registration token instead)
-		if info.FullMethod == "/agent.v1.AgentService/RegisterServer" {
+		// Skip authentication for RegisterHost (uses registration token instead)
+		if info.FullMethod == "/agent.v1.AgentService/RegisterHost" {
 			return handler(ctx, req)
 		}
 
@@ -48,8 +48,8 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 		}
 
 		// 2. Lookup agent_key from database
-		var server models.Server
-		if err := database.DB.Where("agent_id = ?", agentID).First(&server).Error; err != nil {
+		var host models.Host
+		if err := database.DB.Where("agent_id = ?", agentID).First(&host).Error; err != nil {
 			slog.Warn("agent not found", "agent_id", agentID)
 			return nil, status.Error(codes.Unauthenticated, "Invalid agent credentials")
 		}
@@ -77,7 +77,7 @@ func AuthInterceptor(timestampWindow int) grpc.UnaryServerInterceptor {
 		}
 
 		// 4. Validate HMAC
-		if err := ValidateHMAC(ctx, agentID, server.AgentKey, message); err != nil {
+		if err := ValidateHMAC(ctx, agentID, host.AgentKey, message); err != nil {
 			slog.Warn("HMAC validation failed", "agent_id", agentID, "error", err)
 			return nil, status.Error(codes.Unauthenticated, "HMAC validation failed")
 		}

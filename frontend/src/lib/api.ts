@@ -1,10 +1,10 @@
 import type {
   LoginResponse,
   RegisterResponse,
-  CreateServerResponse,
+  CreateHostResponse,
   RegenerateTokenResponse,
-  GetServerResponse,
-  ListServersResponse,
+  GetHostResponse,
+  ListHostsResponse,
   GetMetricsResponse,
   GetAggregatedMetricsResponse,
   GetDroppedMetricsResponse,
@@ -20,14 +20,14 @@ import type {
   GetSMTPSettingsResponse,
   UpdateSMTPSettingsRequest,
   GetAlertRulesResponse,
-  GetServerAlertRulesResponse,
+  GetHostAlertRulesResponse,
   GetActiveIncidentsResponse,
-  GetServerIncidentsResponse,
+  GetHostIncidentsResponse,
   IncidentStatusFilter,
   AlertMetricType,
 } from "./types";
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 // Build query string from params, filtering out undefined/null/empty values
 export function buildQueryString(
@@ -256,15 +256,15 @@ export async function changeUsername(
   });
 }
 
-// Server API calls
-export async function listServers(params?: {
+// Host API calls
+export async function listHosts(params?: {
   page?: number;
   perPage?: number;
   sort?: string;
   order?: "asc" | "desc";
   status?: string;
   search?: string;
-}): Promise<ListServersResponse> {
+}): Promise<ListHostsResponse> {
   const query = buildQueryString({
     page: params?.page,
     per_page: params?.perPage,
@@ -273,19 +273,19 @@ export async function listServers(params?: {
     status: params?.status,
     search: params?.search,
   });
-  return apiRequest<ListServersResponse>(`/servers${query}`);
+  return apiRequest<ListHostsResponse>(`/hosts${query}`);
 }
 
-export async function getServer(id: string): Promise<GetServerResponse> {
-  return apiRequest<GetServerResponse>(`/servers/${id}`);
+export async function getHost(id: string): Promise<GetHostResponse> {
+  return apiRequest<GetHostResponse>(`/hosts/${id}`);
 }
 
-export async function createServer(
+export async function createHost(
   name: string,
   configuredIP?: string,
   allowAnyIP?: boolean,
-): Promise<CreateServerResponse> {
-  return apiRequest<CreateServerResponse>("/servers", {
+): Promise<CreateHostResponse> {
+  return apiRequest<CreateHostResponse>("/hosts", {
     method: "POST",
     body: JSON.stringify({
       name,
@@ -295,20 +295,20 @@ export async function createServer(
   });
 }
 
-export async function pauseServer(id: string): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${id}/pause`, {
+export async function pauseHost(id: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/hosts/${id}/pause`, {
     method: "PUT",
   });
 }
 
-export async function resumeServer(id: string): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${id}/resume`, {
+export async function resumeHost(id: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/hosts/${id}/resume`, {
     method: "PUT",
   });
 }
 
-export async function deleteServer(id: string): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${id}`, {
+export async function deleteHost(id: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/hosts/${id}`, {
     method: "DELETE",
   });
 }
@@ -317,7 +317,7 @@ export async function regenerateToken(
   id: string,
 ): Promise<RegenerateTokenResponse> {
   return apiRequest<RegenerateTokenResponse>(
-    `/servers/${id}/regenerate-token`,
+    `/hosts/${id}/regenerate-token`,
     {
       method: "POST",
     },
@@ -328,17 +328,17 @@ export async function validateIP(
   id: string,
   selectedIP: string,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${id}/validate-ip`, {
+  return apiRequest<{ message: string }>(`/hosts/${id}/validate-ip`, {
     method: "PUT",
     body: JSON.stringify({ selected_ip: selectedIP }),
   });
 }
 
-export async function renameServer(
+export async function renameHost(
   id: string,
   newName: string,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${id}/rename`, {
+  return apiRequest<{ message: string }>(`/hosts/${id}/rename`, {
     method: "PUT",
     body: JSON.stringify({ new_name: newName }),
   });
@@ -348,7 +348,7 @@ export async function updateConfiguredIP(
   id: string,
   newIP: string,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${id}/change-ip`, {
+  return apiRequest<{ message: string }>(`/hosts/${id}/change-ip`, {
     method: "PUT",
     body: JSON.stringify({ new_ip: newIP }),
   });
@@ -357,7 +357,7 @@ export async function updateConfiguredIP(
 export async function ignoreIPMismatch(
   id: string,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${id}/ignore-ip-mismatch`, {
+  return apiRequest<{ message: string }>(`/hosts/${id}/ignore-ip-mismatch`, {
     method: "PUT",
   });
 }
@@ -366,7 +366,7 @@ export async function dismissReactivation(
   id: string,
 ): Promise<{ message: string }> {
   return apiRequest<{ message: string }>(
-    `/servers/${id}/dismiss-reactivation`,
+    `/hosts/${id}/dismiss-reactivation`,
     {
       method: "PUT",
     },
@@ -399,8 +399,8 @@ export async function updatePreferences(
 }
 
 // Metrics API calls
-export async function getServerMetrics(
-  serverId: string,
+export async function getHostMetrics(
+  hostId: string,
   params: MetricsQueryParams = {},
 ): Promise<GetMetricsResponse> {
   const query = buildQueryString({
@@ -408,43 +408,43 @@ export async function getServerMetrics(
     limit: params.limit,
     offset: params.offset,
   });
-  return apiRequest<GetMetricsResponse>(`/servers/${serverId}/metrics${query}`);
+  return apiRequest<GetMetricsResponse>(`/hosts/${hostId}/metrics${query}`);
 }
 
 // Get dropped metrics summary for the last 24 hours
 export async function getDroppedMetrics(): Promise<GetDroppedMetricsResponse> {
-  return apiRequest<GetDroppedMetricsResponse>("/servers/dropped-metrics");
+  return apiRequest<GetDroppedMetricsResponse>("/hosts/dropped-metrics");
 }
 
-// Get per-sensor temperature readings for a specific server
+// Get per-sensor temperature readings for a specific host
 export async function getSensorReadings(
-  serverId: string,
+  hostId: string,
   timeRange?: string,
 ): Promise<GetSensorReadingsResponse> {
   const query = buildQueryString({ time_range: timeRange });
   return apiRequest<GetSensorReadingsResponse>(
-    `/servers/${serverId}/sensor-readings${query}`,
+    `/hosts/${hostId}/sensor-readings${query}`,
   );
 }
 
-// Get container metrics for a specific server
+// Get container metrics for a specific host
 export async function getContainerMetrics(
-  serverId: string,
+  hostId: string,
   timeRange?: string,
 ): Promise<GetContainerMetricsResponse> {
   const query = buildQueryString({ time_range: timeRange });
   return apiRequest<GetContainerMetricsResponse>(
-    `/servers/${serverId}/container-metrics${query}`,
+    `/hosts/${hostId}/container-metrics${query}`,
   );
 }
 
-// Get aggregated metrics from all online servers
+// Get aggregated metrics from all online hosts
 export async function getAggregatedMetrics(
   timeRange?: string,
 ): Promise<GetAggregatedMetricsResponse> {
   const query = buildQueryString({ time_range: timeRange });
   return apiRequest<GetAggregatedMetricsResponse>(
-    `/servers/metrics/aggregated${query}`,
+    `/hosts/metrics/aggregated${query}`,
   );
 }
 
@@ -456,8 +456,8 @@ interface PackageQueryParams {
   search?: string;
 }
 
-export async function getServerPackages(
-  serverId: string,
+export async function getHostPackages(
+  hostId: string,
   params: PackageQueryParams = {},
 ): Promise<GetPackagesResponse> {
   const query = buildQueryString({
@@ -467,15 +467,15 @@ export async function getServerPackages(
     search: params.search,
   });
   return apiRequest<GetPackagesResponse>(
-    `/servers/${serverId}/packages${query}`,
+    `/hosts/${hostId}/packages${query}`,
   );
 }
 
 export async function getPackageStats(
-  serverId: string,
+  hostId: string,
 ): Promise<GetPackageStatsResponse> {
   return apiRequest<GetPackageStatsResponse>(
-    `/servers/${serverId}/packages/stats`,
+    `/hosts/${hostId}/packages/stats`,
   );
 }
 
@@ -485,7 +485,7 @@ interface CollectionQueryParams {
 }
 
 export async function getPackageCollections(
-  serverId: string,
+  hostId: string,
   params: CollectionQueryParams = {},
 ): Promise<GetPackageCollectionsResponse> {
   const query = buildQueryString({
@@ -493,7 +493,7 @@ export async function getPackageCollections(
     offset: params.offset,
   });
   return apiRequest<GetPackageCollectionsResponse>(
-    `/servers/${serverId}/packages/collections${query}`,
+    `/hosts/${hostId}/packages/collections${query}`,
   );
 }
 
@@ -502,7 +502,7 @@ interface HistoryQueryParams extends CollectionQueryParams {
 }
 
 export async function getPackageHistory(
-  serverId: string,
+  hostId: string,
   params: HistoryQueryParams = {},
 ): Promise<GetPackageHistoryResponse> {
   const query = buildQueryString({
@@ -511,7 +511,7 @@ export async function getPackageHistory(
     exclude_initial: params.exclude_initial,
   });
   return apiRequest<GetPackageHistoryResponse>(
-    `/servers/${serverId}/packages/history${query}`,
+    `/hosts/${hostId}/packages/history${query}`,
   );
 }
 
@@ -558,26 +558,26 @@ export async function updateAlertRules(
   });
 }
 
-export async function getServerAlertRules(serverId: string): Promise<GetServerAlertRulesResponse> {
-  return apiRequest<GetServerAlertRulesResponse>(`/servers/${serverId}/alerts`);
+export async function getHostAlertRules(hostId: string): Promise<GetHostAlertRulesResponse> {
+  return apiRequest<GetHostAlertRulesResponse>(`/hosts/${hostId}/alerts`);
 }
 
-export async function upsertServerAlertRule(
-  serverId: string,
+export async function upsertHostAlertRule(
+  hostId: string,
   metricType: AlertMetricType,
   data: { enabled: boolean; threshold: number; duration_minutes: number },
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${serverId}/alerts/${metricType}`, {
+  return apiRequest<{ message: string }>(`/hosts/${hostId}/alerts/${metricType}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
-export async function deleteServerAlertRule(
-  serverId: string,
+export async function deleteHostAlertRule(
+  hostId: string,
   metricType: AlertMetricType,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/servers/${serverId}/alerts/${metricType}`, {
+  return apiRequest<{ message: string }>(`/hosts/${hostId}/alerts/${metricType}`, {
     method: 'DELETE',
   });
 }
@@ -586,10 +586,10 @@ export async function getActiveIncidents(): Promise<GetActiveIncidentsResponse> 
   return apiRequest<GetActiveIncidentsResponse>('/settings/alerts/active');
 }
 
-export async function getServerIncidents(
-  serverId: string,
+export async function getHostIncidents(
+  hostId: string,
   params: { status?: IncidentStatusFilter; limit?: number; offset?: number } = {},
-): Promise<GetServerIncidentsResponse> {
+): Promise<GetHostIncidentsResponse> {
   const qs = buildQueryString(params);
-  return apiRequest<GetServerIncidentsResponse>(`/servers/${serverId}/incidents${qs}`);
+  return apiRequest<GetHostIncidentsResponse>(`/hosts/${hostId}/incidents${qs}`);
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"watchflare/backend/cache"
@@ -24,11 +25,16 @@ type AgentServer struct {
 	pb.UnimplementedAgentServiceServer
 }
 
-// Global PKI instance (set during startup)
-var pkiInstance *pki.PKI
+// Global PKI instance (set during startup, protected by mutex)
+var (
+	pkiInstance *pki.PKI
+	pkiMu       sync.RWMutex
+)
 
-// SetPKI stores the PKI instance for use in gRPC handlers
+// SetPKI stores the PKI instance for use in gRPC handlers.
 func SetPKI(p *pki.PKI) {
+	pkiMu.Lock()
+	defer pkiMu.Unlock()
 	pkiInstance = p
 }
 
@@ -37,15 +43,15 @@ func NewAgentServer() *AgentServer {
 	return &AgentServer{}
 }
 
-// RegisterServer handles initial agent registration
-func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServerRequest) (*pb.RegisterServerResponse, error) {
+// RegisterHost handles initial agent registration
+func (s *AgentServer) RegisterHost(ctx context.Context, req *pb.RegisterHostRequest) (*pb.RegisterHostResponse, error) {
 	// Step 1: Validate token and find the pending agent
 	hashedToken := hashToken(req.RegistrationToken)
-	var pendingAgent models.Server
+	var pendingAgent models.Host
 	result := database.DB.Where("registration_token = ?", hashedToken).First(&pendingAgent)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return &pb.RegisterServerResponse{
+			return &pb.RegisterHostResponse{
 				Success: false,
 				Message: "Invalid registration token",
 			}, nil
@@ -55,7 +61,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 
 	// Step 2: Validate token hasn't expired
 	if pendingAgent.ExpiresAt != nil && time.Now().After(*pendingAgent.ExpiresAt) {
-		return &pb.RegisterServerResponse{
+		return &pb.RegisterHostResponse{
 			Success: false,
 			Message: "Registration token has expired",
 		}, nil
@@ -63,9 +69,9 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 
 	// Step 3: Validate token is for a pending agent
 	if pendingAgent.Status != models.StatusPending && pendingAgent.Status != models.StatusExpired {
-		return &pb.RegisterServerResponse{
+		return &pb.RegisterHostResponse{
 			Success: false,
-			Message: "Server is already registered",
+			Message: "Host is already registered",
 		}, nil
 	}
 
@@ -73,7 +79,7 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 	if !pendingAgent.AllowAnyIPRegistration {
 		if pendingAgent.ConfiguredIP != nil && *pendingAgent.ConfiguredIP != "" {
 			if req.IpAddressV4 != *pendingAgent.ConfiguredIP {
-				return &pb.RegisterServerResponse{
+				return &pb.RegisterHostResponse{
 					Success: false,
 					Message: "IP address mismatch. Expected: " + *pendingAgent.ConfiguredIP + ", Got: " + req.IpAddressV4,
 				}, nil
@@ -84,19 +90,19 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 	// Step 5: Check if this is a re-registration (existing UUID provided).
 	// The UUID must match the pending agent's own AgentID to prevent a token holder
 	// from hijacking an arbitrary existing agent.
-	var agentToUse *models.Server
+	var agentToUse *models.Host
 	var deletePending bool
 
 	if req.ExistingAgentUuid != "" {
 		if req.ExistingAgentUuid != pendingAgent.AgentID {
-			return &pb.RegisterServerResponse{
+			return &pb.RegisterHostResponse{
 				Success: false,
 				Message: "Invalid registration request",
 			}, nil
 		}
 
 		// Try to find existing agent by UUID
-		var existingAgent models.Server
+		var existingAgent models.Host
 		result := database.DB.Where("agent_id = ?", req.ExistingAgentUuid).First(&existingAgent)
 		if result.Error == nil {
 			// Found existing agent - reactivate it instead of using pending
@@ -158,13 +164,13 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 		}
 	}
 
-	// Step 9: Broadcast SSE event for server update
+	// Step 9: Broadcast SSE event for host update
 	broker := sse.GetBroker()
 	configuredIP := ""
 	if agentToUse.ConfiguredIP != nil {
 		configuredIP = *agentToUse.ConfiguredIP
 	}
-	broker.BroadcastServerUpdate(sse.ServerUpdate{
+	broker.BroadcastHostUpdate(sse.HostUpdate{
 		ID:               agentToUse.ID,
 		Status:           models.StatusOffline,
 		IPv4Address:      req.IpAddressV4,
@@ -177,14 +183,17 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 	})
 
 	// Step 10: Get CA certificate for agent TLS verification
-	caCertPEM, err := pkiInstance.GetCACertPEM()
+	pkiMu.RLock()
+	pki := pkiInstance
+	pkiMu.RUnlock()
+	caCertPEM, err := pki.GetCACertPEM()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA certificate: %w", err)
 	}
 
-	return &pb.RegisterServerResponse{
+	return &pb.RegisterHostResponse{
 		Success:     true,
-		Message:     "Server registered successfully",
+		Message:     "Host registered successfully",
 		AgentId:     agentToUse.AgentID,
 		AgentKey:    agentToUse.AgentKey,
 		CaCert:      string(caCertPEM),
@@ -196,8 +205,8 @@ func (s *AgentServer) RegisterServer(ctx context.Context, req *pb.RegisterServer
 // Heartbeat handles periodic heartbeats from agents
 func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	// Verify agent credentials (read-only DB query)
-	var server models.Server
-	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
+	var host models.Host
+	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&host)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return &pb.HeartbeatResponse{
@@ -208,11 +217,11 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 		return nil, result.Error
 	}
 
-	// If server is paused, acknowledge but don't update cache or broadcast
-	if server.Status == models.StatusPaused {
+	// If host is paused, acknowledge but don't update cache or broadcast
+	if host.Status == models.StatusPaused {
 		return &pb.HeartbeatResponse{
 			Success: true,
-			Message: "Server is paused",
+			Message: "Host is paused",
 		}, nil
 	}
 
@@ -223,16 +232,16 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	// Broadcast SSE event for real-time dashboard
 	broker := sse.GetBroker()
 	configuredIP := ""
-	if server.ConfiguredIP != nil {
-		configuredIP = *server.ConfiguredIP
+	if host.ConfiguredIP != nil {
+		configuredIP = *host.ConfiguredIP
 	}
-	broker.BroadcastServerUpdate(sse.ServerUpdate{
-		ID:               server.ID,
+	broker.BroadcastHostUpdate(sse.HostUpdate{
+		ID:               host.ID,
 		Status:           models.StatusOnline,
 		IPv4Address:      req.IpAddressV4,
 		IPv6Address:      req.IpAddressV6,
 		ConfiguredIP:     configuredIP,
-		IgnoreIPMismatch: server.IgnoreIPMismatch,
+		IgnoreIPMismatch: host.IgnoreIPMismatch,
 		LastSeen:         time.Now().Format(time.RFC3339),
 	})
 
@@ -244,9 +253,9 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 
 // SendMetrics handles incoming system metrics from agents
 func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsRequest) (*pb.SendMetricsResponse, error) {
-	// Find server by agent ID and verify agent key
-	var server models.Server
-	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
+	// Find host by agent ID and verify agent key
+	var host models.Host
+	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&host)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return &pb.SendMetricsResponse{
@@ -260,12 +269,12 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 	// Update agent version if it changed (e.g. after an upgrade + restart)
 	if req.AgentVersion != "" {
 		currentVersion := ""
-		if server.AgentVersion != nil {
-			currentVersion = *server.AgentVersion
+		if host.AgentVersion != nil {
+			currentVersion = *host.AgentVersion
 		}
 		if req.AgentVersion != currentVersion {
-			if err := database.DB.Model(&server).Update("agent_version", req.AgentVersion).Error; err != nil {
-				slog.Warn("failed to update agent version", "server_id", server.ID, "error", err)
+			if err := database.DB.Model(&host).Update("agent_version", req.AgentVersion).Error; err != nil {
+				slog.Warn("failed to update agent version", "host_id", host.ID, "error", err)
 			}
 		}
 	}
@@ -277,12 +286,12 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		}, nil
 	}
 
-	// If server is paused, acknowledge but don't store metrics
-	if server.Status == models.StatusPaused {
-		slog.Info("metrics discarded for paused server", "name", server.Name, "server_id", server.ID)
+	// If host is paused, acknowledge but don't store metrics
+	if host.Status == models.StatusPaused {
+		slog.Info("metrics discarded for paused host", "name", host.Name, "host_id", host.ID)
 		return &pb.SendMetricsResponse{
 			Success: true,
-			Message: "Server is paused, metrics discarded",
+			Message: "Host is paused, metrics discarded",
 		}, nil
 	}
 
@@ -302,7 +311,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 
 	// Create metric record
 	metric := &models.Metric{
-		ServerID:             server.ID,
+		HostID:               host.ID,
 		Timestamp:            time.Unix(req.Metrics.Timestamp, 0),
 		CPUUsagePercent:      req.Metrics.CpuUsagePercent,
 		MemoryTotalBytes:     req.Metrics.MemoryTotalBytes,
@@ -325,7 +334,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 	// Broadcast SSE first for low-latency real-time display (Netdata/Prometheus pattern)
 	broker := sse.GetBroker()
 	broker.BroadcastMetricsUpdate(sse.MetricsUpdate{
-		ServerID:             server.ID,
+		HostID:               host.ID,
 		Timestamp:            metric.Timestamp.Format(time.RFC3339),
 		CPUUsagePercent:      metric.CPUUsagePercent,
 		MemoryTotalBytes:     metric.MemoryTotalBytes,
@@ -351,7 +360,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 
 		for _, cm := range req.ContainerMetrics {
 			containerModels = append(containerModels, models.ContainerMetric{
-				ServerID:             server.ID,
+				HostID:               host.ID,
 				Timestamp:            metric.Timestamp,
 				ContainerID:          cm.ContainerId,
 				ContainerName:        cm.ContainerName,
@@ -375,14 +384,14 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		}
 
 		broker.BroadcastContainerMetricsUpdate(sse.ContainerMetricsUpdate{
-			ServerID:  server.ID,
+			HostID:    host.ID,
 			Timestamp: metric.Timestamp.Unix(),
 			Metrics:   sseContainerMetrics,
 		})
 
 		// Persist container metrics to DB (after SSE for lower latency)
 		if err := database.DB.Create(&containerModels).Error; err != nil {
-			slog.Warn("failed to save container metrics", "server_id", server.ID, "error", err)
+			slog.Warn("failed to save container metrics", "host_id", host.ID, "error", err)
 		}
 	}
 
@@ -397,13 +406,13 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		for i, sr := range sensorReadings {
 			sensorMetrics[i] = models.SensorMetric{
 				Time:        metric.Timestamp,
-				ServerID:    server.ID,
+				HostID:      host.ID,
 				SensorKey:   sr.Key,
 				Temperature: sr.TemperatureCelsius,
 			}
 		}
 		if err := database.DB.Create(&sensorMetrics).Error; err != nil {
-			slog.Warn("failed to save sensor metrics", "server_id", server.ID, "error", err)
+			slog.Warn("failed to save sensor metrics", "host_id", host.ID, "error", err)
 		}
 	}
 
@@ -416,8 +425,8 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 // ReportDroppedMetrics handles reports of metrics that were dropped by agents
 func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDroppedMetricsRequest) (*pb.ReportDroppedMetricsResponse, error) {
 	// Verify agent credentials
-	var server models.Server
-	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
+	var host models.Host
+	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&host)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return &pb.ReportDroppedMetricsResponse{
@@ -431,10 +440,10 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDr
 	// Insert dropped metrics report into database
 	err := database.DB.Exec(`
 		INSERT INTO dropped_metrics
-		(agent_id, count, first_dropped_at, last_dropped_at, reason)
+		(host_id, count, first_dropped_at, last_dropped_at, reason)
 		VALUES ($1, $2, $3, $4, $5)
 	`,
-		server.ID,
+		host.ID,
 		req.Count,
 		time.Unix(req.FirstDroppedAt, 0),
 		time.Unix(req.LastDroppedAt, 0),
@@ -442,7 +451,7 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDr
 	).Error
 
 	if err != nil {
-		slog.Error("failed to insert dropped metrics report", "server_id", server.ID, "error", err)
+		slog.Error("failed to insert dropped metrics report", "host_id", host.ID, "error", err)
 		return nil, fmt.Errorf("failed to save dropped metrics report: %w", err)
 	}
 
@@ -450,7 +459,7 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDr
 	downtimeDuration := time.Unix(req.LastDroppedAt, 0).Sub(time.Unix(req.FirstDroppedAt, 0))
 
 	slog.Warn("agent reported dropped metrics",
-		"name", server.Name,
+		"name", host.Name,
 		"agent_id", req.AgentId,
 		"count", req.Count,
 		"downtime", downtimeDuration.Round(time.Second),
@@ -466,8 +475,8 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDr
 // SendPackageInventory handles package inventory updates from agents
 func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPackageInventoryRequest) (*pb.SendPackageInventoryResponse, error) {
 	// Verify agent credentials
-	var server models.Server
-	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&server)
+	var host models.Host
+	result := database.DB.Where("agent_id = ? AND agent_key = ?", req.AgentId, req.AgentKey).First(&host)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return &pb.SendPackageInventoryResponse{
@@ -479,9 +488,9 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPack
 	}
 
 	// Process package inventory
-	packagesProcessed, changesDetected, err := processPackageInventory(server.ID, req)
+	packagesProcessed, changesDetected, err := processPackageInventory(host.ID, req)
 	if err != nil {
-		slog.Error("failed to process package inventory", "server_id", server.ID, "error", err)
+		slog.Error("failed to process package inventory", "host_id", host.ID, "error", err)
 		return &pb.SendPackageInventoryResponse{
 			Success: false,
 			Message: fmt.Sprintf("Failed to process package inventory: %v", err),
@@ -489,8 +498,8 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPack
 	}
 
 	slog.Info("package inventory processed",
-		"name", server.Name,
-		"server_id", server.ID,
+		"name", host.Name,
+		"host_id", host.ID,
 		"packages", packagesProcessed,
 		"changes", changesDetected,
 		"type", req.InventoryType,
@@ -519,10 +528,10 @@ func pkgFields(pkg *pb.Package, installedAt *time.Time, now time.Time) map[strin
 }
 
 // writeHistory inserts a package history record within a transaction.
-func writeHistory(tx *gorm.DB, serverID string, pkg *pb.Package, changeType string, now time.Time) error {
+func writeHistory(tx *gorm.DB, hostID string, pkg *pb.Package, changeType string, now time.Time) error {
 	return tx.Create(&models.PackageHistory{
 		Timestamp:      now,
-		ServerID:       serverID,
+		HostID:         hostID,
 		Name:           pkg.Name,
 		Version:        pkg.Version,
 		Architecture:   pkg.Architecture,
@@ -535,7 +544,7 @@ func writeHistory(tx *gorm.DB, serverID string, pkg *pb.Package, changeType stri
 }
 
 // processPackageInventory handles the business logic for package inventory updates
-func processPackageInventory(serverID string, req *pb.SendPackageInventoryRequest) (int, int, error) {
+func processPackageInventory(hostID string, req *pb.SendPackageInventoryRequest) (int, int, error) {
 	tx := database.DB.Begin()
 	if tx.Error != nil {
 		return 0, 0, tx.Error
@@ -558,12 +567,12 @@ func processPackageInventory(serverID string, req *pb.SendPackageInventoryReques
 	if req.InventoryType == models.CollectionTypeFull {
 		for _, pkg := range req.AllPackages {
 			installedAt := convertTimestamp(pkg.InstalledAt)
-			model := models.Package{ServerID: serverID, Name: pkg.Name, Version: pkg.Version, Architecture: pkg.Architecture, PackageManager: pkg.PackageManager, Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize, Description: pkg.Description, FirstSeen: now, LastSeen: now}
-			if err := tx.Where("server_id = ? AND name = ? AND package_manager = ?", serverID, pkg.Name, pkg.PackageManager).Assign(pkgFields(pkg, installedAt, now)).FirstOrCreate(&model).Error; err != nil {
+			model := models.Package{HostID: hostID, Name: pkg.Name, Version: pkg.Version, Architecture: pkg.Architecture, PackageManager: pkg.PackageManager, Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize, Description: pkg.Description, FirstSeen: now, LastSeen: now}
+			if err := tx.Where("host_id = ? AND name = ? AND package_manager = ?", hostID, pkg.Name, pkg.PackageManager).Assign(pkgFields(pkg, installedAt, now)).FirstOrCreate(&model).Error; err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to upsert package %s: %w", pkg.Name, err)
 			}
-			if err := writeHistory(tx, serverID, pkg, models.ChangeTypeInitial, now); err != nil {
+			if err := writeHistory(tx, hostID, pkg, models.ChangeTypeInitial, now); err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to create history record for %s: %w", pkg.Name, err)
 			}
@@ -574,12 +583,12 @@ func processPackageInventory(serverID string, req *pb.SendPackageInventoryReques
 	} else if req.InventoryType == models.CollectionTypeDelta {
 		for _, pkg := range req.AddedPackages {
 			installedAt := convertTimestamp(pkg.InstalledAt)
-			model := models.Package{ServerID: serverID, Name: pkg.Name, Version: pkg.Version, Architecture: pkg.Architecture, PackageManager: pkg.PackageManager, Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize, Description: pkg.Description, FirstSeen: now, LastSeen: now}
-			if err := tx.Where("server_id = ? AND name = ? AND package_manager = ?", serverID, pkg.Name, pkg.PackageManager).Assign(pkgFields(pkg, installedAt, now)).FirstOrCreate(&model).Error; err != nil {
+			model := models.Package{HostID: hostID, Name: pkg.Name, Version: pkg.Version, Architecture: pkg.Architecture, PackageManager: pkg.PackageManager, Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize, Description: pkg.Description, FirstSeen: now, LastSeen: now}
+			if err := tx.Where("host_id = ? AND name = ? AND package_manager = ?", hostID, pkg.Name, pkg.PackageManager).Assign(pkgFields(pkg, installedAt, now)).FirstOrCreate(&model).Error; err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to upsert added package %s: %w", pkg.Name, err)
 			}
-			if err := writeHistory(tx, serverID, pkg, models.ChangeTypeAdded, now); err != nil {
+			if err := writeHistory(tx, hostID, pkg, models.ChangeTypeAdded, now); err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to create history for added package %s: %w", pkg.Name, err)
 			}
@@ -587,11 +596,11 @@ func processPackageInventory(serverID string, req *pb.SendPackageInventoryReques
 		}
 
 		for _, pkg := range req.RemovedPackages {
-			if err := tx.Where("server_id = ? AND name = ? AND package_manager = ?", serverID, pkg.Name, pkg.PackageManager).Delete(&models.Package{}).Error; err != nil {
+			if err := tx.Where("host_id = ? AND name = ? AND package_manager = ?", hostID, pkg.Name, pkg.PackageManager).Delete(&models.Package{}).Error; err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to delete removed package %s: %w", pkg.Name, err)
 			}
-			if err := writeHistory(tx, serverID, pkg, models.ChangeTypeRemoved, now); err != nil {
+			if err := writeHistory(tx, hostID, pkg, models.ChangeTypeRemoved, now); err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to create history for removed package %s: %w", pkg.Name, err)
 			}
@@ -600,11 +609,11 @@ func processPackageInventory(serverID string, req *pb.SendPackageInventoryReques
 
 		for _, pkg := range req.UpdatedPackages {
 			installedAt := convertTimestamp(pkg.InstalledAt)
-			if err := tx.Model(&models.Package{}).Where("server_id = ? AND name = ? AND package_manager = ?", serverID, pkg.Name, pkg.PackageManager).Updates(pkgFields(pkg, installedAt, now)).Error; err != nil {
+			if err := tx.Model(&models.Package{}).Where("host_id = ? AND name = ? AND package_manager = ?", hostID, pkg.Name, pkg.PackageManager).Updates(pkgFields(pkg, installedAt, now)).Error; err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to update package %s: %w", pkg.Name, err)
 			}
-			if err := writeHistory(tx, serverID, pkg, models.ChangeTypeUpdated, now); err != nil {
+			if err := writeHistory(tx, hostID, pkg, models.ChangeTypeUpdated, now); err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to create history for updated package %s: %w", pkg.Name, err)
 			}
@@ -615,7 +624,7 @@ func processPackageInventory(serverID string, req *pb.SendPackageInventoryReques
 	}
 
 	if err := tx.Create(&models.PackageCollection{
-		ServerID:       serverID,
+		HostID:         hostID,
 		Timestamp:      now,
 		CollectionType: req.InventoryType,
 		PackageCount:   int(req.TotalPackageCount),

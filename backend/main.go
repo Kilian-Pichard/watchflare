@@ -164,8 +164,8 @@ func setupRouter() *gin.Engine {
 	}
 	router.Use(cors.New(corsConfig))
 
-	// API routes under /api prefix
-	api := router.Group("/api")
+	// API routes under /api/v1 prefix
+	api := router.Group("/api/v1")
 
 	// Health check endpoint
 	api.GET("/health", func(c *gin.Context) {
@@ -216,39 +216,39 @@ func setupRouter() *gin.Engine {
 		agentGroup.GET("/latest-version", handlers.GetLatestAgentVersion)
 	}
 
-	// Server routes (protected)
-	serverGroup := api.Group("/servers")
-	serverGroup.Use(middleware.AuthMiddleware())
+	// Host routes (protected)
+	hostGroup := api.Group("/hosts")
+	hostGroup.Use(middleware.AuthMiddleware())
 	{
 		// Collection routes (no :id param)
-		serverGroup.POST("", handlers.CreateAgent)
-		serverGroup.GET("", handlers.ListServers)
-		serverGroup.GET("/events", handlers.ServerEvents)
-		serverGroup.GET("/dropped-metrics", handlers.GetDroppedMetrics)
-		serverGroup.GET("/metrics/aggregated", handlers.GetAggregatedMetrics)
+		hostGroup.POST("", handlers.CreateAgent)
+		hostGroup.GET("", handlers.ListHosts)
+		hostGroup.GET("/events", handlers.HostEvents)
+		hostGroup.GET("/dropped-metrics", handlers.GetDroppedMetrics)
+		hostGroup.GET("/metrics/aggregated", handlers.GetAggregatedMetrics)
 
-		// Per-server routes
-		serverGroup.GET("/:id", handlers.GetServer)
-		serverGroup.GET("/:id/metrics", handlers.GetMetrics)
-		serverGroup.GET("/:id/sensor-readings", handlers.GetSensorReadings)
-		serverGroup.GET("/:id/container-metrics", handlers.GetContainerMetrics)
-		serverGroup.PUT("/:id/validate-ip", handlers.ValidateIP)
-		serverGroup.PUT("/:id/rename", handlers.RenameServer)
-		serverGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
-		serverGroup.PUT("/:id/ignore-ip-mismatch", handlers.IgnoreIPMismatch)
-		serverGroup.PUT("/:id/dismiss-reactivation", handlers.DismissReactivation)
-		serverGroup.PUT("/:id/pause", handlers.PauseServer)
-		serverGroup.PUT("/:id/resume", handlers.ResumeServer)
-		serverGroup.POST("/:id/regenerate-token", handlers.RegenerateToken)
-		serverGroup.DELETE("/:id", handlers.DeleteServer)
-		serverGroup.GET("/:id/packages", handlers.GetServerPackages)
-		serverGroup.GET("/:id/packages/history", handlers.GetServerPackageHistory)
-		serverGroup.GET("/:id/packages/collections", handlers.GetServerPackageCollections)
-		serverGroup.GET("/:id/packages/stats", handlers.GetPackageStats)
-		serverGroup.GET("/:id/incidents", handlers.GetServerIncidents)
-		serverGroup.GET("/:id/alerts", handlers.GetServerAlertRules)
-		serverGroup.PUT("/:id/alerts/:metric_type", handlers.UpsertServerAlertRule)
-		serverGroup.DELETE("/:id/alerts/:metric_type", handlers.DeleteServerAlertRule)
+		// Per-host routes
+		hostGroup.GET("/:id", handlers.GetHost)
+		hostGroup.GET("/:id/metrics", handlers.GetMetrics)
+		hostGroup.GET("/:id/sensor-readings", handlers.GetSensorReadings)
+		hostGroup.GET("/:id/container-metrics", handlers.GetContainerMetrics)
+		hostGroup.PUT("/:id/validate-ip", handlers.ValidateIP)
+		hostGroup.PUT("/:id/rename", handlers.RenameHost)
+		hostGroup.PUT("/:id/change-ip", handlers.UpdateConfiguredIP)
+		hostGroup.PUT("/:id/ignore-ip-mismatch", handlers.IgnoreIPMismatch)
+		hostGroup.PUT("/:id/dismiss-reactivation", handlers.DismissReactivation)
+		hostGroup.PUT("/:id/pause", handlers.PauseHost)
+		hostGroup.PUT("/:id/resume", handlers.ResumeHost)
+		hostGroup.POST("/:id/regenerate-token", handlers.RegenerateToken)
+		hostGroup.DELETE("/:id", handlers.DeleteHost)
+		hostGroup.GET("/:id/packages", handlers.GetHostPackages)
+		hostGroup.GET("/:id/packages/history", handlers.GetHostPackageHistory)
+		hostGroup.GET("/:id/packages/collections", handlers.GetHostPackageCollections)
+		hostGroup.GET("/:id/packages/stats", handlers.GetPackageStats)
+		hostGroup.GET("/:id/incidents", handlers.GetHostIncidents)
+		hostGroup.GET("/:id/alerts", handlers.GetHostAlertRules)
+		hostGroup.PUT("/:id/alerts/:metric_type", handlers.UpsertHostAlertRule)
+		hostGroup.DELETE("/:id/alerts/:metric_type", handlers.DeleteHostAlertRule)
 	}
 
 	// Serve embedded frontend (SPA with fallback to index.html)

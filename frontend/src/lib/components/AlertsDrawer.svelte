@@ -31,14 +31,14 @@
     const incidents = $derived($alertsStore.activeIncidents);
 
     function isCritical(incident: ActiveIncident): boolean {
-        return incident.metric_type === "server_down";
+        return incident.metric_type === "host_down";
     }
 
     function formatMessage(incident: ActiveIncident): string {
         const { metric_type, current_value, threshold_value } = incident;
         switch (metric_type as AlertMetricType) {
-            case "server_down":
-                return "Server is offline";
+            case "host_down":
+                return "Host is offline";
             case "cpu_usage":
                 return `CPU: ${current_value.toFixed(1)}% (threshold: ${threshold_value.toFixed(0)}%)`;
             case "memory_usage":
@@ -108,7 +108,7 @@
                                 {/if}
                             </div>
                             <div class="flex-1 min-w-0">
-                                <p class="text-xs font-medium mb-0.5">{incident.server_name}</p>
+                                <p class="text-xs font-medium mb-0.5">{incident.host_name}</p>
                                 <p class="text-xs opacity-90">{formatMessage(incident)}</p>
                                 <p class="text-xs opacity-60 mt-1">{formatRelativeTime(incident.started_at)}</p>
                             </div>

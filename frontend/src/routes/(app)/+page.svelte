@@ -11,8 +11,8 @@
     import {
         userStore,
         currentUser,
-        serversStore,
-        servers,
+        hostsStore,
+        hosts,
         metricsStore,
         latestMetrics,
         aggregatedStore,
@@ -23,7 +23,7 @@
         sseStore,
         uiStore,
     } from "$lib/stores";
-    import ServerTable from "$lib/components/ServerTable.svelte";
+    import HostTable from "$lib/components/HostTable.svelte";
     import DashboardStats from "$lib/components/dashboard/DashboardStats.svelte";
     import DashboardCharts from "$lib/components/dashboard/DashboardCharts.svelte";
     import DroppedMetricsAlert from "$lib/components/dashboard/DroppedMetricsAlert.svelte";
@@ -31,7 +31,7 @@
     import { ChevronUp, ChevronDown } from "lucide-svelte";
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
     import Modal from "$lib/components/Modal.svelte";
-    import type { Server, SSEEvent, TimeRange } from "$lib/types";
+    import type { Host, SSEEvent, TimeRange } from "$lib/types";
 
     // SSE unsubscribe function
     let sseUnsubscribe: (() => void) | null = null;
@@ -39,30 +39,30 @@
     // Modal state
     let showDeleteConfirm = $state(false);
     let showRename = $state(false);
-    let selectedServer: Server | null = $state(null);
-    let newServerName = $state("");
+    let selectedHost: Host | null = $state(null);
+    let newHostName = $state("");
 
     // Derived states from stores
     let loading = $state(true);
     let user = $derived($currentUser);
-    let serversList = $derived($servers);
+    let hostsList = $derived($hosts);
     let stats = $derived($dashboardStats);
     let droppedAlerts = $derived($alertsStore.droppedMetrics);
-    let activeIncidentServerIds = $derived(
+    let activeIncidentHostIds = $derived(
         $alertsStore.activeIncidents.reduce((map, i) => {
-            map.set(i.server_id, (map.get(i.server_id) ?? 0) + 1);
+            map.set(i.host_id, (map.get(i.host_id) ?? 0) + 1);
             return map;
         }, new Map<string, number>())
     );
     let metricsCollapsed = $derived($uiStore.metricsCollapsed);
     let selectedTimeRange = $derived($currentTimeRange);
 
-    async function loadServerMetrics(
-        serverIds: string[],
+    async function loadHostMetrics(
+        hostIds: string[],
         timeRangeValue: TimeRange,
     ) {
-        if (serverIds.length > 0) {
-            await metricsStore.loadForServers(serverIds, timeRangeValue);
+        if (hostIds.length > 0) {
+            await metricsStore.loadForHosts(hostIds, timeRangeValue);
         }
     }
 
@@ -81,14 +81,14 @@
                 userTimeRange === "6h" ? "12h" : userTimeRange;
             aggregatedStore.setTimeRange(migratedTimeRange);
 
-            // Load servers and get IDs directly from API response
-            await serversStore.load();
+            // Load hosts and get IDs directly from API response
+            await hostsStore.load();
 
-            // Load dropped metrics alerts, aggregated metrics, and per-server metrics in parallel
-            const serverIds = get(serversStore).servers.map((s) => s.server.id);
+            // Load dropped metrics alerts, aggregated metrics, and per-host metrics in parallel
+            const hostIds = get(hostsStore).hosts.map((s) => s.host.id);
 
             await Promise.all([
-                loadServerMetrics(serverIds, migratedTimeRange as TimeRange),
+                loadHostMetrics(hostIds, migratedTimeRange as TimeRange),
                 alertsStore.load(),
                 aggregatedStore.load(migratedTimeRange),
                 aggregatedStore.load24h(),
@@ -104,92 +104,92 @@
     async function handleTimeRangeChange(newTimeRange: TimeRange) {
         aggregatedStore.setTimeRange(newTimeRange);
 
-        const serverIds = get(serversStore).servers.map((s) => s.server.id);
+        const hostIds = get(hostsStore).hosts.map((s) => s.host.id);
 
-        // Load aggregated data and per-server metrics in parallel
+        // Load aggregated data and per-host metrics in parallel
         await Promise.all([
             aggregatedStore.load(newTimeRange),
-            loadServerMetrics(serverIds, newTimeRange),
+            loadHostMetrics(hostIds, newTimeRange),
         ]);
     }
 
     function handleSSEMessage(event: SSEEvent) {
         handleSSEReactivation(event);
 
-        if (event.type === "server_update") {
-            // Update server status via store
-            serversStore.updateStatus(
+        if (event.type === "host_update") {
+            // Update host status via store
+            hostsStore.updateStatus(
                 event.data.id,
                 event.data.status,
                 event.data.last_seen,
             );
         } else if (event.type === "metrics_update") {
-            // Update individual server metrics via store
-            metricsStore.updateServerMetrics(event.data.server_id, event.data);
+            // Update individual host metrics via store
+            metricsStore.updateHostMetrics(event.data.host_id, event.data);
         } else if (event.type === "aggregated_metrics_update") {
             // Add new aggregated metrics point via store
             aggregatedStore.addMetricPoint(event.data);
         }
     }
 
-    function handleRename(server: Server) {
-        selectedServer = server;
-        newServerName = server.name;
+    function handleRename(host: Host) {
+        selectedHost = host;
+        newHostName = host.name;
         showRename = true;
     }
 
     async function handleRenameSubmit() {
-        if (!selectedServer) return;
+        if (!selectedHost) return;
         try {
-            await api.renameServer(selectedServer.id, newServerName);
+            await api.renameHost(selectedHost.id, newHostName);
             showRename = false;
-            newServerName = "";
-            selectedServer = null;
-            await serversStore.load();
+            newHostName = "";
+            selectedHost = null;
+            await hostsStore.load();
         } catch (err) {
-            logger.error("Failed to rename server:", err);
+            logger.error("Failed to rename host:", err);
         }
     }
 
-    async function handlePause(serverId: string) {
+    async function handlePause(hostId: string) {
         try {
-            await api.pauseServer(serverId);
-            serversStore.updateStatus(serverId, "paused", "");
+            await api.pauseHost(hostId);
+            hostsStore.updateStatus(hostId, "paused", "");
         } catch (err) {
-            logger.error("Failed to pause server:", err);
+            logger.error("Failed to pause host:", err);
         }
     }
 
-    async function handleResume(serverId: string) {
+    async function handleResume(hostId: string) {
         try {
-            await api.resumeServer(serverId);
-            serversStore.updateStatus(serverId, "online", "");
+            await api.resumeHost(hostId);
+            hostsStore.updateStatus(hostId, "online", "");
         } catch (err) {
-            logger.error("Failed to resume server:", err);
+            logger.error("Failed to resume host:", err);
         }
     }
 
-    function handleDeleteRequest(server: Server) {
-        selectedServer = server;
+    function handleDeleteRequest(host: Host) {
+        selectedHost = host;
         showDeleteConfirm = true;
     }
 
     async function handleDeleteConfirm() {
-        if (!selectedServer) return;
+        if (!selectedHost) return;
         try {
-            await api.deleteServer(selectedServer.id);
+            await api.deleteHost(selectedHost.id);
             showDeleteConfirm = false;
-            selectedServer = null;
-            await serversStore.load();
+            selectedHost = null;
+            await hostsStore.load();
         } catch (err) {
-            logger.error("Failed to delete server:", err);
+            logger.error("Failed to delete host:", err);
         }
     }
 
     onMount(() => {
         loadData();
 
-        // Connect to SSE for server status updates and real-time aggregated metrics
+        // Connect to SSE for host status updates and real-time aggregated metrics
         sseUnsubscribe = sseStore.connect(handleSSEMessage);
 
         // Refresh dropped metrics every 1 hour
@@ -236,12 +236,12 @@
             >
         </h1>
         <p class="text-sm text-muted-foreground mt-1">
-            {#if stats.totalServers === 0}
-                No servers monitored yet
+            {#if stats.totalHosts === 0}
+                No hosts monitored yet
             {:else}
                 Global uptime at <span class="font-medium text-foreground"
                     >{formatPercent(
-                        (stats.onlineServers / stats.totalServers) * 100,
+                        (stats.onlineHosts / stats.totalHosts) * 100,
                     )}</span
                 > in the last 24h
             {/if}
@@ -291,15 +291,15 @@
         </div>
     {/if}
 
-    <!-- Servers Table -->
+    <!-- Hosts Table -->
     <div class="mb-6">
         <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-lg font-semibold">Server Summary</h2>
+            <h2 class="text-lg font-semibold">Host Summary</h2>
         </div>
-        <ServerTable
-            servers={serversList.filter((s) => s.server.status !== "pending")}
+        <HostTable
+            hosts={hostsList.filter((s) => s.host.status !== "pending")}
             latestMetrics={$latestMetrics}
-            {activeIncidentServerIds}
+            {activeIncidentHostIds}
             onRename={handleRename}
             onPause={handlePause}
             onResume={handleResume}
@@ -313,22 +313,22 @@
     open={showDeleteConfirm}
     title="Confirm Delete"
     onConfirm={handleDeleteConfirm}
-    onClose={() => { showDeleteConfirm = false; selectedServer = null; }}
-    confirmLabel="Delete Server"
+    onClose={() => { showDeleteConfirm = false; selectedHost = null; }}
+    confirmLabel="Delete Host"
     confirmVariant="destructive"
 >
     <p class="text-sm text-muted-foreground mb-4">
-        Are you sure you want to delete "{selectedServer?.name}"?
+        Are you sure you want to delete "{selectedHost?.name}"?
     </p>
     <p class="text-sm font-medium text-destructive">
         This action cannot be undone.
     </p>
 </ConfirmDialog>
 
-<!-- Rename Server Modal -->
-<Modal open={showRename} onClose={() => { showRename = false; newServerName = ''; selectedServer = null; }}>
+<!-- Rename Host Modal -->
+<Modal open={showRename} onClose={() => { showRename = false; newHostName = ''; selectedHost = null; }}>
     <h3 class="text-lg font-semibold text-foreground mb-3">
-        Rename Server
+        Rename Host
     </h3>
     <div class="mb-4">
         <label
@@ -340,21 +340,21 @@
         <input
             id="newname"
             type="text"
-            bind:value={newServerName}
+            bind:value={newHostName}
             placeholder="e.g., production-web-01"
             class="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
     </div>
     <div class="flex gap-3 justify-end">
         <button
-            onclick={() => { showRename = false; newServerName = ''; selectedServer = null; }}
+            onclick={() => { showRename = false; newHostName = ''; selectedHost = null; }}
             class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
         >
             Cancel
         </button>
         <button
             onclick={handleRenameSubmit}
-            disabled={newServerName.length < 2}
+            disabled={newHostName.length < 2}
             class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
         >
             Rename

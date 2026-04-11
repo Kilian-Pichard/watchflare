@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.4
-// source: agent/v1/agent.proto
+// source: shared/proto/agent/v1/agent.proto
 
 package proto
 
@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_RegisterServer_FullMethodName       = "/agent.v1.AgentService/RegisterServer"
+	AgentService_RegisterHost_FullMethodName         = "/agent.v1.AgentService/RegisterHost"
 	AgentService_Heartbeat_FullMethodName            = "/agent.v1.AgentService/Heartbeat"
 	AgentService_SendMetrics_FullMethodName          = "/agent.v1.AgentService/SendMetrics"
 	AgentService_ReportDroppedMetrics_FullMethodName = "/agent.v1.AgentService/ReportDroppedMetrics"
@@ -32,8 +32,8 @@ const (
 //
 // AgentService handles agent registration and heartbeats
 type AgentServiceClient interface {
-	// RegisterServer is called when an agent first connects
-	RegisterServer(ctx context.Context, in *RegisterServerRequest, opts ...grpc.CallOption) (*RegisterServerResponse, error)
+	// RegisterHost is called when an agent first connects
+	RegisterHost(ctx context.Context, in *RegisterHostRequest, opts ...grpc.CallOption) (*RegisterHostResponse, error)
 	// Heartbeat is called every 5 seconds by the agent
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// SendMetrics sends system metrics to the backend
@@ -52,10 +52,10 @@ func NewAgentServiceClient(cc grpc.ClientConnInterface) AgentServiceClient {
 	return &agentServiceClient{cc}
 }
 
-func (c *agentServiceClient) RegisterServer(ctx context.Context, in *RegisterServerRequest, opts ...grpc.CallOption) (*RegisterServerResponse, error) {
+func (c *agentServiceClient) RegisterHost(ctx context.Context, in *RegisterHostRequest, opts ...grpc.CallOption) (*RegisterHostResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterServerResponse)
-	err := c.cc.Invoke(ctx, AgentService_RegisterServer_FullMethodName, in, out, cOpts...)
+	out := new(RegisterHostResponse)
+	err := c.cc.Invoke(ctx, AgentService_RegisterHost_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +108,8 @@ func (c *agentServiceClient) SendPackageInventory(ctx context.Context, in *SendP
 //
 // AgentService handles agent registration and heartbeats
 type AgentServiceServer interface {
-	// RegisterServer is called when an agent first connects
-	RegisterServer(context.Context, *RegisterServerRequest) (*RegisterServerResponse, error)
+	// RegisterHost is called when an agent first connects
+	RegisterHost(context.Context, *RegisterHostRequest) (*RegisterHostResponse, error)
 	// Heartbeat is called every 5 seconds by the agent
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// SendMetrics sends system metrics to the backend
@@ -128,8 +128,8 @@ type AgentServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAgentServiceServer struct{}
 
-func (UnimplementedAgentServiceServer) RegisterServer(context.Context, *RegisterServerRequest) (*RegisterServerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RegisterServer not implemented")
+func (UnimplementedAgentServiceServer) RegisterHost(context.Context, *RegisterHostRequest) (*RegisterHostResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterHost not implemented")
 }
 func (UnimplementedAgentServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
@@ -164,20 +164,20 @@ func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer)
 	s.RegisterService(&AgentService_ServiceDesc, srv)
 }
 
-func _AgentService_RegisterServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterServerRequest)
+func _AgentService_RegisterHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterHostRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentServiceServer).RegisterServer(ctx, in)
+		return srv.(AgentServiceServer).RegisterHost(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentService_RegisterServer_FullMethodName,
+		FullMethod: AgentService_RegisterHost_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).RegisterServer(ctx, req.(*RegisterServerRequest))
+		return srv.(AgentServiceServer).RegisterHost(ctx, req.(*RegisterHostRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -262,8 +262,8 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AgentServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "RegisterServer",
-			Handler:    _AgentService_RegisterServer_Handler,
+			MethodName: "RegisterHost",
+			Handler:    _AgentService_RegisterHost_Handler,
 		},
 		{
 			MethodName: "Heartbeat",
@@ -283,5 +283,5 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "agent/v1/agent.proto",
+	Metadata: "shared/proto/agent/v1/agent.proto",
 }

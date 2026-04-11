@@ -12,7 +12,7 @@ import (
 
 // MetricsQueryParams holds parameters for metrics retrieval.
 type MetricsQueryParams struct {
-	ServerID string
+	HostID string
 	Start    time.Time
 	End      time.Time
 	Interval string // e.g., "1m", "5m", "15m", "1h"
@@ -60,21 +60,21 @@ type aggregatedMetricRow struct {
 	UptimeSeconds         uint64    `gorm:"column:uptime_seconds"`
 }
 
-// GetMetrics retrieves metrics for a server. When Interval is empty, raw data is
+// GetMetrics retrieves metrics for a host. When Interval is empty, raw data is
 // returned; otherwise the appropriate continuous aggregate view is used.
 func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
-	var server models.Server
-	if err := database.DB.Where("id = ?", params.ServerID).First(&server).Error; err != nil {
+	var host models.Host
+	if err := database.DB.Where("id = ?", params.HostID).First(&host).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrServerNotFound
+			return nil, ErrHostNotFound
 		}
 		return nil, err
 	}
 
 	if params.Interval == "" {
 		var metrics []models.Metric
-		if err := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
-			params.ServerID, params.Start, params.End).
+		if err := database.DB.Where("host_id = ? AND timestamp >= ? AND timestamp <= ?",
+			params.HostID, params.Start, params.End).
 			Order("timestamp ASC").
 			Find(&metrics).Error; err != nil {
 			return nil, err
@@ -131,12 +131,12 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 			cpu_temperature_celsius,
 			CAST(uptime_seconds AS BIGINT) AS uptime_seconds
 		FROM %s
-		WHERE server_id = $1 AND bucket >= $2 AND bucket <= $3
+		WHERE host_id = $1 AND bucket >= $2 AND bucket <= $3
 		ORDER BY bucket ASC
 	`, tableName)
 
 	var rows []aggregatedMetricRow
-	if err := database.DB.Raw(query, params.ServerID, params.Start, params.End).
+	if err := database.DB.Raw(query, params.HostID, params.Start, params.End).
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -166,20 +166,20 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 	return results, nil
 }
 
-// GetContainerMetrics retrieves container metrics for a server within a time range.
-func GetContainerMetrics(serverID string, start, end time.Time, interval string) ([]models.ContainerMetric, error) {
-	var server models.Server
-	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+// GetContainerMetrics retrieves container metrics for a host within a time range.
+func GetContainerMetrics(hostID string, start, end time.Time, interval string) ([]models.ContainerMetric, error) {
+	var host models.Host
+	if err := database.DB.Where("id = ?", hostID).First(&host).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrServerNotFound
+			return nil, ErrHostNotFound
 		}
 		return nil, err
 	}
 
 	if interval == "" {
 		var metrics []models.ContainerMetric
-		if err := database.DB.Where("server_id = ? AND timestamp >= ? AND timestamp <= ?",
-			serverID, start, end).
+		if err := database.DB.Where("host_id = ? AND timestamp >= ? AND timestamp <= ?",
+			hostID, start, end).
 			Order("timestamp ASC").
 			Find(&metrics).Error; err != nil {
 			return nil, err
@@ -196,7 +196,7 @@ func GetContainerMetrics(serverID string, start, end time.Time, interval string)
 	query := fmt.Sprintf(`
 		SELECT
 			bucket AS timestamp,
-			server_id,
+			host_id,
 			container_id,
 			container_name,
 			cpu_percent,
@@ -205,12 +205,12 @@ func GetContainerMetrics(serverID string, start, end time.Time, interval string)
 			CAST(network_rx_bytes_per_sec AS BIGINT) AS network_rx_bytes_per_sec,
 			CAST(network_tx_bytes_per_sec AS BIGINT) AS network_tx_bytes_per_sec
 		FROM %s
-		WHERE server_id = $1 AND bucket >= $2 AND bucket <= $3
+		WHERE host_id = $1 AND bucket >= $2 AND bucket <= $3
 		ORDER BY bucket ASC, container_name ASC
 	`, tableName)
 
 	var metrics []models.ContainerMetric
-	if err := database.DB.Raw(query, serverID, start, end).
+	if err := database.DB.Raw(query, hostID, start, end).
 		Scan(&metrics).Error; err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ import (
 func setupMetricsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	group := router.Group("/servers")
+	group := router.Group("/hosts")
 	group.Use(middleware.AuthMiddleware())
 	{
 		group.GET("/:id/metrics", GetMetrics)
@@ -92,7 +92,7 @@ func TestGetMetrics_InvalidTimeRange(t *testing.T) {
 	router := setupMetricsRouter()
 	cookie := createTestUser(t)
 
-	req, _ := http.NewRequest("GET", "/servers/some-id/metrics?time_range=invalid", nil)
+	req, _ := http.NewRequest("GET", "/hosts/some-id/metrics?time_range=invalid", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -108,7 +108,7 @@ func TestGetMetrics_StartAfterEnd(t *testing.T) {
 	cookie := createTestUser(t)
 
 	// start after end
-	req, _ := http.NewRequest("GET", "/servers/some-id/metrics?start=2024-01-15T12:00:00Z&end=2024-01-15T10:00:00Z", nil)
+	req, _ := http.NewRequest("GET", "/hosts/some-id/metrics?start=2024-01-15T12:00:00Z&end=2024-01-15T10:00:00Z", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -122,7 +122,7 @@ func TestGetMetrics_Unauthenticated(t *testing.T) {
 
 	router := setupMetricsRouter()
 
-	req, _ := http.NewRequest("GET", "/servers/some-id/metrics", nil)
+	req, _ := http.NewRequest("GET", "/hosts/some-id/metrics", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -136,7 +136,7 @@ func TestGetContainerMetrics_InvalidTimeRange(t *testing.T) {
 	router := setupMetricsRouter()
 	cookie := createTestUser(t)
 
-	req, _ := http.NewRequest("GET", "/servers/some-id/metrics/containers?time_range=bad", nil)
+	req, _ := http.NewRequest("GET", "/hosts/some-id/metrics/containers?time_range=bad", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -151,7 +151,7 @@ func TestGetSensorReadings_InvalidTimeRange(t *testing.T) {
 	router := setupMetricsRouter()
 	cookie := createTestUser(t)
 
-	req, _ := http.NewRequest("GET", "/servers/some-id/metrics/sensors?time_range=bad", nil)
+	req, _ := http.NewRequest("GET", "/hosts/some-id/metrics/sensors?time_range=bad", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)

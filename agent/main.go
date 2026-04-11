@@ -76,7 +76,7 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Println("Watchflare Agent - Server Monitoring Agent")
+	fmt.Println("Watchflare Agent - Host Monitoring Agent")
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  watchflare-agent [command]")

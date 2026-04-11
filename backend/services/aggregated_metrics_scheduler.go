@@ -68,7 +68,7 @@ func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
 			COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_total_bytes ELSE 0 END), 0) as disk_total_bytes,
 			COALESCE(SUM(CASE WHEN s.environment_type != 'container' THEN m.disk_used_bytes ELSE 0 END), 0) as disk_used_bytes
 		FROM metrics m
-		JOIN servers s ON m.server_id = s.id
+		JOIN hosts s ON m.host_id = s.id
 		WHERE s.status = 'online'
 		  AND m.timestamp > $1
 		  AND m.timestamp <= $2
@@ -84,7 +84,7 @@ func (s *AggregatedMetricsScheduler) calculateAndBroadcast() {
 		return
 	}
 
-	// Skip broadcasting when all servers are paused or offline.
+	// Skip broadcasting when all hosts are paused or offline.
 	if memoryTotalBytes == 0 && diskTotalBytes == 0 && cpuUsagePercent == 0 {
 		return
 	}

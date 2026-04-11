@@ -65,7 +65,7 @@
                 Watchflare
             </h1>
             <p class="text-sm text-muted-foreground">
-                Server Monitoring Dashboard
+                Host Monitoring Dashboard
             </p>
         </div>
 
@@ -163,7 +163,7 @@
 
         <!-- Footer -->
         <p class="mt-6 text-center text-xs text-muted-foreground">
-            Watchflare Server Monitoring
+            Watchflare Host Monitoring
         </p>
     </div>
 </div>

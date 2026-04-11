@@ -84,7 +84,7 @@ export function formatUptime(seconds: number): string {
 	return `${minutes}m`;
 }
 
-// Server status badge class
+// Host status badge class
 export function getStatusClass(status: string): string {
 	switch (status) {
 		case 'online':
@@ -198,9 +198,9 @@ export function getManagerColor(manager: string): string {
 
 // SSE reactivation toast (shared across pages)
 export function handleSSEReactivation(event: SSEEvent): void {
-	if (event.type === 'server_update' && event.data.reactivated && event.data.hostname) {
+	if (event.type === 'host_update' && event.data.reactivated && event.data.hostname) {
 		toasts.add(
-			`Agent "${event.data.hostname}" was reactivated (same physical server detected via UUID)`,
+			`Agent "${event.data.hostname}" was reactivated (same physical host detected via UUID)`,
 			'info',
 			TOAST_LONG_DURATION
 		);

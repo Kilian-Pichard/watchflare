@@ -23,15 +23,15 @@ type sensorRow struct {
 	Temperature float64   `gorm:"column:temperature"`
 }
 
-// GetSensorReadings retrieves per-sensor temperature data for a server.
+// GetSensorReadings retrieves per-sensor temperature data for a host.
 //
 // For 1h/12h/24h: queries metrics.sensor_readings (JSONB) — always available.
 // For 7d/30d:     queries sensor_metrics hypertable — accumulates over time.
-func GetSensorReadings(serverID string, start, end time.Time, interval string) ([]SensorDataPoint, error) {
-	var server models.Server
-	if err := database.DB.Where("id = ?", serverID).First(&server).Error; err != nil {
+func GetSensorReadings(hostID string, start, end time.Time, interval string) ([]SensorDataPoint, error) {
+	var host models.Host
+	if err := database.DB.Where("id = ?", hostID).First(&host).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrServerNotFound
+			return nil, ErrHostNotFound
 		}
 		return nil, err
 	}
@@ -50,14 +50,14 @@ func GetSensorReadings(serverID string, start, end time.Time, interval string) (
 			       AVG((sr->>'temperature_celsius')::double precision) AS temperature
 			FROM metrics,
 			     LATERAL jsonb_array_elements(sensor_readings) AS sr
-			WHERE server_id = $1
+			WHERE host_id = $1
 			  AND timestamp >= $2
 			  AND timestamp <= $3
 			  AND sensor_readings IS NOT NULL
 			  AND jsonb_array_length(sensor_readings) > 0
 			GROUP BY 1, 2
 			ORDER BY 1 ASC, 2 ASC
-		`, bucket), serverID, start, end).Scan(&rows).Error
+		`, bucket), hostID, start, end).Scan(&rows).Error
 
 	case "2h", "8h":
 		// 7d / 30d — dedicated sensor_metrics hypertable
@@ -68,12 +68,12 @@ func GetSensorReadings(serverID string, start, end time.Time, interval string) (
 			       sensor_key,
 			       AVG(temperature) AS temperature
 			FROM sensor_metrics
-			WHERE server_id = $1
+			WHERE host_id = $1
 			  AND time >= $2
 			  AND time <= $3
 			GROUP BY 1, 2
 			ORDER BY 1 ASC, 2 ASC
-		`, bucket), serverID, start, end).Scan(&rows).Error
+		`, bucket), hostID, start, end).Scan(&rows).Error
 
 	default:
 		return nil, fmt.Errorf("invalid interval: %s", interval)

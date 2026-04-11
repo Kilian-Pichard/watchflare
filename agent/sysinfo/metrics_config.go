@@ -28,7 +28,7 @@ func GetMetricsConfig(env *Environment, dockerMetrics bool) *MetricsConfig {
 
 	switch env.Type {
 	case EnvPhysical:
-		// Physical server: collect everything
+		// Physical host: collect everything
 		config.CollectCPU = true
 		config.CollectMemory = true
 		config.CollectDisk = true
@@ -39,7 +39,7 @@ func GetMetricsConfig(env *Environment, dockerMetrics bool) *MetricsConfig {
 		config.CollectTemperature = true
 
 	case EnvPhysicalWithContainers:
-		// Physical server running Docker: collect everything
+		// Physical host running Docker: collect everything
 		config.CollectCPU = true
 		config.CollectMemory = true
 		config.CollectDisk = true
@@ -109,9 +109,9 @@ func GetMetricsConfig(env *Environment, dockerMetrics bool) *MetricsConfig {
 func (e *Environment) String() string {
 	switch e.Type {
 	case EnvPhysical:
-		return "Physical Server"
+		return "Physical Host"
 	case EnvPhysicalWithContainers:
-		return "Physical Server with Docker"
+		return "Physical Host with Docker"
 	case EnvVM:
 		return "Virtual Machine (" + e.Hypervisor + ")"
 	case EnvVMWithContainers:

@@ -7,11 +7,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// ContainerMetric stores per-container metrics for a server
+// ContainerMetric stores per-container metrics for a host
 type ContainerMetric struct {
 	ID                   string    `gorm:"type:char(36);primaryKey;priority:1" json:"id"`
 	Timestamp            time.Time `gorm:"primaryKey;priority:2;not null" json:"timestamp"`
-	ServerID             string    `gorm:"type:char(36);index:idx_container_metrics_server;not null" json:"server_id"`
+	HostID               string    `gorm:"type:char(36);index:idx_container_metrics_host;not null" json:"host_id"`
 	ContainerID          string    `gorm:"not null" json:"container_id"`
 	ContainerName        string    `gorm:"not null" json:"container_name"`
 	Image                string    `json:"image"`

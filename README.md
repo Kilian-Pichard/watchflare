@@ -1,6 +1,6 @@
 # Watchflare
 
-Self-hosted server monitoring with real-time dashboards. Lightweight agents report metrics over gRPC/TLS to a central backend, served as a single binary with an embedded web UI.
+Self-hosted host monitoring with real-time dashboards. Lightweight agents report metrics over gRPC/TLS to a central backend, served as a single binary with an embedded web UI.
 
 ## Features
 

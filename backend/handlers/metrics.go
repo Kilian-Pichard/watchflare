@@ -37,9 +37,9 @@ func resolveTimeRange(timeRange string) (start, end time.Time, interval string, 
 	return
 }
 
-// GetMetrics returns metrics for a specific server
+// GetMetrics returns metrics for a specific host
 func GetMetrics(c *gin.Context) {
-	serverID := c.Param("id")
+	hostID := c.Param("id")
 
 	// Parse query parameters
 	startStr := c.DefaultQuery("start", "")
@@ -90,7 +90,7 @@ func GetMetrics(c *gin.Context) {
 
 	// Query metrics
 	params := services.MetricsQueryParams{
-		ServerID: serverID,
+		HostID:   hostID,
 		Start:    start,
 		End:      end,
 		Interval: interval,
@@ -98,7 +98,7 @@ func GetMetrics(c *gin.Context) {
 
 	metrics, err := services.GetMetrics(params)
 	if err != nil {
-		if errors.Is(err, services.ErrServerNotFound) {
+		if errors.Is(err, services.ErrHostNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
@@ -107,7 +107,7 @@ func GetMetrics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"server_id":  serverID,
+		"host_id":    hostID,
 		"start":      start.Format(time.RFC3339),
 		"end":        end.Format(time.RFC3339),
 		"time_range": timeRange,
@@ -117,9 +117,9 @@ func GetMetrics(c *gin.Context) {
 	})
 }
 
-// GetContainerMetrics returns container metrics for a specific server
+// GetContainerMetrics returns container metrics for a specific host
 func GetContainerMetrics(c *gin.Context) {
-	serverID := c.Param("id")
+	hostID := c.Param("id")
 	timeRange := c.DefaultQuery("time_range", "1h")
 
 	start, end, interval, ok := resolveTimeRange(timeRange)
@@ -128,9 +128,9 @@ func GetContainerMetrics(c *gin.Context) {
 		return
 	}
 
-	metrics, err := services.GetContainerMetrics(serverID, start, end, interval)
+	metrics, err := services.GetContainerMetrics(hostID, start, end, interval)
 	if err != nil {
-		if errors.Is(err, services.ErrServerNotFound) {
+		if errors.Is(err, services.ErrHostNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
@@ -139,16 +139,16 @@ func GetContainerMetrics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"server_id":  serverID,
+		"host_id":    hostID,
 		"time_range": timeRange,
 		"count":      len(metrics),
 		"metrics":    metrics,
 	})
 }
 
-// GetSensorReadings returns per-sensor temperature data for a specific server
+// GetSensorReadings returns per-sensor temperature data for a specific host
 func GetSensorReadings(c *gin.Context) {
-	serverID := c.Param("id")
+	hostID := c.Param("id")
 	timeRange := c.DefaultQuery("time_range", "1h")
 
 	start, end, interval, ok := resolveTimeRange(timeRange)
@@ -157,9 +157,9 @@ func GetSensorReadings(c *gin.Context) {
 		return
 	}
 
-	data, err := services.GetSensorReadings(serverID, start, end, interval)
+	data, err := services.GetSensorReadings(hostID, start, end, interval)
 	if err != nil {
-		if errors.Is(err, services.ErrServerNotFound) {
+		if errors.Is(err, services.ErrHostNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
@@ -168,7 +168,7 @@ func GetSensorReadings(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"server_id":  serverID,
+		"host_id":    hostID,
 		"time_range": timeRange,
 		"count":      len(data),
 		"data":       data,

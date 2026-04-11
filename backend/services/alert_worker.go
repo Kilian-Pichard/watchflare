@@ -20,9 +20,9 @@ type AlertWorker struct {
 	interval time.Duration
 	ctx      context.Context
 	cancel   context.CancelFunc
-	// pending tracks when each server+metric first started breaching.
+	// pending tracks when each host+metric first started breaching.
 	// An incident is only written to DB once the configured duration has elapsed.
-	// Key format: "serverID:metricType"
+	// Key format: "hostID:metricType"
 	pending map[string]time.Time
 }
 
@@ -57,17 +57,17 @@ func (w *AlertWorker) Stop() {
 	w.cancel()
 }
 
-// evaluate runs one evaluation cycle across all monitored servers.
+// evaluate runs one evaluation cycle across all monitored hosts.
 func (w *AlertWorker) evaluate() {
-	// Load all servers that should be monitored (skip paused and expired)
-	var servers []models.Server
+	// Load all hosts that should be monitored (skip paused and expired)
+	var hosts []models.Host
 	if err := database.DB.
 		Where("status NOT IN ?", []string{models.StatusPaused, models.StatusExpired, models.StatusPending}).
-		Find(&servers).Error; err != nil {
-		slog.Error("alert worker: failed to load servers", "error", err)
+		Find(&hosts).Error; err != nil {
+		slog.Error("alert worker: failed to load hosts", "error", err)
 		return
 	}
-	if len(servers) == 0 {
+	if len(hosts) == 0 {
 		return
 	}
 
@@ -90,10 +90,10 @@ func (w *AlertWorker) evaluate() {
 		}
 	}
 	if !anyEnabled {
-		// Check server-level overrides
+		// Check host-level overrides
 		var count int64
-		if err := database.DB.Model(&models.ServerAlertRule{}).Where("enabled = true").Count(&count).Error; err != nil {
-			slog.Error("alert worker: failed to count server overrides", "error", err)
+		if err := database.DB.Model(&models.HostAlertRule{}).Where("enabled = true").Count(&count).Error; err != nil {
+			slog.Error("alert worker: failed to count host overrides", "error", err)
 			return
 		}
 		if count == 0 {
@@ -117,54 +117,54 @@ func (w *AlertWorker) evaluate() {
 	hbCache := cache.GetCache()
 	now := time.Now()
 
-	for i := range servers {
-		server := &servers[i]
-		w.evaluateServer(server, globalMap, hbCache, recipient, now)
+	for i := range hosts {
+		host := &hosts[i]
+		w.evaluateHost(host, globalMap, hbCache, recipient, now)
 	}
 }
 
-func (w *AlertWorker) evaluateServer(
-	server *models.Server,
+func (w *AlertWorker) evaluateHost(
+	host *models.Host,
 	globalMap map[string]models.AlertRule,
 	hbCache *cache.HeartbeatCache,
 	recipient string,
 	now time.Time,
 ) {
-	// Load server-level overrides
-	var overrides []models.ServerAlertRule
-	if err := database.DB.Where("server_id = ?", server.ID).Find(&overrides).Error; err != nil {
-		slog.Error("alert worker: failed to load server overrides", "server_id", server.ID, "error", err)
+	// Load host-level overrides
+	var overrides []models.HostAlertRule
+	if err := database.DB.Where("host_id = ?", host.ID).Find(&overrides).Error; err != nil {
+		slog.Error("alert worker: failed to load host overrides", "host_id", host.ID, "error", err)
 		return
 	}
-	overrideMap := make(map[string]models.ServerAlertRule, len(overrides))
+	overrideMap := make(map[string]models.HostAlertRule, len(overrides))
 	for _, o := range overrides {
 		overrideMap[o.MetricType] = o
 	}
 
-	// Get the server's current status: prefer HeartbeatCache, fall back to DB value
+	// Get the host's current status: prefer HeartbeatCache, fall back to DB value
 	var currentStatus string
-	if hb, ok := hbCache.Get(server.AgentID); ok {
+	if hb, ok := hbCache.Get(host.AgentID); ok {
 		currentStatus = hb.Status
 	} else {
-		currentStatus = server.Status
+		currentStatus = host.Status
 	}
 
-	// Load the latest metric row (used for all non-server_down metrics)
+	// Load the latest metric row (used for all non-host_down metrics)
 	var latestMetric *models.Metric
 	var m models.Metric
 	err := database.DB.
-		Where("server_id = ?", server.ID).
+		Where("host_id = ?", host.ID).
 		Order("timestamp DESC").
 		First(&m).Error
 	if err == nil {
 		latestMetric = &m
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		slog.Error("alert worker: failed to load latest metric", "server_id", server.ID, "error", err)
+		slog.Error("alert worker: failed to load latest metric", "host_id", host.ID, "error", err)
 		return
 	}
 
 	for _, metricType := range models.AllMetricTypes {
-		// Resolve effective rule (server override > global)
+		// Resolve effective rule (host override > global)
 		var enabled bool
 		var threshold float64
 		var durationMinutes int
@@ -181,12 +181,12 @@ func (w *AlertWorker) evaluateServer(
 			continue
 		}
 
-		pendingKey := server.ID + ":" + metricType
+		pendingKey := host.ID + ":" + metricType
 
 		if !enabled {
 			// Rule disabled — clear pending state and resolve any open incident silently
 			delete(w.pending, pendingKey)
-			resolveIncident(server.ID, metricType, now)
+			resolveIncident(host.ID, metricType, now)
 			continue
 		}
 
@@ -197,12 +197,12 @@ func (w *AlertWorker) evaluateServer(
 		var incident models.AlertIncident
 		hasIncident := true
 		if err := database.DB.
-			Where("server_id = ? AND metric_type = ? AND resolved_at IS NULL", server.ID, metricType).
+			Where("host_id = ? AND metric_type = ? AND resolved_at IS NULL", host.ID, metricType).
 			First(&incident).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				hasIncident = false
 			} else {
-				slog.Error("alert worker: failed to query incident", "server_id", server.ID, "metric_type", metricType, "error", err)
+				slog.Error("alert worker: failed to query incident", "host_id", host.ID, "metric_type", metricType, "error", err)
 				continue
 			}
 		}
@@ -212,16 +212,16 @@ func (w *AlertWorker) evaluateServer(
 				// Incident already exists (restart scenario) — update current value and
 				// send notification if duration elapsed and not yet notified.
 				if err := database.DB.Model(&incident).Update("current_value", currentValue).Error; err != nil {
-					slog.Error("alert worker: failed to update incident value", "server_id", server.ID, "metric_type", metricType, "error", err)
+					slog.Error("alert worker: failed to update incident value", "host_id", host.ID, "metric_type", metricType, "error", err)
 				}
 				if !incident.Notified && now.Sub(incident.StartedAt) >= time.Duration(durationMinutes)*time.Minute {
-					if err := sendAlertEmail(server, metricType, threshold, currentValue, incident.StartedAt, recipient); err != nil {
-						slog.Error("alert worker: failed to send alert email", "server_id", server.ID, "metric_type", metricType, "error", err)
+					if err := sendAlertEmail(host, metricType, threshold, currentValue, incident.StartedAt, recipient); err != nil {
+						slog.Error("alert worker: failed to send alert email", "host_id", host.ID, "metric_type", metricType, "error", err)
 					} else {
 						if err := database.DB.Model(&incident).Update("notified", true).Error; err != nil {
-							slog.Error("alert worker: failed to mark incident notified", "server_id", server.ID, "metric_type", metricType, "error", err)
+							slog.Error("alert worker: failed to mark incident notified", "host_id", host.ID, "metric_type", metricType, "error", err)
 						} else {
-							slog.Info("alert fired", "server", server.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
+							slog.Info("alert fired", "host", host.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
 						}
 					}
 				}
@@ -229,14 +229,14 @@ func (w *AlertWorker) evaluateServer(
 				// No open incident — track in pending map until duration is reached.
 				firstSeen, ok := w.pending[pendingKey]
 				if !ok {
-					// First tick this breach is observed. For server_down, backdate to
+					// First tick this breach is observed. For host_down, backdate to
 					// actual offline time so duration is measured from the real event.
 					firstSeen = now
-					if metricType == models.MetricTypeServerDown {
-						if hb, ok := hbCache.Get(server.AgentID); ok && hb.Status == models.StatusOffline {
+					if metricType == models.MetricTypeHostDown {
+						if hb, ok := hbCache.Get(host.AgentID); ok && hb.Status == models.StatusOffline {
 							firstSeen = hb.LastSeen
-						} else if server.LastSeen != nil {
-							firstSeen = *server.LastSeen
+						} else if host.LastSeen != nil {
+							firstSeen = *host.LastSeen
 						}
 					}
 					w.pending[pendingKey] = firstSeen
@@ -245,25 +245,25 @@ func (w *AlertWorker) evaluateServer(
 				// Duration reached — create incident and fire notification atomically.
 				if now.Sub(firstSeen) >= time.Duration(durationMinutes)*time.Minute {
 					incident = models.AlertIncident{
-						ServerID:       server.ID,
+						HostID:         host.ID,
 						MetricType:     metricType,
 						StartedAt:      firstSeen,
 						ThresholdValue: threshold,
 						CurrentValue:   currentValue,
 					}
 					if err := database.DB.Create(&incident).Error; err != nil {
-						slog.Error("alert worker: failed to create incident", "server_id", server.ID, "metric_type", metricType, "error", err)
+						slog.Error("alert worker: failed to create incident", "host_id", host.ID, "metric_type", metricType, "error", err)
 						continue
 					}
 					delete(w.pending, pendingKey)
 
-					if err := sendAlertEmail(server, metricType, threshold, currentValue, firstSeen, recipient); err != nil {
-						slog.Error("alert worker: failed to send alert email", "server_id", server.ID, "metric_type", metricType, "error", err)
+					if err := sendAlertEmail(host, metricType, threshold, currentValue, firstSeen, recipient); err != nil {
+						slog.Error("alert worker: failed to send alert email", "host_id", host.ID, "metric_type", metricType, "error", err)
 					} else {
 						if err := database.DB.Model(&incident).Update("notified", true).Error; err != nil {
-							slog.Error("alert worker: failed to mark incident notified", "server_id", server.ID, "metric_type", metricType, "error", err)
+							slog.Error("alert worker: failed to mark incident notified", "host_id", host.ID, "metric_type", metricType, "error", err)
 						} else {
-							slog.Info("alert fired", "server", server.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
+							slog.Info("alert fired", "host", host.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
 						}
 					}
 				}
@@ -273,12 +273,12 @@ func (w *AlertWorker) evaluateServer(
 			delete(w.pending, pendingKey)
 			if hasIncident {
 				if err := database.DB.Model(&incident).Update("resolved_at", now).Error; err != nil {
-					slog.Error("alert worker: failed to resolve incident", "server_id", server.ID, "metric_type", metricType, "error", err)
+					slog.Error("alert worker: failed to resolve incident", "host_id", host.ID, "metric_type", metricType, "error", err)
 				} else {
-					slog.Info("alert resolved", "server", server.Name, "metric_type", metricType)
+					slog.Info("alert resolved", "host", host.Name, "metric_type", metricType)
 					if incident.Notified {
-						if err := sendResolutionEmail(server, metricType, incident.StartedAt, now, recipient); err != nil {
-							slog.Error("alert worker: failed to send resolution email", "server_id", server.ID, "metric_type", metricType, "error", err)
+						if err := sendResolutionEmail(host, metricType, incident.StartedAt, now, recipient); err != nil {
+							slog.Error("alert worker: failed to send resolution email", "host_id", host.ID, "metric_type", metricType, "error", err)
 						}
 					}
 				}
@@ -295,7 +295,7 @@ func evaluateMetric(
 	m *models.Metric,
 ) (breaching bool, currentValue float64) {
 	switch metricType {
-	case models.MetricTypeServerDown:
+	case models.MetricTypeHostDown:
 		if status == models.StatusOffline {
 			return true, 0
 		}
@@ -348,15 +348,15 @@ func evaluateMetric(
 	return false, 0
 }
 
-// resolveIncident silently resolves any open incident for the given server + metric type.
-func resolveIncident(serverID, metricType string, now time.Time) {
+// resolveIncident silently resolves any open incident for the given host + metric type.
+func resolveIncident(hostID, metricType string, now time.Time) {
 	database.DB.Model(&models.AlertIncident{}).
-		Where("server_id = ? AND metric_type = ? AND resolved_at IS NULL", serverID, metricType).
+		Where("host_id = ? AND metric_type = ? AND resolved_at IS NULL", hostID, metricType).
 		Update("resolved_at", now)
 }
 
 // sendAlertEmail delivers an alert notification email.
-func sendAlertEmail(server *models.Server, metricType string, threshold, currentValue float64, startedAt time.Time, recipient string) error {
+func sendAlertEmail(host *models.Host, metricType string, threshold, currentValue float64, startedAt time.Time, recipient string) error {
 	var s models.SmtpSettings
 	if err := database.DB.First(&s).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -380,18 +380,18 @@ func sendAlertEmail(server *models.Server, metricType string, threshold, current
 		}
 	}
 
-	subject, body := buildAlertEmailContent(server.Name, metricType, threshold, currentValue, startedAt)
+	subject, body := buildAlertEmailContent(host.Name, metricType, threshold, currentValue, startedAt)
 	return sendEmail(&s, plainPassword, recipient, subject, body)
 }
 
-func buildAlertEmailContent(serverName, metricType string, threshold, currentValue float64, startedAt time.Time) (subject, body string) {
+func buildAlertEmailContent(hostName, metricType string, threshold, currentValue float64, startedAt time.Time) (subject, body string) {
 	var metricLabel, valueDesc string
 
 	switch metricType {
-	case models.MetricTypeServerDown:
-		subject = fmt.Sprintf("[Watchflare Alert] %s is offline", serverName)
-		body = fmt.Sprintf("Server %q has been offline since %s.\n\nThis alert was triggered by Watchflare.",
-			serverName, startedAt.Format(time.RFC1123))
+	case models.MetricTypeHostDown:
+		subject = fmt.Sprintf("[Watchflare Alert] %s is offline", hostName)
+		body = fmt.Sprintf("Host %q has been offline since %s.\n\nThis alert was triggered by Watchflare.",
+			hostName, startedAt.Format(time.RFC1123))
 		return
 
 	case models.MetricTypeCPUUsage:
@@ -427,14 +427,14 @@ func buildAlertEmailContent(serverName, metricType string, threshold, currentVal
 		valueDesc = fmt.Sprintf("%.2f (threshold: %.2f)", currentValue, threshold)
 	}
 
-	subject = fmt.Sprintf("[Watchflare Alert] %s — %s exceeded", serverName, metricLabel)
-	body = fmt.Sprintf("An alert has been triggered for server %q.\n\n%s: %s\n\nThis alert started at %s.\n\nThis notification was sent by Watchflare.",
-		serverName, metricLabel, valueDesc, startedAt.Format(time.RFC1123))
+	subject = fmt.Sprintf("[Watchflare Alert] %s — %s exceeded", hostName, metricLabel)
+	body = fmt.Sprintf("An alert has been triggered for host %q.\n\n%s: %s\n\nThis alert started at %s.\n\nThis notification was sent by Watchflare.",
+		hostName, metricLabel, valueDesc, startedAt.Format(time.RFC1123))
 	return
 }
 
 // sendResolutionEmail delivers a resolution notification email.
-func sendResolutionEmail(server *models.Server, metricType string, startedAt, resolvedAt time.Time, recipient string) error {
+func sendResolutionEmail(host *models.Host, metricType string, startedAt, resolvedAt time.Time, recipient string) error {
 	var s models.SmtpSettings
 	if err := database.DB.First(&s).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -458,19 +458,19 @@ func sendResolutionEmail(server *models.Server, metricType string, startedAt, re
 		}
 	}
 
-	subject, body := buildResolutionEmailContent(server.Name, metricType, startedAt, resolvedAt)
+	subject, body := buildResolutionEmailContent(host.Name, metricType, startedAt, resolvedAt)
 	return sendEmail(&s, plainPassword, recipient, subject, body)
 }
 
-func buildResolutionEmailContent(serverName, metricType string, startedAt, resolvedAt time.Time) (subject, body string) {
+func buildResolutionEmailContent(hostName, metricType string, startedAt, resolvedAt time.Time) (subject, body string) {
 	duration := resolvedAt.Sub(startedAt).Round(time.Second)
 
 	var metricLabel string
 	switch metricType {
-	case models.MetricTypeServerDown:
-		subject = fmt.Sprintf("[Watchflare Resolved] %s is back online", serverName)
-		body = fmt.Sprintf("Server %q is back online.\n\nThe server was offline for %s (since %s).\n\nThis notification was sent by Watchflare.",
-			serverName, duration, startedAt.Format(time.RFC1123))
+	case models.MetricTypeHostDown:
+		subject = fmt.Sprintf("[Watchflare Resolved] %s is back online", hostName)
+		body = fmt.Sprintf("Host %q is back online.\n\nThe host was offline for %s (since %s).\n\nThis notification was sent by Watchflare.",
+			hostName, duration, startedAt.Format(time.RFC1123))
 		return
 	case models.MetricTypeCPUUsage:
 		metricLabel = "CPU usage"
@@ -490,9 +490,9 @@ func buildResolutionEmailContent(serverName, metricType string, startedAt, resol
 		metricLabel = metricType
 	}
 
-	subject = fmt.Sprintf("[Watchflare Resolved] %s — %s back to normal", serverName, metricLabel)
-	body = fmt.Sprintf("The alert for server %q has been resolved.\n\n%s is back to normal.\n\nAlert duration: %s (started at %s).\n\nThis notification was sent by Watchflare.",
-		serverName, metricLabel, duration, startedAt.Format(time.RFC1123))
+	subject = fmt.Sprintf("[Watchflare Resolved] %s — %s back to normal", hostName, metricLabel)
+	body = fmt.Sprintf("The alert for host %q has been resolved.\n\n%s is back to normal.\n\nAlert duration: %s (started at %s).\n\nThis notification was sent by Watchflare.",
+		hostName, metricLabel, duration, startedAt.Format(time.RFC1123))
 	return
 }
 

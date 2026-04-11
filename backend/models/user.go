@@ -18,7 +18,7 @@ type User struct {
 
 	// Display preferences
 	TimeFormat              string `gorm:"type:varchar(3);default:'24h'" json:"time_format"`
-	TemperatureUnit         string `gorm:"type:varchar(10);default:'celsius'" json:"temperature_unit"`
+	TemperatureUnit         string `gorm:"type:varchar(15);default:'celsius'" json:"temperature_unit"`
 	NetworkUnit             string `gorm:"type:varchar(5);default:'bytes'" json:"network_unit"`
 	DiskUnit                string `gorm:"type:varchar(5);default:'bytes'" json:"disk_unit"`
 	GaugeWarningThreshold   int    `gorm:"default:70" json:"gauge_warning_threshold"`

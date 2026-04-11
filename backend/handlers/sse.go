@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// ServerEvents handles SSE connections for real-time server updates
-func ServerEvents(c *gin.Context) {
+// HostEvents handles SSE connections for real-time host updates
+func HostEvents(c *gin.Context) {
 	// Set CORS headers explicitly for SSE
 	// EventSource requires explicit origin when using credentials
 	requestOrigin := c.Request.Header.Get("Origin")

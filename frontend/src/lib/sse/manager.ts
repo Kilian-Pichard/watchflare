@@ -19,7 +19,7 @@ interface MinifiedSensorReading {
  * Minified metrics format from backend SSE
  */
 interface MinifiedMetrics {
-	s: string;       // server_id
+	s: string;       // host_id
 	t: number;       // timestamp (Unix epoch)
 	c: number;       // cpu_usage_percent
 	mu: number;      // memory_used_bytes
@@ -53,7 +53,7 @@ interface MinifiedContainerMetric {
 }
 
 interface MinifiedContainerMetricsUpdate {
-	s: string;   // server_id
+	s: string;   // host_id
 	t: number;   // timestamp (Unix epoch)
 	m: MinifiedContainerMetric[];
 }
@@ -61,13 +61,13 @@ interface MinifiedContainerMetricsUpdate {
 /**
  * Decode minified container metrics to full format
  */
-function decodeMinifiedContainerMetrics(minified: MinifiedContainerMetricsUpdate): { server_id: string; metrics: ContainerMetric[] } {
+function decodeMinifiedContainerMetrics(minified: MinifiedContainerMetricsUpdate): { host_id: string; metrics: ContainerMetric[] } {
 	const timestamp = new Date(minified.t * 1000).toISOString();
 	return {
-		server_id: minified.s,
+		host_id: minified.s,
 		metrics: minified.m.map(cm => ({
 			id: '',
-			server_id: minified.s,
+			host_id: minified.s,
 			timestamp,
 			container_id: cm.i,
 			container_name: cm.n,
@@ -92,7 +92,7 @@ function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
 
 	return {
 		id: 0,
-		server_id: minified.s,
+		host_id: minified.s,
 		timestamp: new Date(minified.t * 1000).toISOString(),
 		cpu_usage_percent: minified.c,
 		memory_used_bytes: minified.mu,
@@ -168,7 +168,7 @@ export class SSEManager {
 		this.setState('connecting');
 
 		try {
-			this.eventSource = new EventSource(`${API_BASE_URL}/servers/events`, {
+			this.eventSource = new EventSource(`${API_BASE_URL}/hosts/events`, {
 				withCredentials: true
 			});
 
@@ -241,9 +241,9 @@ export class SSEManager {
 			logger.log('SSE connected:', data.client_id);
 		});
 
-		this.eventSource.addEventListener('server_update', (e: MessageEvent) => {
+		this.eventSource.addEventListener('host_update', (e: MessageEvent) => {
 			const data = JSON.parse(e.data);
-			this.bufferEvent({ type: 'server_update', data });
+			this.bufferEvent({ type: 'host_update', data });
 		});
 
 		this.eventSource.addEventListener('metrics_update', (e: MessageEvent) => {

@@ -21,7 +21,7 @@ export default defineConfig({
 		port: 5173,
 
 		proxy: {
-			'/api': {
+			'/api/v1': {
 				target: process.env.BACKEND_URL || 'http://localhost:8080',
 				changeOrigin: true,
 				configure: (proxy) => {

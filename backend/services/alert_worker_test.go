@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEvaluateMetric_ServerDown(t *testing.T) {
-	// Offline server → breaching
-	breaching, value := evaluateMetric(models.MetricTypeServerDown, 0, models.StatusOffline, nil)
+func TestEvaluateMetric_HostDown(t *testing.T) {
+	// Offline host → breaching
+	breaching, value := evaluateMetric(models.MetricTypeHostDown, 0, models.StatusOffline, nil)
 	assert.True(t, breaching)
 	assert.Equal(t, float64(0), value)
 
-	// Online server → not breaching
-	breaching, value = evaluateMetric(models.MetricTypeServerDown, 0, models.StatusOnline, nil)
+	// Online host → not breaching
+	breaching, value = evaluateMetric(models.MetricTypeHostDown, 0, models.StatusOnline, nil)
 	assert.False(t, breaching)
 	assert.Equal(t, float64(0), value)
 }
@@ -155,11 +155,11 @@ func TestEvaluateMetric_UnknownType(t *testing.T) {
 	assert.Equal(t, float64(0), value)
 }
 
-func TestBuildResolutionEmailContent_ServerDown(t *testing.T) {
+func TestBuildResolutionEmailContent_HostDown(t *testing.T) {
 	startedAt := time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC)
 	resolvedAt := time.Date(2026, 4, 8, 10, 5, 30, 0, time.UTC)
 
-	subject, body := buildResolutionEmailContent("web01", models.MetricTypeServerDown, startedAt, resolvedAt)
+	subject, body := buildResolutionEmailContent("web01", models.MetricTypeHostDown, startedAt, resolvedAt)
 
 	assert.Contains(t, subject, "Resolved")
 	assert.Contains(t, subject, "web01")

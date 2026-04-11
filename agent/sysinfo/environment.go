@@ -16,8 +16,8 @@ const (
 type EnvironmentType string
 
 const (
-	EnvPhysical                EnvironmentType = "physical"                  // Bare metal server
-	EnvPhysicalWithContainers  EnvironmentType = "physical_with_containers"  // Physical server running containers
+	EnvPhysical                EnvironmentType = "physical"                  // Bare metal host
+	EnvPhysicalWithContainers  EnvironmentType = "physical_with_containers"  // Physical host running containers
 	EnvVM                      EnvironmentType = "vm"                        // Virtual machine
 	EnvVMWithContainers        EnvironmentType = "vm_with_containers"        // VM running containers
 	EnvContainer               EnvironmentType = "container"                 // Inside a container
@@ -77,7 +77,7 @@ func determineType(env *Environment) EnvironmentType {
 		return EnvVM
 	}
 
-	// Physical server
+	// Physical host
 	if env.HasDockerRunning {
 		return EnvPhysicalWithContainers
 	}

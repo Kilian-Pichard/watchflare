@@ -180,7 +180,7 @@
                 metric_type: mt,
                 enabled: false,
                 threshold: mt === 'temperature' ? 80 : mt === 'load_avg' ? 5 : 90,
-                duration_minutes: mt === 'server_down' ? 1 : 5,
+                duration_minutes: mt === 'host_down' ? 1 : 5,
             }));
         }
         alertLoaded = true;
@@ -196,7 +196,7 @@
         alertSaveSuccess = false;
         clearTimeout(alertSuccessTimer);
 
-        const invalidThreshold = alertRules.find(r => r.enabled && r.metric_type !== 'server_down' && (r.threshold === null || isNaN(r.threshold as unknown as number)));
+        const invalidThreshold = alertRules.find(r => r.enabled && r.metric_type !== 'host_down' && (r.threshold === null || isNaN(r.threshold as unknown as number)));
         if (invalidThreshold) { alertSaveError = `Enter a threshold for ${ALERT_METRIC_LABELS[invalidThreshold.metric_type]}.`; return; }
         const invalidDuration = alertRules.find(r => r.enabled && (r.duration_minutes === null || isNaN(r.duration_minutes as unknown as number)));
         if (invalidDuration) { alertSaveError = `Enter a duration for ${ALERT_METRIC_LABELS[invalidDuration.metric_type]}.`; return; }
@@ -234,7 +234,7 @@
     }
 
     const DESCRIPTIONS: Record<AlertMetricType, string> = {
-        server_down:  "Alert when the server stops sending heartbeats.",
+        host_down:  "Alert when the host stops sending heartbeats.",
         cpu_usage:    "Alert when CPU usage stays above the threshold.",
         memory_usage: "Alert when RAM usage stays above the threshold.",
         disk_usage:   "Alert when disk usage stays above the threshold.",
@@ -601,7 +601,7 @@
                 <!-- Controls -->
                 {#if rule.enabled}
                     <div class="mt-4 rounded-xl bg-muted/40 px-4 py-3 space-y-4">
-                        {#if rule.metric_type !== 'server_down'}
+                        {#if rule.metric_type !== 'host_down'}
                             <!-- Threshold -->
                             <div>
                                 <p class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Threshold</p>

@@ -43,11 +43,11 @@ func (s *SensorReadings) Scan(value interface{}) error {
 	return json.Unmarshal(bytes, s)
 }
 
-// Metric stores time-series system metrics for a server
+// Metric stores time-series system metrics for a host
 type Metric struct {
 	ID        string    `gorm:"type:char(36);primaryKey;priority:1" json:"id"`
 	Timestamp time.Time `gorm:"primaryKey;priority:2;not null" json:"timestamp"` // Hypertable partition key
-	ServerID  string    `gorm:"type:char(36);index:idx_metrics_server;not null" json:"server_id"`
+	HostID    string    `gorm:"type:char(36);index:idx_metrics_host;not null" json:"host_id"`
 
 	// CPU metrics
 	CPUUsagePercent float64 `json:"cpu_usage_percent"`
@@ -74,7 +74,7 @@ type Metric struct {
 	NetworkRxBytesPerSec uint64 `json:"network_rx_bytes_per_sec"`
 	NetworkTxBytesPerSec uint64 `json:"network_tx_bytes_per_sec"`
 
-	// Temperature (physical servers only, 0 if unavailable)
+	// Temperature (physical hosts only, 0 if unavailable)
 	CPUTemperatureCelsius float64 `json:"cpu_temperature_celsius"`
 
 	// All sensor readings (temperature sensors, battery, storage, etc.)

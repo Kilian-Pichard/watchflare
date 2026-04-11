@@ -26,19 +26,19 @@ func setupAlertsRouter() *gin.Engine {
 		protected.GET("/settings/alerts", GetAlertRules)
 		protected.PUT("/settings/alerts", UpdateAlertRules)
 		protected.GET("/settings/alerts/active", GetActiveIncidents)
-		protected.GET("/servers/:id/alerts", GetServerAlertRules)
-		protected.PUT("/servers/:id/alerts/:metric_type", UpsertServerAlertRule)
-		protected.DELETE("/servers/:id/alerts/:metric_type", DeleteServerAlertRule)
-		protected.GET("/servers/:id/incidents", GetServerIncidents)
+		protected.GET("/hosts/:id/alerts", GetHostAlertRules)
+		protected.PUT("/hosts/:id/alerts/:metric_type", UpsertHostAlertRule)
+		protected.DELETE("/hosts/:id/alerts/:metric_type", DeleteHostAlertRule)
+		protected.GET("/hosts/:id/incidents", GetHostIncidents)
 	}
 	return r
 }
 
 func teardownAlertData() {
 	database.DB.Exec("DELETE FROM alert_incidents")
-	database.DB.Exec("DELETE FROM server_alert_rules")
+	database.DB.Exec("DELETE FROM host_alert_rules")
 	database.DB.Exec("DELETE FROM alert_rules")
-	database.DB.Exec("DELETE FROM servers")
+	database.DB.Exec("DELETE FROM hosts")
 	database.DB.Exec("DELETE FROM users")
 }
 
@@ -151,7 +151,7 @@ func TestUpdateAlertRules_Unauthenticated(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestGetServerAlertRules(t *testing.T) {
+func TestGetHostAlertRules(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
@@ -160,7 +160,7 @@ func TestGetServerAlertRules(t *testing.T) {
 
 	seedGlobalAlertRules(t)
 
-	req, _ := http.NewRequest("GET", "/servers/server-abc/alerts", nil)
+	req, _ := http.NewRequest("GET", "/hosts/host-abc/alerts", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -173,7 +173,7 @@ func TestGetServerAlertRules(t *testing.T) {
 	assert.GreaterOrEqual(t, len(rules), 2)
 }
 
-func TestUpsertServerAlertRule(t *testing.T) {
+func TestUpsertHostAlertRule(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
@@ -184,7 +184,7 @@ func TestUpsertServerAlertRule(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		serverID       string
+		hostID         string
 		metricType     string
 		payload        map[string]interface{}
 		expectedStatus int
@@ -192,17 +192,17 @@ func TestUpsertServerAlertRule(t *testing.T) {
 	}{
 		{
 			name:       "Success - valid upsert",
-			serverID:   "server-abc",
+			hostID:     "host-abc",
 			metricType: models.MetricTypeCPUUsage,
 			payload:    map[string]interface{}{"enabled": true, "threshold": 95.0, "duration_minutes": 3},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
-				assert.Equal(t, "server alert rule saved", resp["message"])
+				assert.Equal(t, "host alert rule saved", resp["message"])
 			},
 		},
 		{
 			name:       "Fail - invalid metric_type",
-			serverID:   "server-abc",
+			hostID:     "host-abc",
 			metricType: "not_a_real_metric",
 			payload:    map[string]interface{}{"enabled": true, "threshold": 95.0, "duration_minutes": 3},
 			expectedStatus: http.StatusBadRequest,
@@ -212,7 +212,7 @@ func TestUpsertServerAlertRule(t *testing.T) {
 		},
 		{
 			name:       "Fail - duration_minutes less than 1",
-			serverID:   "server-abc",
+			hostID:     "host-abc",
 			metricType: models.MetricTypeCPUUsage,
 			payload:    map[string]interface{}{"enabled": true, "threshold": 95.0, "duration_minutes": 0},
 			expectedStatus: http.StatusBadRequest,
@@ -225,7 +225,7 @@ func TestUpsertServerAlertRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := json.Marshal(tt.payload)
-			url := "/servers/" + tt.serverID + "/alerts/" + tt.metricType
+			url := "/hosts/" + tt.hostID + "/alerts/" + tt.metricType
 			req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(b))
 			req.Header.Set("Content-Type", "application/json")
 			req.AddCookie(cookie)
@@ -241,7 +241,7 @@ func TestUpsertServerAlertRule(t *testing.T) {
 	}
 }
 
-func TestDeleteServerAlertRule(t *testing.T) {
+func TestDeleteHostAlertRule(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
@@ -252,7 +252,7 @@ func TestDeleteServerAlertRule(t *testing.T) {
 
 	// Create an override first.
 	b, _ := json.Marshal(map[string]interface{}{"enabled": true, "threshold": 75.0, "duration_minutes": 2})
-	req, _ := http.NewRequest("PUT", "/servers/server-del/alerts/"+models.MetricTypeCPUUsage, bytes.NewBuffer(b))
+	req, _ := http.NewRequest("PUT", "/hosts/host-del/alerts/"+models.MetricTypeCPUUsage, bytes.NewBuffer(b))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
@@ -260,36 +260,36 @@ func TestDeleteServerAlertRule(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	// Delete it.
-	req, _ = http.NewRequest("DELETE", "/servers/server-del/alerts/"+models.MetricTypeCPUUsage, nil)
+	req, _ = http.NewRequest("DELETE", "/hosts/host-del/alerts/"+models.MetricTypeCPUUsage, nil)
 	req.AddCookie(cookie)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "server alert rule deleted", resp["message"])
+	assert.Equal(t, "host alert rule deleted", resp["message"])
 }
 
-func TestDeleteServerAlertRule_InvalidMetricType(t *testing.T) {
+func TestDeleteHostAlertRule_InvalidMetricType(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
 	r := setupAlertsRouter()
 	cookie := registerAndGetCookie(t, "alerts6@test.com")
 
-	req, _ := http.NewRequest("DELETE", "/servers/server-abc/alerts/not_a_real_metric", nil)
+	req, _ := http.NewRequest("DELETE", "/hosts/host-abc/alerts/not_a_real_metric", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestDeleteServerAlertRule_Unauthenticated(t *testing.T) {
+func TestDeleteHostAlertRule_Unauthenticated(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
 	r := setupAlertsRouter()
-	req, _ := http.NewRequest("DELETE", "/servers/server-abc/alerts/"+models.MetricTypeCPUUsage, nil)
+	req, _ := http.NewRequest("DELETE", "/hosts/host-abc/alerts/"+models.MetricTypeCPUUsage, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -302,13 +302,13 @@ func TestGetActiveIncidents(t *testing.T) {
 	r := setupAlertsRouter()
 	cookie := registerAndGetCookie(t, "incidents@test.com")
 
-	// Seed a server and an active incident
-	server := models.Server{ID: "server-inc-1", Name: "test-server", Status: "offline"}
-	require.NoError(t, database.DB.Create(&server).Error)
+	// Seed a host and an active incident
+	host := models.Host{ID: "host-inc-1", Name: "test-host", Status: "offline"}
+	require.NoError(t, database.DB.Create(&host).Error)
 
 	incident := models.AlertIncident{
-		ServerID:       server.ID,
-		MetricType:     models.MetricTypeServerDown,
+		HostID:         host.ID,
+		MetricType:     models.MetricTypeHostDown,
 		StartedAt:      time.Now().Add(-5 * time.Minute),
 		ThresholdValue: 0,
 		CurrentValue:   0,
@@ -328,9 +328,9 @@ func TestGetActiveIncidents(t *testing.T) {
 	require.Len(t, incidents, 1)
 
 	item := incidents[0].(map[string]interface{})
-	assert.Equal(t, server.ID, item["server_id"])
-	assert.Equal(t, "test-server", item["server_name"])
-	assert.Equal(t, models.MetricTypeServerDown, item["metric_type"])
+	assert.Equal(t, host.ID, item["host_id"])
+	assert.Equal(t, "test-host", item["host_name"])
+	assert.Equal(t, models.MetricTypeHostDown, item["metric_type"])
 }
 
 func TestGetActiveIncidents_Empty(t *testing.T) {
@@ -353,27 +353,27 @@ func TestGetActiveIncidents_Empty(t *testing.T) {
 	assert.Empty(t, incidents)
 }
 
-func TestGetServerIncidents(t *testing.T) {
+func TestGetHostIncidents(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
 	r := setupAlertsRouter()
 	cookie := registerAndGetCookie(t, "sinc@test.com")
 
-	server := models.Server{ID: "server-sinc", Name: "sinc-server", Status: "offline"}
-	require.NoError(t, database.DB.Create(&server).Error)
+	host := models.Host{ID: "host-sinc", Name: "sinc-host", Status: "offline"}
+	require.NoError(t, database.DB.Create(&host).Error)
 
 	// Active incident
 	active := models.AlertIncident{
-		ServerID:   server.ID,
-		MetricType: models.MetricTypeServerDown,
+		HostID:     host.ID,
+		MetricType: models.MetricTypeHostDown,
 		StartedAt:  time.Now().Add(-5 * time.Minute),
 	}
 	require.NoError(t, database.DB.Create(&active).Error)
 
 	// Resolved incident
 	resolved := models.AlertIncident{
-		ServerID:   server.ID,
+		HostID:     host.ID,
 		MetricType: models.MetricTypeCPUUsage,
 		StartedAt:  time.Now().Add(-30 * time.Minute),
 	}
@@ -381,7 +381,7 @@ func TestGetServerIncidents(t *testing.T) {
 	resolvedAt := time.Now().Add(-20 * time.Minute)
 	require.NoError(t, database.DB.Model(&resolved).Update("resolved_at", resolvedAt).Error)
 
-	req, _ := http.NewRequest("GET", "/servers/server-sinc/incidents", nil)
+	req, _ := http.NewRequest("GET", "/hosts/host-sinc/incidents", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -395,25 +395,25 @@ func TestGetServerIncidents(t *testing.T) {
 	assert.Len(t, incidents, 2)
 }
 
-func TestGetServerIncidents_StatusFilter(t *testing.T) {
+func TestGetHostIncidents_StatusFilter(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
 	r := setupAlertsRouter()
 	cookie := registerAndGetCookie(t, "sinc2@test.com")
 
-	server := models.Server{ID: "server-sinc2", Name: "sinc2-server", Status: "offline"}
-	require.NoError(t, database.DB.Create(&server).Error)
+	host := models.Host{ID: "host-sinc2", Name: "sinc2-host", Status: "offline"}
+	require.NoError(t, database.DB.Create(&host).Error)
 
 	active := models.AlertIncident{
-		ServerID:   server.ID,
-		MetricType: models.MetricTypeServerDown,
+		HostID:     host.ID,
+		MetricType: models.MetricTypeHostDown,
 		StartedAt:  time.Now().Add(-5 * time.Minute),
 	}
 	require.NoError(t, database.DB.Create(&active).Error)
 
 	resolved := models.AlertIncident{
-		ServerID:   server.ID,
+		HostID:     host.ID,
 		MetricType: models.MetricTypeCPUUsage,
 		StartedAt:  time.Now().Add(-30 * time.Minute),
 	}
@@ -421,7 +421,7 @@ func TestGetServerIncidents_StatusFilter(t *testing.T) {
 	require.NoError(t, database.DB.Model(&resolved).Update("resolved_at", time.Now()).Error)
 
 	// Filter: active only
-	req, _ := http.NewRequest("GET", "/servers/server-sinc2/incidents?status=active", nil)
+	req, _ := http.NewRequest("GET", "/hosts/host-sinc2/incidents?status=active", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -431,7 +431,7 @@ func TestGetServerIncidents_StatusFilter(t *testing.T) {
 	assert.Equal(t, float64(1), resp["total_count"])
 
 	// Filter: resolved only
-	req, _ = http.NewRequest("GET", "/servers/server-sinc2/incidents?status=resolved", nil)
+	req, _ = http.NewRequest("GET", "/hosts/host-sinc2/incidents?status=resolved", nil)
 	req.AddCookie(cookie)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -440,14 +440,14 @@ func TestGetServerIncidents_StatusFilter(t *testing.T) {
 	assert.Equal(t, float64(1), resp["total_count"])
 }
 
-func TestGetServerIncidents_Empty(t *testing.T) {
+func TestGetHostIncidents_Empty(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
 	r := setupAlertsRouter()
 	cookie := registerAndGetCookie(t, "sinc3@test.com")
 
-	req, _ := http.NewRequest("GET", "/servers/no-such-server/incidents", nil)
+	req, _ := http.NewRequest("GET", "/hosts/no-such-host/incidents", nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -461,12 +461,12 @@ func TestGetServerIncidents_Empty(t *testing.T) {
 	assert.Equal(t, float64(0), resp["total_count"])
 }
 
-func TestGetServerIncidents_Unauthenticated(t *testing.T) {
+func TestGetHostIncidents_Unauthenticated(t *testing.T) {
 	setupTestDB(t)
 	defer teardownAlertData()
 
 	r := setupAlertsRouter()
-	req, _ := http.NewRequest("GET", "/servers/server-abc/incidents", nil)
+	req, _ := http.NewRequest("GET", "/hosts/host-abc/incidents", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)

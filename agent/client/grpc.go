@@ -126,7 +126,7 @@ func (c *Client) Register(r RegisterRequest) (*RegistrationResponse, error) {
 
 	// Note: Registration uses token-based auth, not HMAC
 	// HMAC is only used after successful registration
-	req := &pb.RegisterServerRequest{
+	req := &pb.RegisterHostRequest{
 		RegistrationToken: r.Token,
 		Hostname:          r.Hostname,
 		IpAddressV4:       r.IPv4,
@@ -144,7 +144,7 @@ func (c *Client) Register(r RegisterRequest) (*RegistrationResponse, error) {
 		AgentVersion:      r.AgentVersion,
 	}
 
-	resp, err := c.client.RegisterServer(ctx, req)
+	resp, err := c.client.RegisterHost(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("registration failed: %w", err)
 	}

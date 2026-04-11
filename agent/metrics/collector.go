@@ -44,7 +44,7 @@ type SystemMetrics struct {
 	NetworkRxBytesPerSec uint64
 	NetworkTxBytesPerSec uint64
 
-	// Temperature (physical servers only)
+	// Temperature (physical hosts only)
 	CPUTemperatureCelsius float64
 
 	// All sensor readings (temperature sensors, battery, storage, etc.)
@@ -142,7 +142,7 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		}
 	}
 
-	// Temperature (physical servers only) — single syscall for CPU temp + all readings
+	// Temperature (physical hosts only) — single syscall for CPU temp + all readings
 	if config.CollectTemperature {
 		cpuTemp, readings, tempErr := collectTemperatures()
 		if tempErr != nil {

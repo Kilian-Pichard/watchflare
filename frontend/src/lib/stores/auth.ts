@@ -1,7 +1,7 @@
 import { goto } from '$app/navigation';
 import { get } from 'svelte/store';
 import { logout as apiLogout } from '$lib/api';
-import { userStore, serversStore, metricsStore, aggregatedStore, alertsStore } from '.';
+import { userStore, hostsStore, metricsStore, aggregatedStore, alertsStore } from '.';
 import { logger } from '$lib/utils';
 import { authTheme } from '$lib/stores/auth-theme';
 
@@ -16,7 +16,7 @@ export const authActions = {
 			}
 			await apiLogout();
 			userStore.clear();
-			serversStore.clear();
+			hostsStore.clear();
 			metricsStore.clear();
 			aggregatedStore.clear();
 			alertsStore.clear();

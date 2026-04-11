@@ -113,7 +113,7 @@
             class="flex items-center justify-center sm:justify-start gap-2 w-9.5 h-9.5 sm:w-fit sm:h-full rounded-lg border bg-background px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
         >
             <Search class="h-4 w-4 shrink-0" />
-            <span class="hidden md:inline">Search servers...</span>
+            <span class="hidden md:inline">Search hosts...</span>
             <span class="hidden sm:inline md:hidden">Search...</span>
             <div class="ml-auto hidden sm:flex items-center gap-0.5">
                 <kbd
@@ -136,19 +136,19 @@
             >W</a
         >
 
-        <!-- Add Server + Alerts -->
+        <!-- Add Host + Alerts -->
         <div class="flex items-center gap-3 shrink-0 ms-auto h-full">
             <button
-                onclick={() => goto("/servers/new")}
+                onclick={() => goto("/hosts/new")}
                 class="hidden sm:flex items-center gap-1.5 h-9.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
                 <Plus class="h-4 w-4" />
-                <span class="hidden sm:inline">Add Server</span>
+                <span class="hidden sm:inline">Add Host</span>
             </button>
             <button
-                onclick={() => goto("/servers/new")}
+                onclick={() => goto("/hosts/new")}
                 class="flex sm:hidden items-center gap-1.5 h-9.5 w-9.5 xs:h-full xs:w-fit p-0 xs:px-4 py-1.5 justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
-                aria-label="Add Server"
+                aria-label="Add Host"
             >
                 <Plus class="h-4 w-4" />
                 <span class="hidden xs:inline sm:hidden">Add</span>
