@@ -6,7 +6,10 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"time"
 
 	"watchflare-agent/metrics"
@@ -162,8 +165,10 @@ func (c *Client) Register(r RegisterRequest) (*RegistrationResponse, error) {
 	}, nil
 }
 
-// SaveCACertificate saves the CA certificate to disk
-// The directory will be created if it doesn't exist
+// SaveCACertificate saves the CA certificate to disk.
+// The directory will be created if it doesn't exist.
+// When running as root, the file is chowned to the appropriate service group so
+// the unprivileged service user can read it (Linux: root:watchflare, macOS: root:staff).
 func SaveCACertificate(caCertPEM, certPath string) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(certPath)
@@ -171,9 +176,29 @@ func SaveCACertificate(caCertPEM, certPath string) error {
 		return fmt.Errorf("failed to create PKI directory: %w", err)
 	}
 
-	// Write CA certificate with restricted permissions
+	// CA certificate: 640 so only root and the service group can read it
 	if err := os.WriteFile(certPath, []byte(caCertPEM), 0640); err != nil {
 		return fmt.Errorf("failed to write CA certificate: %w", err)
+	}
+
+	// Fix ownership so the service user can read the certificate.
+	// Linux: root:watchflare (service runs as unprivileged watchflare user)
+	// macOS: root:staff (Homebrew service runs as the invoking user, who is in staff)
+	if os.Geteuid() == 0 {
+		var groupName string
+		switch runtime.GOOS {
+		case "linux":
+			groupName = "watchflare"
+		case "darwin":
+			groupName = "staff"
+		}
+		if groupName != "" {
+			if grp, err := user.LookupGroup(groupName); err == nil {
+				if gid, err := strconv.Atoi(grp.Gid); err == nil {
+					_ = os.Chown(certPath, 0, gid)
+				}
+			}
+		}
 	}
 
 	return nil

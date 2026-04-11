@@ -102,6 +102,23 @@ func TestSaveCACertificate_CreatesFileAndDirectory(t *testing.T) {
 	}
 }
 
+func TestSaveCACertificate_FilePermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ca.pem")
+	pem := "-----BEGIN CERTIFICATE-----\nfakecert\n-----END CERTIFICATE-----\n"
+
+	if err := SaveCACertificate(pem, path); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat failed: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0640 {
+		t.Errorf("file permissions: got %04o, want 0640", got)
+	}
+}
+
 func TestSaveCACertificate_InvalidPath(t *testing.T) {
 	// Use a file as a directory component — cannot be created
 	tmp := t.TempDir()
