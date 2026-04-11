@@ -224,7 +224,7 @@
 </script>
 
 <svelte:head>
-    <title>Packages{ctx.host ? ` - ${ctx.host.name}` : ''} - Watchflare</title>
+    <title>Packages{ctx.host ? ` - ${ctx.host.display_name}` : ''} - Watchflare</title>
 </svelte:head>
 
 <!-- Error -->

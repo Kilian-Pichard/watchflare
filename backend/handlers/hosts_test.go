@@ -75,7 +75,7 @@ func TestCreateAgent(t *testing.T) {
 		{
 			name: "Success - Create pending host",
 			payload: map[string]interface{}{
-				"name":          "host01",
+				"display_name":  "host01",
 				"configured_ip": "192.168.1.100",
 				"allow_any_ip":  false,
 			},
@@ -88,14 +88,14 @@ func TestCreateAgent(t *testing.T) {
 				assert.NotNil(t, resp["agent_key"])
 
 				host := resp["host"].(map[string]interface{})
-				assert.Equal(t, "host01", host["name"])
+				assert.Equal(t, "host01", host["display_name"])
 				assert.Equal(t, models.StatusPending, host["status"])
 			},
 		},
 		{
 			name: "Success - AllowAnyIP without configured_ip",
 			payload: map[string]interface{}{
-				"name":         "host02",
+				"display_name": "host02",
 				"allow_any_ip": true,
 			},
 			withCookie:     true,
@@ -107,7 +107,7 @@ func TestCreateAgent(t *testing.T) {
 		{
 			name: "Fail - Missing configured_ip when allow_any_ip is false",
 			payload: map[string]interface{}{
-				"name": "host03",
+				"display_name": "host03",
 			},
 			withCookie:     true,
 			expectedStatus: http.StatusBadRequest,
@@ -118,7 +118,7 @@ func TestCreateAgent(t *testing.T) {
 		{
 			name: "Fail - No authentication",
 			payload: map[string]interface{}{
-				"name":          "host04",
+				"display_name":  "host04",
 				"configured_ip": "192.168.1.102",
 			},
 			withCookie:     false,
@@ -182,7 +182,7 @@ func TestListHosts(t *testing.T) {
 	for _, h := range hosts {
 		hst := h.(map[string]interface{})
 		ids = append(ids, hst["id"].(string))
-		names = append(names, hst["name"].(string))
+		names = append(names, hst["display_name"].(string))
 		assert.Equal(t, models.StatusPending, hst["status"])
 	}
 	assert.Contains(t, ids, host1.ID)
@@ -215,7 +215,7 @@ func TestGetHost(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]interface{}) {
 				hostData := resp["host"].(map[string]interface{})
-				assert.Equal(t, "host01", hostData["name"])
+				assert.Equal(t, "host01", hostData["display_name"])
 				assert.Equal(t, models.StatusPending, hostData["status"])
 			},
 		},

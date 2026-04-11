@@ -102,7 +102,7 @@
             <h1
                 class="text-xl sm:text-2xl font-semibold text-foreground break-all"
             >
-                {host.name}
+                {host.display_name}
             </h1>
             <span
                 class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(

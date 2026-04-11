@@ -134,7 +134,7 @@
 
     function handleRename(host: Host) {
         selectedHost = host;
-        newHostName = host.name;
+        newHostName = host.display_name;
         showRename = true;
     }
 
@@ -318,7 +318,7 @@
     confirmVariant="destructive"
 >
     <p class="text-sm text-muted-foreground mb-4">
-        Are you sure you want to delete "{selectedHost?.name}"?
+        Are you sure you want to delete "{selectedHost?.display_name}"?
     </p>
     <p class="text-sm font-medium text-destructive">
         This action cannot be undone.

@@ -48,7 +48,7 @@ func CreateAgent(name, configuredIP string, allowAnyIP bool) (*models.Host, stri
 		ID:                     uuid.New().String(),
 		AgentID:                agentID,
 		AgentKey:               agentKey,
-		Name:                   name,
+		DisplayName:            name,
 		ConfiguredIP:           configuredIPPtr,
 		AllowAnyIPRegistration: allowAnyIP,
 		RegistrationToken:      &hashedToken,
@@ -76,7 +76,7 @@ type HostListParams struct {
 
 // allowedSortColumns is a whitelist preventing SQL injection in ORDER BY.
 var allowedSortColumns = map[string]string{
-	"name":       "name",
+	"name":       "display_name",
 	"status":     "status",
 	"ip":         "ip_address_v4",
 	"last_seen":  "last_seen",
@@ -90,7 +90,7 @@ func ListHosts(params HostListParams) ([]models.Host, int64, error) {
 
 	if params.Search != "" {
 		search := "%" + params.Search + "%"
-		query = query.Where("name ILIKE ? OR hostname ILIKE ?", search, search)
+		query = query.Where("display_name ILIKE ? OR hostname ILIKE ?", search, search)
 	}
 
 	if params.Environment != "" {
@@ -209,7 +209,7 @@ func RenameHost(hostID string, newName string) error {
 		return err
 	}
 
-	host.Name = newName
+	host.DisplayName = newName
 	return database.DB.Save(&host).Error
 }
 

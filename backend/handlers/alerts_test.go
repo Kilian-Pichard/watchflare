@@ -303,7 +303,7 @@ func TestGetActiveIncidents(t *testing.T) {
 	cookie := registerAndGetCookie(t, "incidents@test.com")
 
 	// Seed a host and an active incident
-	host := models.Host{ID: "host-inc-1", Name: "test-host", Status: "offline"}
+	host := models.Host{ID: "host-inc-1", DisplayName: "test-host", Status: "offline"}
 	require.NoError(t, database.DB.Create(&host).Error)
 
 	incident := models.AlertIncident{
@@ -360,7 +360,7 @@ func TestGetHostIncidents(t *testing.T) {
 	r := setupAlertsRouter()
 	cookie := registerAndGetCookie(t, "sinc@test.com")
 
-	host := models.Host{ID: "host-sinc", Name: "sinc-host", Status: "offline"}
+	host := models.Host{ID: "host-sinc", DisplayName: "sinc-host", Status: "offline"}
 	require.NoError(t, database.DB.Create(&host).Error)
 
 	// Active incident
@@ -402,7 +402,7 @@ func TestGetHostIncidents_StatusFilter(t *testing.T) {
 	r := setupAlertsRouter()
 	cookie := registerAndGetCookie(t, "sinc2@test.com")
 
-	host := models.Host{ID: "host-sinc2", Name: "sinc2-host", Status: "offline"}
+	host := models.Host{ID: "host-sinc2", DisplayName: "sinc2-host", Status: "offline"}
 	require.NoError(t, database.DB.Create(&host).Error)
 
 	active := models.AlertIncident{

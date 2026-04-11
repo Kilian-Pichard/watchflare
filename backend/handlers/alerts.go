@@ -166,7 +166,7 @@ type ActiveIncidentItem struct {
 func GetActiveIncidents(c *gin.Context) {
 	var items []ActiveIncidentItem
 	err := database.DB.Table("alert_incidents").
-		Select("alert_incidents.id, alert_incidents.host_id, hosts.name AS host_name, alert_incidents.metric_type, alert_incidents.started_at, alert_incidents.threshold_value, alert_incidents.current_value").
+		Select("alert_incidents.id, alert_incidents.host_id, hosts.display_name AS host_name, alert_incidents.metric_type, alert_incidents.started_at, alert_incidents.threshold_value, alert_incidents.current_value").
 		Joins("JOIN hosts ON hosts.id = alert_incidents.host_id").
 		Where("alert_incidents.resolved_at IS NULL").
 		Order("alert_incidents.started_at DESC").

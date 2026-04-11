@@ -250,7 +250,7 @@
     confirmVariant="destructive"
 >
     <p class="text-sm text-muted-foreground mb-4">
-        Are you sure you want to delete the host "{hostToDelete?.name}"?
+        Are you sure you want to delete the host "{hostToDelete?.display_name}"?
     </p>
     {#if hostToDelete?.status === "online"}
         <div class="mb-4 rounded-md border border-primary/20 bg-primary/5 p-3">

@@ -247,7 +247,7 @@
 </script>
 
 <svelte:head>
-    <title>{host?.name || 'Host'} - Watchflare</title>
+    <title>{host?.display_name || 'Host'} - Watchflare</title>
 </svelte:head>
 
 {#if loading}
@@ -267,7 +267,7 @@
         onDelete={() => (showDeleteConfirm = true)}
         onRegenerateToken={() => (showRegenerateConfirm = true)}
         onChangeIP={() => (showChangeIP = true)}
-        onRename={() => { newHostName = host?.name || ''; showRename = true; }}
+        onRename={() => { newHostName = host?.display_name || ''; showRename = true; }}
         onPause={handlePause}
         onResume={handleResume}
         onAlertRules={() => { showAlertRules = true; }}
@@ -361,7 +361,7 @@
     confirmLabel="Delete Host"
     confirmVariant="destructive"
 >
-    <p class="text-sm text-muted-foreground mb-4">Are you sure you want to delete "{host?.name}"?</p>
+    <p class="text-sm text-muted-foreground mb-4">Are you sure you want to delete "{host?.display_name}"?</p>
     <p class="text-sm font-medium text-destructive">This action cannot be undone.</p>
 </ConfirmDialog>
 

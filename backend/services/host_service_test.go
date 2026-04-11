@@ -54,7 +54,7 @@ func TestCreateAgent(t *testing.T) {
 	assert.NotEmpty(t, agentKey)
 
 	// Verify host fields
-	assert.Equal(t, "host01", host.Name)
+	assert.Equal(t, "host01", host.DisplayName)
 	assert.Equal(t, "192.168.1.100", *host.ConfiguredIP)
 	assert.False(t, host.AllowAnyIPRegistration)
 	assert.Equal(t, models.StatusPending, host.Status)
@@ -100,7 +100,7 @@ func TestListHosts(t *testing.T) {
 	assert.Len(t, hosts, 3)
 
 	// Verify hosts are returned
-	names := []string{hosts[0].Name, hosts[1].Name, hosts[2].Name}
+	names := []string{hosts[0].DisplayName, hosts[1].DisplayName, hosts[2].DisplayName}
 	assert.Contains(t, names, "host01")
 	assert.Contains(t, names, "host02")
 	assert.Contains(t, names, "host03")
@@ -129,7 +129,7 @@ func TestGetHost(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, host)
 	assert.Equal(t, createdHost.ID, host.ID)
-	assert.Equal(t, "host01", host.Name)
+	assert.Equal(t, "host01", host.DisplayName)
 }
 
 func TestGetHost_NotFound(t *testing.T) {
@@ -318,7 +318,7 @@ func TestListHosts_SearchFilter(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), total)
-	assert.Equal(t, "web-host", hosts[0].Name)
+	assert.Equal(t, "web-host", hosts[0].DisplayName)
 }
 
 func TestRenameHost(t *testing.T) {
@@ -331,7 +331,7 @@ func TestRenameHost(t *testing.T) {
 
 	assert.NoError(t, err)
 	updated, _ := GetHost(host.ID)
-	assert.Equal(t, "new-name", updated.Name)
+	assert.Equal(t, "new-name", updated.DisplayName)
 }
 
 func TestRenameHost_TooShort(t *testing.T) {

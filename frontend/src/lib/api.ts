@@ -281,14 +281,14 @@ export async function getHost(id: string): Promise<GetHostResponse> {
 }
 
 export async function createHost(
-  name: string,
+  displayName: string,
   configuredIP?: string,
   allowAnyIP?: boolean,
 ): Promise<CreateHostResponse> {
   return apiRequest<CreateHostResponse>("/hosts", {
     method: "POST",
     body: JSON.stringify({
-      name,
+      display_name: displayName,
       configured_ip: configuredIP,
       allow_any_ip: allowAnyIP,
     }),

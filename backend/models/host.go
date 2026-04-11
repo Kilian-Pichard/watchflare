@@ -22,7 +22,7 @@ type Host struct {
 	AgentKey  string `gorm:"not null" json:"-"` // AES-256 key, hidden in JSON
 
 	// Set at creation time (admin)
-	Name                   string  `gorm:"not null" json:"name"`
+	DisplayName            string  `gorm:"column:display_name;not null" json:"display_name"`
 	ConfiguredIP           *string `json:"configured_ip"`
 	PreviousConfiguredIP   *string `json:"previous_configured_ip"`
 	AllowAnyIPRegistration bool    `gorm:"default:false" json:"allow_any_ip_registration"`

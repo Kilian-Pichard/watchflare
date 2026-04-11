@@ -170,7 +170,7 @@
 				<div>
 					<h2 class="text-lg font-semibold text-success">Host Created Successfully!</h2>
 					<p class="text-sm text-muted-foreground mt-1">
-						Host "{createdHost.name}" has been created with status: {createdHost.status}
+						Host "{createdHost.display_name}" has been created with status: {createdHost.status}
 					</p>
 				</div>
 			</div>

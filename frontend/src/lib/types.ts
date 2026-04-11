@@ -56,7 +56,7 @@ export type EnvironmentType =
 
 export interface Host {
   id: string;
-  name: string;
+  display_name: string;
   hostname: string;
   platform: string | null;
   platform_version: string | null;
@@ -84,7 +84,7 @@ export interface HostWithMetrics {
 }
 
 export interface CreateHostRequest {
-  name: string;
+  display_name: string;
   configured_ip?: string;
   allow_any_ip?: boolean;
 }

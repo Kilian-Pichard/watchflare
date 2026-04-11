@@ -221,7 +221,7 @@ func (w *AlertWorker) evaluateHost(
 						if err := database.DB.Model(&incident).Update("notified", true).Error; err != nil {
 							slog.Error("alert worker: failed to mark incident notified", "host_id", host.ID, "metric_type", metricType, "error", err)
 						} else {
-							slog.Info("alert fired", "host", host.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
+							slog.Info("alert fired", "host", host.DisplayName, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
 						}
 					}
 				}
@@ -263,7 +263,7 @@ func (w *AlertWorker) evaluateHost(
 						if err := database.DB.Model(&incident).Update("notified", true).Error; err != nil {
 							slog.Error("alert worker: failed to mark incident notified", "host_id", host.ID, "metric_type", metricType, "error", err)
 						} else {
-							slog.Info("alert fired", "host", host.Name, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
+							slog.Info("alert fired", "host", host.DisplayName, "metric_type", metricType, "current_value", currentValue, "threshold", threshold)
 						}
 					}
 				}
@@ -275,7 +275,7 @@ func (w *AlertWorker) evaluateHost(
 				if err := database.DB.Model(&incident).Update("resolved_at", now).Error; err != nil {
 					slog.Error("alert worker: failed to resolve incident", "host_id", host.ID, "metric_type", metricType, "error", err)
 				} else {
-					slog.Info("alert resolved", "host", host.Name, "metric_type", metricType)
+					slog.Info("alert resolved", "host", host.DisplayName, "metric_type", metricType)
 					if incident.Notified {
 						if err := sendResolutionEmail(host, metricType, incident.StartedAt, now, recipient); err != nil {
 							slog.Error("alert worker: failed to send resolution email", "host_id", host.ID, "metric_type", metricType, "error", err)
@@ -380,7 +380,7 @@ func sendAlertEmail(host *models.Host, metricType string, threshold, currentValu
 		}
 	}
 
-	subject, body := buildAlertEmailContent(host.Name, metricType, threshold, currentValue, startedAt)
+	subject, body := buildAlertEmailContent(host.DisplayName, metricType, threshold, currentValue, startedAt)
 	return sendEmail(&s, plainPassword, recipient, subject, body)
 }
 
@@ -458,7 +458,7 @@ func sendResolutionEmail(host *models.Host, metricType string, startedAt, resolv
 		}
 	}
 
-	subject, body := buildResolutionEmailContent(host.Name, metricType, startedAt, resolvedAt)
+	subject, body := buildResolutionEmailContent(host.DisplayName, metricType, startedAt, resolvedAt)
 	return sendEmail(&s, plainPassword, recipient, subject, body)
 }
 

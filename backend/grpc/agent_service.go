@@ -288,7 +288,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 
 	// If host is paused, acknowledge but don't store metrics
 	if host.Status == models.StatusPaused {
-		slog.Info("metrics discarded for paused host", "name", host.Name, "host_id", host.ID)
+		slog.Info("metrics discarded for paused host", "name", host.DisplayName, "host_id", host.ID)
 		return &pb.SendMetricsResponse{
 			Success: true,
 			Message: "Host is paused, metrics discarded",
@@ -459,7 +459,7 @@ func (s *AgentServer) ReportDroppedMetrics(ctx context.Context, req *pb.ReportDr
 	downtimeDuration := time.Unix(req.LastDroppedAt, 0).Sub(time.Unix(req.FirstDroppedAt, 0))
 
 	slog.Warn("agent reported dropped metrics",
-		"name", host.Name,
+		"name", host.DisplayName,
 		"agent_id", req.AgentId,
 		"count", req.Count,
 		"downtime", downtimeDuration.Round(time.Second),
@@ -498,7 +498,7 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPack
 	}
 
 	slog.Info("package inventory processed",
-		"name", host.Name,
+		"name", host.DisplayName,
 		"host_id", host.ID,
 		"packages", packagesProcessed,
 		"changes", changesDetected,

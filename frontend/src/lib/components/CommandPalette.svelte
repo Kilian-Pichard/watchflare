@@ -93,7 +93,7 @@
                                 <Server class="h-4 w-4 shrink-0 text-muted-foreground" />
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center gap-2">
-                                        <span class="font-medium text-foreground truncate">{host.name}</span>
+                                        <span class="font-medium text-foreground truncate">{host.display_name}</span>
                                         <span class="h-1.5 w-1.5 shrink-0 rounded-full {getStatusDot(host.status)}"></span>
                                     </div>
                                     {#if host.hostname}

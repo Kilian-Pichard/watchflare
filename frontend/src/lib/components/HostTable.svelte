@@ -102,7 +102,7 @@
         const filtered = hosts.filter((s) => {
             if (statusFilter && s.host.status !== statusFilter) return false;
             if (query) {
-                const name = (s.host.name || "").toLowerCase();
+                const name = (s.host.display_name || "").toLowerCase();
                 const hostname = (s.host.hostname || "").toLowerCase();
                 if (!name.includes(query) && !hostname.includes(query)) return false;
             }
@@ -112,8 +112,8 @@
             let valA, valB;
             switch (sortColumn) {
                 case "name":
-                    valA = (a.host.name || "").toLowerCase();
-                    valB = (b.host.name || "").toLowerCase();
+                    valA = (a.host.display_name || "").toLowerCase();
+                    valB = (b.host.display_name || "").toLowerCase();
                     break;
                 case "status":
                     valA = a.host.status || "";
@@ -230,7 +230,7 @@
                                   : 'bg-muted-foreground'}"
                         ></span>
                         <span class="font-medium text-foreground break-all"
-                            >{host.name}</span
+                            >{host.display_name}</span
                         >
                         {#if activeIncidentHostIds.has(host.id)}
                             {@const count = activeIncidentHostIds.get(host.id) ?? 0}
@@ -488,7 +488,7 @@
                                     <span
                                         class="font-medium text-foreground group-hover:text-primary transition-colors whitespace-nowrap"
                                     >
-                                        {host.name}
+                                        {host.display_name}
                                     </span>
                                     {#if activeIncidentHostIds.has(host.id)}
                                         {@const count = activeIncidentHostIds.get(host.id) ?? 0}
