@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS idx_dropped_metrics_reported_at ON dropped_metrics(re
 CREATE OR REPLACE VIEW agent_dropped_metrics_summary AS
 SELECT
     h.id   AS host_id,
-    h.name AS hostname,
+    h.display_name AS hostname,
     SUM(dm.count)            AS total_dropped,
     MIN(dm.first_dropped_at) AS first_dropped_at,
     MAX(dm.last_dropped_at)  AS last_dropped_at,
@@ -28,7 +28,7 @@ SELECT
 FROM hosts h
 JOIN dropped_metrics dm ON dm.host_id = h.id
 WHERE dm.reported_at > NOW() - INTERVAL '24 hours'
-GROUP BY h.id, h.name
+GROUP BY h.id, h.display_name
 HAVING SUM(dm.count) > 0
 ORDER BY total_dropped DESC;
 
