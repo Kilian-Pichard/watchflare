@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -44,12 +45,31 @@ func (c *CargoCollector) Collect() ([]*Package, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, c.cargoPath, "install", "--list")
+	cmd.Env = cargoEnvWithHome()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("cargo install --list failed: %w (output: %s)", err, string(output))
 	}
 
 	return parseCargoOutput(output), nil
+}
+
+// cargoEnvWithHome returns the environment for cargo commands with CARGO_HOME
+// redirected to /tmp. When the service user has a non-writable home (e.g. /var/empty),
+// cargo fails trying to access ~/.cargo. Redirecting CARGO_HOME to a writable
+// temp directory prevents this.
+func cargoEnvWithHome() []string {
+	const tmpDir = "/tmp/watchflare-cargo"
+	_ = os.MkdirAll(tmpDir, 0700)
+
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "CARGO_HOME=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env, "CARGO_HOME="+tmpDir)
 }
 
 // parseCargoOutput parses the output of "cargo install --list".
