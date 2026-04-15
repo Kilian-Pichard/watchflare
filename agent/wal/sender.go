@@ -114,7 +114,11 @@ func (s *Sender) replayWAL() error {
 
 	records, err := s.wal.ReadAll()
 	if err != nil {
-		return fmt.Errorf("failed to read WAL: %w", err)
+		slog.Warn("WAL corrupted, resetting to recover", "error", err)
+		if clearErr := s.wal.Clear(); clearErr != nil {
+			slog.Error("failed to reset corrupted WAL", "error", clearErr)
+		}
+		return nil
 	}
 
 	if len(records) == 0 {
@@ -212,7 +216,10 @@ func (s *Sender) collectAndSend() {
 	// Send all pending records
 	records, err := s.wal.ReadAll()
 	if err != nil {
-		slog.Error("failed to read WAL", "error", err)
+		slog.Warn("WAL corrupted, resetting to recover", "error", err)
+		if clearErr := s.wal.Clear(); clearErr != nil {
+			slog.Error("failed to reset corrupted WAL", "error", clearErr)
+		}
 		return
 	}
 
