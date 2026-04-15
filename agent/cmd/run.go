@@ -369,6 +369,19 @@ func collectAndSendPackages(ctx context.Context, grpcClient *client.Client, cfg 
 	isFirstRun := len(state.Packages) == 0
 	hasChanges := packages.HasChanges(added, removed, updated)
 
+	// If any package has an available update, always send a full inventory so the
+	// backend has current available_version / has_security_update for every package —
+	// not just the ones that changed in this delta.
+	if !forceFull && !isFirstRun {
+		for _, pkg := range allPackages {
+			if pkg.AvailableVersion != "" {
+				slog.Info("updates available, sending full inventory to refresh update statuses")
+				forceFull = true
+				break
+			}
+		}
+	}
+
 	if !forceFull && !isFirstRun && !hasChanges {
 		slog.Info("no package changes detected, skipping send")
 		return
@@ -437,14 +450,16 @@ func convertPackagesToProto(pkgs []*packages.Package) []*pb.Package {
 		}
 
 		protoPackages[i] = &pb.Package{
-			Name:           pkg.Name,
-			Version:        pkg.Version,
-			Architecture:   pkg.Architecture,
-			PackageManager: pkg.PackageManager,
-			Source:         pkg.Source,
-			InstalledAt:    installedAt,
-			PackageSize:    pkg.PackageSize,
-			Description:    pkg.Description,
+			Name:              pkg.Name,
+			Version:           pkg.Version,
+			Architecture:      pkg.Architecture,
+			PackageManager:    pkg.PackageManager,
+			Source:            pkg.Source,
+			InstalledAt:       installedAt,
+			PackageSize:       pkg.PackageSize,
+			Description:       pkg.Description,
+			AvailableVersion:  pkg.AvailableVersion,
+			HasSecurityUpdate: pkg.HasSecurityUpdate,
 		}
 	}
 

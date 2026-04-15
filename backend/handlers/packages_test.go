@@ -159,4 +159,6 @@ func TestGetPackageStats_ReturnsStats(t *testing.T) {
 	assert.NotNil(t, resp["total_packages"])
 	assert.NotNil(t, resp["by_package_manager"])
 	assert.NotNil(t, resp["recent_changes"])
+	assert.NotNil(t, resp["outdated_count"])
+	assert.NotNil(t, resp["security_updates_count"])
 }

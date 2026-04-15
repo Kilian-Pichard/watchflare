@@ -11,12 +11,12 @@ func TestParseBrewFormulaeJSON_Valid(t *testing.T) {
 			{
 				"name": "git",
 				"desc": "Distributed revision control system",
-				"versions": {"stable": "2.43.0"}
+				"installed": [{"version": "2.43.0"}]
 			},
 			{
 				"name": "curl",
 				"desc": "Get a file from an HTTP, HTTPS or FTP server",
-				"versions": {"stable": "8.5.0"}
+				"installed": [{"version": "8.5.0"}]
 			}
 		],
 		"casks": []
@@ -47,7 +47,7 @@ func TestParseBrewFormulaeJSON_Valid(t *testing.T) {
 func TestParseBrewFormulaeJSON_MissingVersion(t *testing.T) {
 	output := []byte(`{
 		"formulae": [
-			{"name": "noversionpkg", "desc": "A tool", "versions": {"stable": ""}}
+			{"name": "noversionpkg", "desc": "A tool", "installed": []}
 		],
 		"casks": []
 	}`)
@@ -83,9 +83,43 @@ func TestParseBrewFormulaeJSON_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestParseBrewFormulaeJSON_FullNameTakesPrecedence(t *testing.T) {
+	output := []byte(`{
+		"formulae": [
+			{
+				"name": "beszel-agent",
+				"full_name": "henrygd/beszel/beszel-agent",
+				"desc": "Agent",
+				"installed": [{"version": "0.9.0"}]
+			},
+			{
+				"name": "curl",
+				"full_name": "",
+				"desc": "HTTP client",
+				"installed": [{"version": "8.5.0"}]
+			}
+		],
+		"casks": []
+	}`)
+
+	pkgs, err := parseBrewFormulaeJSON(output)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(pkgs) != 2 {
+		t.Fatalf("expected 2 packages, got %d", len(pkgs))
+	}
+	if pkgs[0].Name != "henrygd/beszel/beszel-agent" {
+		t.Errorf("full_name should take precedence: got %q, want %q", pkgs[0].Name, "henrygd/beszel/beszel-agent")
+	}
+	if pkgs[1].Name != "curl" {
+		t.Errorf("should fall back to name when full_name empty: got %q, want %q", pkgs[1].Name, "curl")
+	}
+}
+
 func TestParseBrewFormulaeJSON_TruncatesDescription(t *testing.T) {
 	long := strings.Repeat("x", 200)
-	output := []byte(`{"formulae": [{"name": "pkg", "desc": "` + long + `", "versions": {"stable": "1.0"}}], "casks": []}`)
+	output := []byte(`{"formulae": [{"name": "pkg", "desc": "` + long + `", "installed": [{"version": "1.0"}]}], "casks": []}`)
 
 	pkgs, err := parseBrewFormulaeJSON(output)
 	if err != nil {
@@ -100,8 +134,8 @@ func TestParseBrewCasksJSON_Valid(t *testing.T) {
 	output := []byte(`{
 		"formulae": [],
 		"casks": [
-			{"token": "visual-studio-code", "version": "1.85.2", "desc": "Open-source code editor"},
-			{"token": "firefox", "version": "121.0", "desc": "Web browser"}
+			{"token": "visual-studio-code", "installed": "1.85.2", "desc": "Open-source code editor"},
+			{"token": "firefox", "installed": "121.0", "desc": "Web browser"}
 		]
 	}`)
 

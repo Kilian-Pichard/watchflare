@@ -183,6 +183,8 @@ message Package {
   int64 installed_at = 6;            // Unix timestamp of installation (0 if unknown)
   int64 package_size = 7;            // Package size in bytes
   string description = 8;            // Short description (max 100 chars)
+  string available_version = 9;      // Newer version available (empty if up to date)
+  bool has_security_update = 10;     // True if available_version is a security update
 }
 
 // SendPackageInventoryRequest sends package inventory (delta or full) to backend

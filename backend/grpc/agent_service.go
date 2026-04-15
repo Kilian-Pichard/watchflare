@@ -535,13 +535,15 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPack
 // pkgFields returns the mutable fields map used for package upsert/update.
 func pkgFields(pkg *pb.Package, installedAt *time.Time, now time.Time) map[string]interface{} {
 	return map[string]interface{}{
-		"version":      pkg.Version,
-		"architecture": pkg.Architecture,
-		"source":       pkg.Source,
-		"installed_at": installedAt,
-		"package_size": pkg.PackageSize,
-		"description":  pkg.Description,
-		"last_seen":    now,
+		"version":             pkg.Version,
+		"architecture":        pkg.Architecture,
+		"source":              pkg.Source,
+		"installed_at":        installedAt,
+		"package_size":        pkg.PackageSize,
+		"description":         pkg.Description,
+		"available_version":   pkg.AvailableVersion,
+		"has_security_update": pkg.HasSecurityUpdate,
+		"last_seen":           now,
 	}
 }
 
@@ -585,14 +587,25 @@ func processPackageInventory(hostID string, req *pb.SendPackageInventoryRequest)
 	if req.InventoryType == models.CollectionTypeFull {
 		for _, pkg := range req.AllPackages {
 			installedAt := convertTimestamp(pkg.InstalledAt)
-			model := models.Package{HostID: hostID, Name: pkg.Name, Version: pkg.Version, Architecture: pkg.Architecture, PackageManager: pkg.PackageManager, Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize, Description: pkg.Description, FirstSeen: now, LastSeen: now}
-			if err := tx.Where("host_id = ? AND name = ? AND package_manager = ?", hostID, pkg.Name, pkg.PackageManager).Assign(pkgFields(pkg, installedAt, now)).FirstOrCreate(&model).Error; err != nil {
-				tx.Rollback()
-				return 0, 0, fmt.Errorf("failed to upsert package %s: %w", pkg.Name, err)
+			model := models.Package{
+				HostID: hostID, Name: pkg.Name, Version: pkg.Version,
+				Architecture: pkg.Architecture, PackageManager: pkg.PackageManager,
+				Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize,
+				Description: pkg.Description, AvailableVersion: pkg.AvailableVersion,
+				HasSecurityUpdate: pkg.HasSecurityUpdate, FirstSeen: now, LastSeen: now,
 			}
-			if err := writeHistory(tx, hostID, pkg, models.ChangeTypeInitial, now); err != nil {
+			result := tx.Where("host_id = ? AND name = ? AND package_manager = ?", hostID, pkg.Name, pkg.PackageManager).Assign(pkgFields(pkg, installedAt, now)).FirstOrCreate(&model)
+			if result.Error != nil {
 				tx.Rollback()
-				return 0, 0, fmt.Errorf("failed to create history record for %s: %w", pkg.Name, err)
+				return 0, 0, fmt.Errorf("failed to upsert package %s: %w", pkg.Name, result.Error)
+			}
+			// RowsAffected == 1 means GORM just inserted the row (new package).
+			// RowsAffected == 0 means the row already existed (found, then updated via Assign).
+			if result.RowsAffected == 1 {
+				if err := writeHistory(tx, hostID, pkg, models.ChangeTypeInitial, now); err != nil {
+					tx.Rollback()
+					return 0, 0, fmt.Errorf("failed to create history record for %s: %w", pkg.Name, err)
+				}
 			}
 			packagesProcessed++
 		}
@@ -601,7 +614,13 @@ func processPackageInventory(hostID string, req *pb.SendPackageInventoryRequest)
 	} else if req.InventoryType == models.CollectionTypeDelta {
 		for _, pkg := range req.AddedPackages {
 			installedAt := convertTimestamp(pkg.InstalledAt)
-			model := models.Package{HostID: hostID, Name: pkg.Name, Version: pkg.Version, Architecture: pkg.Architecture, PackageManager: pkg.PackageManager, Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize, Description: pkg.Description, FirstSeen: now, LastSeen: now}
+			model := models.Package{
+				HostID: hostID, Name: pkg.Name, Version: pkg.Version,
+				Architecture: pkg.Architecture, PackageManager: pkg.PackageManager,
+				Source: pkg.Source, InstalledAt: installedAt, PackageSize: pkg.PackageSize,
+				Description: pkg.Description, AvailableVersion: pkg.AvailableVersion,
+				HasSecurityUpdate: pkg.HasSecurityUpdate, FirstSeen: now, LastSeen: now,
+			}
 			if err := tx.Where("host_id = ? AND name = ? AND package_manager = ?", hostID, pkg.Name, pkg.PackageManager).Assign(pkgFields(pkg, installedAt, now)).FirstOrCreate(&model).Error; err != nil {
 				tx.Rollback()
 				return 0, 0, fmt.Errorf("failed to upsert added package %s: %w", pkg.Name, err)

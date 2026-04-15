@@ -4,15 +4,17 @@ import (
 	"runtime"
 )
 
-// CollectorRegistry manages all available package collectors
+// CollectorRegistry manages all available package collectors and update checkers
 type CollectorRegistry struct {
-	collectors []Collector
+	collectors     []Collector
+	updateCheckers []UpdateChecker
 }
 
-// NewRegistry creates a new collector registry with all available collectors
+// NewRegistry creates a new collector registry with all available collectors and update checkers
 func NewRegistry() *CollectorRegistry {
 	registry := &CollectorRegistry{
-		collectors: []Collector{},
+		collectors:     []Collector{},
+		updateCheckers: []UpdateChecker{},
 	}
 
 	// Register platform-specific collectors
@@ -20,6 +22,9 @@ func NewRegistry() *CollectorRegistry {
 
 	// Register cross-platform language collectors
 	registry.registerLanguageCollectors()
+
+	// Register update checkers for installed package managers
+	registry.registerUpdateCheckers()
 
 	return registry
 }
@@ -116,4 +121,34 @@ func (r *CollectorRegistry) ListCollectorNames() []string {
 		names = append(names, c.Name())
 	}
 	return names
+}
+
+// registerUpdateCheckers registers update checkers for the current platform.
+// Each checker self-disables via IsAvailable() if the underlying tool is not installed.
+func (r *CollectorRegistry) registerUpdateCheckers() {
+	switch runtime.GOOS {
+	case "linux":
+		r.updateCheckers = append(r.updateCheckers,
+			&AptUpdateChecker{},    // Debian/Ubuntu
+			&DnfUpdateChecker{},    // RHEL/CentOS/Rocky/Fedora
+			&PacmanUpdateChecker{}, // Arch Linux (requires pacman-contrib)
+			&ApkUpdateChecker{},    // Alpine Linux
+			&BrewUpdateChecker{},   // Homebrew on Linux
+		)
+	case "darwin":
+		r.updateCheckers = append(r.updateCheckers,
+			&BrewUpdateChecker{}, // Homebrew on macOS
+		)
+	}
+}
+
+// GetAvailableUpdateCheckers returns only update checkers whose tools are installed
+func (r *CollectorRegistry) GetAvailableUpdateCheckers() []UpdateChecker {
+	available := make([]UpdateChecker, 0, len(r.updateCheckers))
+	for _, c := range r.updateCheckers {
+		if c.IsAvailable() {
+			available = append(available, c)
+		}
+	}
+	return available
 }

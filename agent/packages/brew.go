@@ -86,11 +86,12 @@ func (b *BrewCollector) collectCasks(ctx context.Context) ([]*Package, error) {
 func parseBrewFormulaeJSON(output []byte) ([]*Package, error) {
 	var response struct {
 		Formulae []struct {
-			Name     string `json:"name"`
-			Desc     string `json:"desc"`
-			Versions struct {
-				Stable string `json:"stable"`
-			} `json:"versions"`
+			Name      string `json:"name"`
+			FullName  string `json:"full_name"`
+			Desc      string `json:"desc"`
+			Installed []struct {
+				Version string `json:"version"`
+			} `json:"installed"`
 		} `json:"formulae"`
 	}
 
@@ -100,12 +101,16 @@ func parseBrewFormulaeJSON(output []byte) ([]*Package, error) {
 
 	pkgs := make([]*Package, 0, len(response.Formulae))
 	for _, f := range response.Formulae {
-		version := f.Versions.Stable
-		if version == "" {
-			version = "unknown"
+		version := "unknown"
+		if len(f.Installed) > 0 && f.Installed[0].Version != "" {
+			version = f.Installed[0].Version
+		}
+		name := f.FullName
+		if name == "" {
+			name = f.Name
 		}
 		pkgs = append(pkgs, &Package{
-			Name:           f.Name,
+			Name:           name,
 			Version:        version,
 			PackageManager: "brew-formula",
 			Source:         "homebrew/core",
@@ -120,9 +125,9 @@ func parseBrewFormulaeJSON(output []byte) ([]*Package, error) {
 func parseBrewCasksJSON(output []byte) ([]*Package, error) {
 	var response struct {
 		Casks []struct {
-			Token   string `json:"token"`
-			Version string `json:"version"`
-			Desc    string `json:"desc"`
+			Token     string `json:"token"`
+			Installed string `json:"installed"` // actually installed version
+			Desc      string `json:"desc"`
 		} `json:"casks"`
 	}
 
@@ -132,9 +137,13 @@ func parseBrewCasksJSON(output []byte) ([]*Package, error) {
 
 	pkgs := make([]*Package, 0, len(response.Casks))
 	for _, c := range response.Casks {
+		version := c.Installed
+		if version == "" {
+			version = "unknown"
+		}
 		pkgs = append(pkgs, &Package{
 			Name:           c.Token,
-			Version:        c.Version,
+			Version:        version,
 			PackageManager: "brew-cask",
 			Source:         "homebrew/cask",
 			Description:    TruncateDescription(c.Desc),

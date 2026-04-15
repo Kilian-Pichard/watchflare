@@ -250,6 +250,24 @@ func GetPackageStats(c *gin.Context) {
 		return
 	}
 
+	// Outdated packages count
+	var outdatedCount int64
+	if err := database.DB.Model(&models.Package{}).
+		Where("host_id = ? AND available_version IS NOT NULL AND available_version != ''", hostID).
+		Count(&outdatedCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count outdated packages"})
+		return
+	}
+
+	// Security updates count
+	var securityUpdatesCount int64
+	if err := database.DB.Model(&models.Package{}).
+		Where("host_id = ? AND has_security_update = true", hostID).
+		Count(&securityUpdatesCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count security updates"})
+		return
+	}
+
 	// Last collection (zero value is fine if none exists yet)
 	var lastCollection models.PackageCollection
 	if err := database.DB.Where("host_id = ?", hostID).Order("timestamp DESC").First(&lastCollection).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -257,9 +275,11 @@ func GetPackageStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"total_packages":     totalPackages,
-		"by_package_manager": managerStats,
-		"recent_changes":     recentChanges,
-		"last_collection":    lastCollection,
+		"total_packages":        totalPackages,
+		"by_package_manager":    managerStats,
+		"recent_changes":        recentChanges,
+		"outdated_count":        outdatedCount,
+		"security_updates_count": securityUpdatesCount,
+		"last_collection":       lastCollection,
 	})
 }

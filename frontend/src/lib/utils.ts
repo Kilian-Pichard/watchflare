@@ -139,7 +139,7 @@ export function formatDateTime(dateString: string | null | undefined, timeFormat
 export const MANAGER_LABELS: Record<string, string> = {
 	brew: 'Homebrew',
 	dpkg: 'apt/dpkg',
-	rpm: 'yum/rpm',
+	rpm: 'dnf/rpm',
 	pacman: 'Pacman',
 	apk: 'Alpine apk',
 	zypper: 'Zypper',

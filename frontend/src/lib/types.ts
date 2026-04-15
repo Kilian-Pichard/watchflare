@@ -191,6 +191,8 @@ export interface Package {
   installed_at: string | null;
   package_size: number;
   description: string;
+  available_version: string;
+  has_security_update: boolean;
   first_seen: string;
   last_seen: string;
 }
@@ -203,6 +205,8 @@ export interface PackageManagerStat {
 export interface PackageStats {
   total_packages: number;
   recent_changes?: number;
+  outdated_count: number;
+  security_updates_count: number;
   by_package_manager: PackageManagerStat[];
 }
 

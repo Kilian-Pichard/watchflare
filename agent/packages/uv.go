@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -24,12 +25,32 @@ func (u *UvCollector) Name() string {
 
 // IsAvailable checks if uv is available
 func (u *UvCollector) IsAvailable() bool {
-	path, err := exec.LookPath("uv")
-	if err != nil {
-		return false
+	// Try PATH first, then common user-local install locations
+	if path, err := exec.LookPath("uv"); err == nil {
+		u.uvPath = path
+		return true
 	}
-	u.uvPath = path
-	return true
+	// Fallback paths for common user-local installs when HOME is not in PATH.
+	// HOME is checked first so the current user's install always takes precedence.
+	seen := make(map[string]bool)
+	var userLocalPaths []string
+	for _, candidate := range []string{
+		os.Getenv("HOME") + "/.local/bin/uv", // current user (macOS + Linux)
+		"/home/watchflare/.local/bin/uv",      // watchflare service user (Linux)
+		"/root/.local/bin/uv",                 // root user
+	} {
+		if candidate != "/.local/bin/uv" && !seen[candidate] {
+			seen[candidate] = true
+			userLocalPaths = append(userLocalPaths, candidate)
+		}
+	}
+	for _, path := range userLocalPaths {
+		if _, err := os.Stat(path); err == nil {
+			u.uvPath = path
+			return true
+		}
+	}
+	return false
 }
 
 // Collect gathers all installed uv tools.

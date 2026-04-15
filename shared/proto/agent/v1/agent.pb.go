@@ -1160,17 +1160,19 @@ func (x *ReportDroppedMetricsResponse) GetMessage() string {
 
 // Package represents a single installed package
 type Package struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`                                           // Package name (e.g., "nginx", "postgresql-15")
-	Version        string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`                                     // Version string (e.g., "1.24.0-1", "15.4-1")
-	Architecture   string                 `protobuf:"bytes,3,opt,name=architecture,proto3" json:"architecture,omitempty"`                           // Architecture (e.g., "amd64", "arm64", "all")
-	PackageManager string                 `protobuf:"bytes,4,opt,name=package_manager,json=packageManager,proto3" json:"package_manager,omitempty"` // Package manager type (e.g., "dpkg", "rpm", "brew")
-	Source         string                 `protobuf:"bytes,5,opt,name=source,proto3" json:"source,omitempty"`                                       // Repository or source URL
-	InstalledAt    int64                  `protobuf:"varint,6,opt,name=installed_at,json=installedAt,proto3" json:"installed_at,omitempty"`         // Unix timestamp of installation (0 if unknown)
-	PackageSize    int64                  `protobuf:"varint,7,opt,name=package_size,json=packageSize,proto3" json:"package_size,omitempty"`         // Package size in bytes
-	Description    string                 `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`                             // Short description (max 100 chars)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Name              string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`                                                        // Package name (e.g., "nginx", "postgresql-15")
+	Version           string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`                                                  // Version string (e.g., "1.24.0-1", "15.4-1")
+	Architecture      string                 `protobuf:"bytes,3,opt,name=architecture,proto3" json:"architecture,omitempty"`                                        // Architecture (e.g., "amd64", "arm64", "all")
+	PackageManager    string                 `protobuf:"bytes,4,opt,name=package_manager,json=packageManager,proto3" json:"package_manager,omitempty"`              // Package manager type (e.g., "dpkg", "rpm", "brew")
+	Source            string                 `protobuf:"bytes,5,opt,name=source,proto3" json:"source,omitempty"`                                                    // Repository or source URL
+	InstalledAt       int64                  `protobuf:"varint,6,opt,name=installed_at,json=installedAt,proto3" json:"installed_at,omitempty"`                      // Unix timestamp of installation (0 if unknown)
+	PackageSize       int64                  `protobuf:"varint,7,opt,name=package_size,json=packageSize,proto3" json:"package_size,omitempty"`                      // Package size in bytes
+	Description       string                 `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`                                          // Short description (max 100 chars)
+	AvailableVersion  string                 `protobuf:"bytes,9,opt,name=available_version,json=availableVersion,proto3" json:"available_version,omitempty"`        // Newer version available (empty if up to date)
+	HasSecurityUpdate bool                   `protobuf:"varint,10,opt,name=has_security_update,json=hasSecurityUpdate,proto3" json:"has_security_update,omitempty"` // True if available_version is a security update
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Package) Reset() {
@@ -1257,6 +1259,20 @@ func (x *Package) GetDescription() string {
 		return x.Description
 	}
 	return ""
+}
+
+func (x *Package) GetAvailableVersion() string {
+	if x != nil {
+		return x.AvailableVersion
+	}
+	return ""
+}
+
+func (x *Package) GetHasSecurityUpdate() bool {
+	if x != nil {
+		return x.HasSecurityUpdate
+	}
+	return false
 }
 
 // SendPackageInventoryRequest sends package inventory (delta or full) to backend
@@ -1557,7 +1573,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x06reason\x18\a \x01(\tR\x06reason\"R\n" +
 	"\x1cReportDroppedMetricsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x84\x02\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xe1\x02\n" +
 	"\aPackage\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\"\n" +
@@ -1566,7 +1582,10 @@ const file_agent_proto_rawDesc = "" +
 	"\x06source\x18\x05 \x01(\tR\x06source\x12!\n" +
 	"\finstalled_at\x18\x06 \x01(\x03R\vinstalledAt\x12!\n" +
 	"\fpackage_size\x18\a \x01(\x03R\vpackageSize\x12 \n" +
-	"\vdescription\x18\b \x01(\tR\vdescription\"\xec\x03\n" +
+	"\vdescription\x18\b \x01(\tR\vdescription\x12+\n" +
+	"\x11available_version\x18\t \x01(\tR\x10availableVersion\x12.\n" +
+	"\x13has_security_update\x18\n" +
+	" \x01(\bR\x11hasSecurityUpdate\"\xec\x03\n" +
 	"\x1bSendPackageInventoryRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1b\n" +
 	"\tagent_key\x18\x02 \x01(\tR\bagentKey\x12\x1c\n" +

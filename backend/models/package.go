@@ -26,18 +26,20 @@ const (
 
 // Package represents current package state on a host
 type Package struct {
-	ID             int64      `gorm:"primaryKey" json:"id"`
-	HostID         string     `gorm:"type:char(36);not null;index:idx_packages_host_id" json:"host_id"`
-	Name           string     `gorm:"type:varchar(255);not null" json:"name"`
-	Version        string     `gorm:"type:varchar(100);not null" json:"version"`
-	Architecture   string     `gorm:"type:varchar(50)" json:"architecture"`
-	PackageManager string     `gorm:"type:varchar(20);not null" json:"package_manager"`
-	Source         string     `gorm:"type:varchar(255)" json:"source"`
-	InstalledAt    *time.Time `json:"installed_at"`
-	PackageSize    int64      `json:"package_size"`
-	Description    string     `gorm:"type:varchar(100)" json:"description"`
-	FirstSeen      time.Time  `gorm:"not null;default:now()" json:"first_seen"`
-	LastSeen       time.Time  `gorm:"not null;default:now()" json:"last_seen"`
+	ID                int64      `gorm:"primaryKey" json:"id"`
+	HostID            string     `gorm:"type:char(36);not null;index:idx_packages_host_id" json:"host_id"`
+	Name              string     `gorm:"type:varchar(255);not null" json:"name"`
+	Version           string     `gorm:"type:varchar(100);not null" json:"version"`
+	Architecture      string     `gorm:"type:varchar(50)" json:"architecture"`
+	PackageManager    string     `gorm:"type:varchar(20);not null" json:"package_manager"`
+	Source            string     `gorm:"type:varchar(255)" json:"source"`
+	InstalledAt       *time.Time `json:"installed_at"`
+	PackageSize       int64      `json:"package_size"`
+	Description       string     `gorm:"type:varchar(100)" json:"description"`
+	AvailableVersion  string     `gorm:"type:varchar(100)" json:"available_version"`   // Empty if up to date
+	HasSecurityUpdate bool       `gorm:"not null;default:false" json:"has_security_update"`
+	FirstSeen         time.Time  `gorm:"not null;default:now()" json:"first_seen"`
+	LastSeen          time.Time  `gorm:"not null;default:now()" json:"last_seen"`
 }
 
 // PackageHistory stores temporal snapshots of packages (TimescaleDB hypertable)

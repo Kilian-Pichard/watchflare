@@ -18,7 +18,7 @@
         formatDateTime,
     } from "$lib/utils";
     import { userStore } from "$lib/stores/user";
-    import { Filter, ChevronDown, ChevronRight, RefreshCw } from "lucide-svelte";
+    import { Filter, ChevronDown, ChevronRight, RefreshCw, ShieldAlert, ArrowUp } from "lucide-svelte";
 
     const timeFormat = $derived(($userStore.user?.time_format ?? '24h') as '12h' | '24h');
 
@@ -45,6 +45,7 @@
     let selectedManagers: Set<string> = $state(new Set(cached?.selectedManagers ?? []));
     let allManagerKeys: string[] = $state(cached?.allManagerKeys ?? []);
     let offset = $state(0);
+    let quickFilter = $state<'all' | 'outdated' | 'security'>('all');
     let showCollections = $state(false);
     let showHistory = $state(false);
 
@@ -60,6 +61,11 @@
         }
         if (allManagerKeys.length > 0 && selectedManagers.size < allManagerKeys.length) {
             result = result.filter(p => selectedManagers.has(p.package_manager));
+        }
+        if (quickFilter === 'outdated') {
+            result = result.filter(p => p.available_version);
+        } else if (quickFilter === 'security') {
+            result = result.filter(p => p.has_security_update);
         }
         return result;
     });
@@ -185,6 +191,11 @@
         offset = 0;
     }
 
+    function setQuickFilter(filter: 'all' | 'outdated' | 'security') {
+        quickFilter = filter;
+        offset = 0;
+    }
+
     function handlePageChange(newPage: number) {
         offset = (newPage - 1) * limit;
     }
@@ -271,7 +282,6 @@
         {/each}
     </div>
 {:else if stats}
-    {@const managerCards = (stats.by_package_manager || []).slice(0, 2)}
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <div class="rounded-xl border bg-card px-4 py-3.5">
             <p class="text-xs text-muted-foreground mb-1.5">Total packages</p>
@@ -281,12 +291,26 @@
             <p class="text-xs text-muted-foreground mb-1.5">Changes (30d)</p>
             <p class="text-2xl font-semibold tabular-nums text-foreground">{stats.recent_changes || 0}</p>
         </div>
-        {#each managerCards as pm}
-            <div class="rounded-xl border bg-card px-4 py-3.5">
-                <p class="text-xs text-muted-foreground mb-1.5 truncate">{getManagerLabel(pm.package_manager)}</p>
-                <p class="text-2xl font-semibold tabular-nums text-foreground">{pm.count}</p>
-            </div>
-        {/each}
+        <button
+            onclick={() => setQuickFilter(quickFilter === 'outdated' ? 'all' : 'outdated')}
+            class="rounded-xl border px-4 py-3.5 text-left transition-colors
+                {quickFilter === 'outdated'
+                    ? 'border-amber-500/40 bg-amber-500/5'
+                    : 'bg-card hover:bg-muted/40'}"
+        >
+            <p class="text-xs text-muted-foreground mb-1.5">Outdated</p>
+            <p class="text-2xl font-semibold tabular-nums {stats.outdated_count > 0 ? 'text-amber-500' : 'text-foreground'}">{stats.outdated_count || 0}</p>
+        </button>
+        <button
+            onclick={() => setQuickFilter(quickFilter === 'security' ? 'all' : 'security')}
+            class="rounded-xl border px-4 py-3.5 text-left transition-colors
+                {quickFilter === 'security'
+                    ? 'border-destructive/40 bg-destructive/5'
+                    : 'bg-card hover:bg-muted/40'}"
+        >
+            <p class="text-xs text-muted-foreground mb-1.5">Security Updates</p>
+            <p class="text-2xl font-semibold tabular-nums {stats.security_updates_count > 0 ? 'text-destructive' : 'text-foreground'}">{stats.security_updates_count || 0}</p>
+        </button>
     </div>
 {/if}
 
@@ -296,7 +320,7 @@
         type="text"
         bind:value={searchTerm}
         oninput={handleSearchInput}
-        onkeydown={(e) => { if (e.key === 'Enter') { clearTimeout(searchDebounce); offset = 0; loadPackages(); } }}
+        onkeydown={(e) => { if (e.key === 'Enter') { clearTimeout(searchDebounce); offset = 0; saveToCache(); } }}
         placeholder="Search packages..."
         class="flex-1 rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     />
@@ -421,7 +445,7 @@
                         <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground" onclick={() => handleSort('name')}>
                             <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">Name {@render sortIcon('name')}</span>
                         </th>
-                        <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground w-40" onclick={() => handleSort('version')}>
+                        <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground" onclick={() => handleSort('version')}>
                             <span class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground">Version {@render sortIcon('version')}</span>
                         </th>
                         <th scope="col" class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground w-px whitespace-nowrap" onclick={() => handleSort('manager')}>
@@ -443,7 +467,24 @@
                     {#each paginatedPackages() as pkg}
                         <tr class="hover:bg-muted/20 transition-colors">
                             <td class="px-4 py-3 text-sm font-medium text-foreground">{pkg.name}</td>
-                            <td class="px-4 py-3 text-sm font-mono text-muted-foreground whitespace-nowrap">{pkg.version || "-"}</td>
+                            <td class="px-4 py-3 text-sm whitespace-nowrap">
+                                {#if pkg.available_version}
+                                    <span class="inline-flex flex-col gap-0.5">
+                                        <span class="font-mono text-muted-foreground line-through">{pkg.version || "-"}</span>
+                                        <span class="inline-flex items-center gap-1">
+                                            {#if pkg.has_security_update}
+                                                <ShieldAlert class="h-3 w-3 text-destructive shrink-0" />
+                                                <span class="font-mono font-medium text-destructive">{pkg.available_version}</span>
+                                            {:else}
+                                                <ArrowUp class="h-3 w-3 text-amber-500 shrink-0" />
+                                                <span class="font-mono font-medium text-amber-500">{pkg.available_version}</span>
+                                            {/if}
+                                        </span>
+                                    </span>
+                                {:else}
+                                    <span class="font-mono text-muted-foreground">{pkg.version || "-"}</span>
+                                {/if}
+                            </td>
                             <td class="px-4 py-3 w-px whitespace-nowrap">
                                 <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {getManagerColor(pkg.package_manager)}">
                                     {getManagerLabel(pkg.package_manager)}

@@ -96,3 +96,33 @@ func TestGetCollectorByName(t *testing.T) {
 		t.Error("GetCollectorByName should return nil for non-existent collector")
 	}
 }
+
+func TestUpdateCheckersRegistered(t *testing.T) {
+	registry := NewRegistry()
+
+	if len(registry.updateCheckers) == 0 {
+		t.Errorf("no update checkers registered on %s", runtime.GOOS)
+	}
+
+	t.Logf("Update checkers registered on %s: %d", runtime.GOOS, len(registry.updateCheckers))
+	for _, c := range registry.updateCheckers {
+		t.Logf("  - %s", c.Name())
+	}
+}
+
+func TestGetAvailableUpdateCheckers(t *testing.T) {
+	registry := NewRegistry()
+	available := registry.GetAvailableUpdateCheckers()
+
+	t.Logf("Available update checkers on %s: %d", runtime.GOOS, len(available))
+	for _, c := range available {
+		t.Logf("  - %s (covers: %v)", c.Name(), c.PackageManagers())
+	}
+
+	// Verify each returned checker reports IsAvailable()=true
+	for _, c := range available {
+		if !c.IsAvailable() {
+			t.Errorf("checker %q returned by GetAvailableUpdateCheckers but IsAvailable() is false", c.Name())
+		}
+	}
+}
