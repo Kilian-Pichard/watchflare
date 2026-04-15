@@ -112,12 +112,16 @@ var predefinedCLIs = []cliTool{
 const versionTimeout = 5 * time.Second
 
 // versionPatterns are compiled once at package init and reused across calls.
+// Patterns are ordered from most specific (X.Y.Z) to least specific (X.Y).
 var versionPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)version\s+v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
 	regexp.MustCompile(`(?i)^v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
 	regexp.MustCompile(`(?i)^\w+\s+v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
 	regexp.MustCompile(`^v?(\d+\.\d+\.\d+[a-zA-Z0-9._-]*)`),
 	regexp.MustCompile(`v?(\d+\.\d+\.\d+)`),
+	// X.Y fallback for tools like jq that output "jq-1.6"
+	regexp.MustCompile(`(?i)version\s+v?(\d+\.\d+)`),
+	regexp.MustCompile(`[^\d]v?(\d+\.\d+)\s*$`),
 }
 
 var semverFallback = regexp.MustCompile(`\d+\.\d+\.\d+`)
