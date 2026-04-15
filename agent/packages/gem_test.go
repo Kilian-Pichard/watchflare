@@ -29,6 +29,18 @@ func TestParseGemLine(t *testing.T) {
 			version: "1.15.4 x86_64-linux",
 		},
 		{
+			// Default gem bundled with Ruby
+			input:   "io-console (default: 0.6.0)",
+			name:    "io-console",
+			version: "0.6.0",
+		},
+		{
+			// Default gem with multiple versions
+			input:   "json (default: 2.6.3, 2.5.1)",
+			name:    "json",
+			version: "2.6.3",
+		},
+		{
 			// Empty line
 			input:   "",
 			wantNil: true,

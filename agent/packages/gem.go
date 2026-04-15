@@ -81,6 +81,8 @@ func parseGemLine(line string) *Package {
 
 	name := matches[1]
 	version := strings.TrimSpace(strings.SplitN(matches[2], ",", 2)[0])
+	// Strip "default: " prefix for gems bundled with Ruby
+	version = strings.TrimPrefix(version, "default: ")
 
 	return &Package{
 		Name:           name,
