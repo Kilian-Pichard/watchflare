@@ -82,9 +82,14 @@
         ),
     );
     let offset = $state(0);
-    let quickFilter = $state<"all" | "needs_update" | "outdated" | "security">(
-        "all",
-    );
+    type StatusFilter = "outdated" | "security" | "up_to_date" | "not_checked";
+    const STATUS_LABELS: Record<StatusFilter, string> = {
+        outdated: "Outdated",
+        security: "Security update",
+        up_to_date: "Up to date",
+        not_checked: "Not checked",
+    };
+    let selectedStatuses: Set<StatusFilter> = $state(new Set());
 
     const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
     let limit = $state(PACKAGES_PER_PAGE);
@@ -104,16 +109,14 @@
                 selectedManagers.has(p.package_manager),
             );
         }
-        if (quickFilter === "needs_update") {
-            result = result.filter(
-                (p) => p.available_version || p.has_security_update,
-            );
-        } else if (quickFilter === "outdated") {
-            result = result.filter(
-                (p) => p.available_version && !p.has_security_update,
-            );
-        } else if (quickFilter === "security") {
-            result = result.filter((p) => p.has_security_update);
+        if (selectedStatuses.size > 0) {
+            result = result.filter((p) => {
+                if (selectedStatuses.has("security") && p.has_security_update) return true;
+                if (selectedStatuses.has("outdated") && p.available_version && !p.has_security_update) return true;
+                if (selectedStatuses.has("up_to_date") && p.update_checked && !p.available_version && !p.has_security_update) return true;
+                if (selectedStatuses.has("not_checked") && !p.update_checked && !p.available_version && !p.has_security_update) return true;
+                return false;
+            });
         }
         return result;
     });
@@ -141,7 +144,9 @@
                             ? "0"
                             : p.available_version
                               ? "1"
-                              : "2";
+                              : p.update_checked
+                                ? "2"
+                                : "3";
                     valA = statusOrder(a);
                     valB = statusOrder(b);
                     break;
@@ -180,6 +185,14 @@
     const totalCount = $derived(filteredPackages().length);
     const currentPage = $derived(Math.floor(offset / limit) + 1);
     const totalPages = $derived(Math.ceil(totalCount / limit));
+    const isStatusFiltered = $derived(selectedStatuses.size > 0);
+    const statusFilterLabel = $derived(
+        selectedStatuses.size === 0
+            ? "All statuses"
+            : selectedStatuses.size === 1
+              ? STATUS_LABELS[[...selectedStatuses][0]]
+              : `${selectedStatuses.size} statuses`,
+    );
     const isFiltered = $derived(selectedManagers.size > 0);
     const filterLabel = $derived(
         !isFiltered
@@ -288,12 +301,12 @@
     }
 
     const hasActiveFilters = $derived(
-        searchTerm !== "" || quickFilter !== "all" || selectedManagers.size > 0,
+        searchTerm !== "" || selectedStatuses.size > 0 || selectedManagers.size > 0,
     );
 
     function clearAllFilters() {
         searchTerm = "";
-        quickFilter = "all";
+        selectedStatuses = new Set();
         selectedManagers = new Set();
         offset = 0;
     }
@@ -309,10 +322,14 @@
         saveToCache();
     }
 
-    function setQuickFilter(
-        filter: "all" | "needs_update" | "outdated" | "security",
-    ) {
-        quickFilter = filter;
+    function toggleStatusFilter(status: StatusFilter) {
+        const next = new Set(selectedStatuses);
+        if (next.has(status)) {
+            next.delete(status);
+        } else {
+            next.add(status);
+        }
+        selectedStatuses = next;
         offset = 0;
     }
 
@@ -498,47 +515,65 @@
                     <button
                         {...props}
                         class="inline-flex items-center gap-1.5 h-9 rounded-lg border px-3 text-sm font-medium transition-colors whitespace-nowrap
-                        {quickFilter === 'security'
-                            ? 'border-destructive/40 bg-destructive/5 text-destructive'
-                            : quickFilter !== 'all'
-                              ? 'border-amber-500/40 bg-amber-500/5 text-amber-500'
-                              : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}"
+                        {isStatusFiltered
+                            ? 'border-primary/40 bg-primary/5 text-primary hover:bg-primary/10'
+                            : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}"
                     >
-                        {#if quickFilter === "security"}
-                            <ShieldAlert class="h-3.5 w-3.5 shrink-0" />
-                        {:else if quickFilter !== "all"}
-                            <ArrowUp class="h-3.5 w-3.5 shrink-0" />
-                        {:else}
-                            <Tag class="h-3.5 w-3.5 shrink-0" />
+                        <Tag class="h-3.5 w-3.5 shrink-0" />
+                        <span class="hidden sm:inline">{statusFilterLabel}</span>
+                        {#if isStatusFiltered}
+                            <span
+                                class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/15 px-1 text-xs font-medium text-primary"
+                            >
+                                {selectedStatuses.size}
+                            </span>
                         {/if}
-                        <span class="hidden sm:inline">
-                            {quickFilter === "all"
-                                ? "All statuses"
-                                : quickFilter === "needs_update"
-                                  ? "Needs update"
-                                  : quickFilter === "outdated"
-                                    ? "Outdated only"
-                                    : "Security updates"}
-                        </span>
                         <ChevronDown
                             class="hidden sm:inline-block h-3 w-3 opacity-40"
                         />
                     </button>
                 {/snippet}
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end" class="group">
-                {#each [{ value: "all", label: "All statuses" }, { value: "needs_update", label: "Needs update" }, { value: "outdated", label: "Outdated only" }, { value: "security", label: "Security updates" }] as option}
+            <DropdownMenu.Content align="end">
+                {#each [{ value: "outdated" as StatusFilter, label: "Outdated" }, { value: "security" as StatusFilter, label: "Security update" }, { value: "up_to_date" as StatusFilter, label: "Up to date" }, { value: "not_checked" as StatusFilter, label: "Not checked" }] as status}
                     <DropdownMenu.Item
-                        closeOnSelect={true}
-                        onclick={() =>
-                            setQuickFilter(option.value as typeof quickFilter)}
-                        class={quickFilter === option.value
-                            ? "bg-muted font-medium group-has-data-highlighted:bg-transparent data-highlighted:bg-muted"
-                            : ""}
+                        closeOnSelect={false}
+                        onclick={() => toggleStatusFilter(status.value)}
                     >
-                        {option.label}
+                        <div
+                            class="flex h-4 w-4 shrink-0 items-center justify-center rounded border
+                            {selectedStatuses.has(status.value)
+                                ? 'border-primary bg-primary'
+                                : 'border-muted-foreground/40'}"
+                        >
+                            {#if selectedStatuses.has(status.value)}
+                                <svg
+                                    class="h-3 w-3 text-primary-foreground"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="3"
+                                        d="M5 13l4 4L19 7"
+                                    />
+                                </svg>
+                            {/if}
+                        </div>
+                        <span class="flex-1">{status.label}</span>
                     </DropdownMenu.Item>
                 {/each}
+                {#if isStatusFiltered}
+                    <DropdownMenu.Separator />
+                    <DropdownMenu.Item
+                        onclick={() => { selectedStatuses = new Set(); offset = 0; }}
+                        class="text-muted-foreground"
+                    >
+                        Clear filter
+                    </DropdownMenu.Item>
+                {/if}
             </DropdownMenu.Content>
         </DropdownMenu.Root>
 
@@ -734,10 +769,15 @@
                                 class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-500 border-amber-500/20"
                                 >Outdated</span
                             >
-                        {:else}
+                        {:else if pkg.update_checked}
                             <span
                                 class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-success/10 text-success border-success/20"
                                 >Up to date</span
+                            >
+                        {:else}
+                            <span
+                                class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground border-border"
+                                >Not checked</span
                             >
                         {/if}
                     </div>
@@ -973,10 +1013,15 @@
                                             class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-500 border-amber-500/20"
                                             >Outdated</span
                                         >
-                                    {:else}
+                                    {:else if pkg.update_checked}
                                         <span
                                             class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-success/10 text-success border-success/20"
                                             >Up to date</span
+                                        >
+                                    {:else}
+                                        <span
+                                            class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground border-border"
+                                            >Not checked</span
                                         >
                                     {/if}
                                 </td>
