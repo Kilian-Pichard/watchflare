@@ -191,7 +191,7 @@ export interface Package {
   installed_at: string | null;
   package_size: number;
   description: string;
-  available_version: string;
+  available_version: string | null;
   has_security_update: boolean;
   first_seen: string;
   last_seen: string;
@@ -208,6 +208,7 @@ export interface PackageStats {
   outdated_count: number;
   security_updates_count: number;
   by_package_manager: PackageManagerStat[];
+  last_collection?: { timestamp: string } | null;
 }
 
 export interface PackageCollection {
@@ -261,6 +262,7 @@ export interface HostUpdateEvent {
   ignore_ip_mismatch?: boolean;
   reactivated?: boolean;
   hostname?: string;
+  clock_desync?: boolean;
 }
 
 export interface MetricsUpdateEvent extends Metric {
@@ -402,35 +404,35 @@ export interface GetSMTPSettingsResponse {
 // ===== Alert Rules =====
 
 export type AlertMetricType =
-  | 'host_down'
-  | 'cpu_usage'
-  | 'memory_usage'
-  | 'disk_usage'
-  | 'load_avg'
-  | 'load_avg_5'
-  | 'load_avg_15'
-  | 'temperature';
+  | "host_down"
+  | "cpu_usage"
+  | "memory_usage"
+  | "disk_usage"
+  | "load_avg"
+  | "load_avg_5"
+  | "load_avg_15"
+  | "temperature";
 
 export const ALERT_METRIC_TYPES: AlertMetricType[] = [
-  'host_down',
-  'cpu_usage',
-  'memory_usage',
-  'disk_usage',
-  'load_avg',
-  'load_avg_5',
-  'load_avg_15',
-  'temperature',
+  "host_down",
+  "cpu_usage",
+  "memory_usage",
+  "disk_usage",
+  "load_avg",
+  "load_avg_5",
+  "load_avg_15",
+  "temperature",
 ];
 
 export const ALERT_METRIC_LABELS: Record<AlertMetricType, string> = {
-  host_down: 'Host offline',
-  cpu_usage: 'CPU usage',
-  memory_usage: 'Memory usage',
-  disk_usage: 'Disk usage',
-  load_avg: 'Load average (1m)',
-  load_avg_5: 'Load average (5m)',
-  load_avg_15: 'Load average (15m)',
-  temperature: 'CPU temperature',
+  host_down: "Host offline",
+  cpu_usage: "CPU usage",
+  memory_usage: "Memory usage",
+  disk_usage: "Disk usage",
+  load_avg: "Load average (1m)",
+  load_avg_5: "Load average (5m)",
+  load_avg_15: "Load average (15m)",
+  temperature: "CPU temperature",
 };
 
 export interface AlertRule {
@@ -480,7 +482,7 @@ export interface HostIncident {
   current_value: number;
 }
 
-export type IncidentStatusFilter = 'all' | 'active' | 'resolved';
+export type IncidentStatusFilter = "all" | "active" | "resolved";
 
 export interface GetHostIncidentsResponse {
   incidents: HostIncident[];

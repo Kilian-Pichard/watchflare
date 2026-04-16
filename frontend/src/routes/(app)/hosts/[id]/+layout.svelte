@@ -1,17 +1,29 @@
 <script lang="ts">
-    import { onMount, onDestroy, setContext } from 'svelte';
-    import { goto } from '$app/navigation';
-    import { page } from '$app/stores';
-    import * as api from '$lib/api.js';
-    import { sseStore } from '$lib/stores/sse';
-    import { handleSSEReactivation, logger } from '$lib/utils';
-    import type { Host, Metric, SSEEvent, Package, PackageStats, PackageCollection, HostIncident, IncidentStatusFilter, TimeRange, ContainerMetric } from '$lib/types';
-    import HostDetailHeader from '$lib/components/host/HostDetailHeader.svelte';
-    import HostAlerts from '$lib/components/host/HostAlerts.svelte';
-    import HostAlertRulesDrawer from '$lib/components/host/HostAlertRulesDrawer.svelte';
-    import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-    import Modal from '$lib/components/Modal.svelte';
-    import InstallInstructions from '$lib/components/InstallInstructions.svelte';
+    import { onMount, onDestroy, setContext } from "svelte";
+    import { goto } from "$app/navigation";
+    import { page } from "$app/stores";
+    import * as api from "$lib/api.js";
+    import { sseStore } from "$lib/stores/sse";
+    import { handleSSEReactivation, logger, formatPercent } from "$lib/utils";
+    import type {
+        Host,
+        Metric,
+        SSEEvent,
+        HostUpdateEvent,
+        MetricsUpdateEvent,
+        Package,
+        PackageStats,
+        HostIncident,
+        IncidentStatusFilter,
+        TimeRange,
+        ContainerMetric,
+    } from "$lib/types";
+    import HostDetailHeader from "$lib/components/host/HostDetailHeader.svelte";
+    import HostAlerts from "$lib/components/host/HostAlerts.svelte";
+    import HostAlertRulesDrawer from "$lib/components/host/HostAlertRulesDrawer.svelte";
+    import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+    import Modal from "$lib/components/Modal.svelte";
+    import InstallInstructions from "$lib/components/InstallInstructions.svelte";
 
     const { children } = $props();
 
@@ -20,16 +32,32 @@
 
     let host: Host | null = $state(null);
     let loading = $state(true);
-    let error = $state('');
+    let error = $state("");
     let clockDesync = $state(false);
     let latestAgentVersion: string | null = $state(null);
     let latestMetric: Metric | null = $state(null);
     let hasActiveAlertRules = $state(false);
 
     // Tab data caches — persist between tab switches for the duration of the host detail session
-    let overviewCache: { metrics: Metric[]; containerMetrics: ContainerMetric[]; timeRange: TimeRange } | null = $state(null);
-    let packagesCache: { allPackages: Package[]; stats: PackageStats | null; collections: PackageCollection[]; searchTerm: string; allManagerKeys: string[]; selectedManagers: string[] } | null = $state(null);
-    let incidentsCache: { incidents: HostIncident[]; totalCount: number; offset: number; statusFilter: IncidentStatusFilter } | null = $state(null);
+    let overviewCache: {
+        metrics: Metric[];
+        containerMetrics: ContainerMetric[];
+        timeRange: TimeRange;
+    } | null = $state(null);
+    let packagesCache: {
+        allPackages: Package[];
+        stats: PackageStats | null;
+        searchTerm: string;
+        allManagerKeys: string[];
+        selectedManagers: string[];
+        visibleColumns: string[];
+    } | null = $state(null);
+    let incidentsCache: {
+        incidents: HostIncident[];
+        totalCount: number;
+        offset: number;
+        statusFilter: IncidentStatusFilter;
+    } | null = $state(null);
 
     // Incremented each time a package_inventory_update SSE event arrives for this host
     let packageInventorySignal = $state(0);
@@ -40,37 +68,61 @@
     let showChangeIP = $state(false);
     let showRename = $state(false);
     let showAlertRules = $state(false);
-    let newHostName = $state('');
-    let newIP = $state('');
-    let regeneratedToken = $state('');
+    let newHostName = $state("");
+    let newIP = $state("");
+    let regeneratedToken = $state("");
     let copiedToken = $state(false);
-    let backendHost = $state('');
+    let backendHost = $state("");
 
-    setContext('hostDetail', {
-        get host() { return host; },
-        get loading() { return loading; },
-        get latestMetric() { return latestMetric; },
-        setLatestMetric: (m: Metric | null) => { latestMetric = m; },
-        get overviewCache() { return overviewCache; },
-        setOverviewCache: (data: typeof overviewCache) => { overviewCache = data; },
-        get packagesCache() { return packagesCache; },
-        setPackagesCache: (data: typeof packagesCache) => { packagesCache = data; },
-        get packageInventorySignal() { return packageInventorySignal; },
-        get incidentsCache() { return incidentsCache; },
-        setIncidentsCache: (data: typeof incidentsCache) => { incidentsCache = data; },
+    setContext("hostDetail", {
+        get host() {
+            return host;
+        },
+        get loading() {
+            return loading;
+        },
+        get latestMetric() {
+            return latestMetric;
+        },
+        setLatestMetric: (m: Metric | null) => {
+            latestMetric = m;
+        },
+        get overviewCache() {
+            return overviewCache;
+        },
+        setOverviewCache: (data: typeof overviewCache) => {
+            overviewCache = data;
+        },
+        get packagesCache() {
+            return packagesCache;
+        },
+        setPackagesCache: (data: typeof packagesCache) => {
+            packagesCache = data;
+        },
+        get packageInventorySignal() {
+            return packageInventorySignal;
+        },
+        get incidentsCache() {
+            return incidentsCache;
+        },
+        setIncidentsCache: (data: typeof incidentsCache) => {
+            incidentsCache = data;
+        },
     });
 
     const showIPMismatchWarning = $derived(
-        !!(host &&
+        !!(
+            host &&
             host.configured_ip &&
             host.ip_address_v4 &&
             host.configured_ip !== host.ip_address_v4 &&
-            !host.ignore_ip_mismatch),
+            !host.ignore_ip_mismatch
+        ),
     );
 
-    function isActiveTab(tab: 'overview' | 'packages' | 'incidents'): boolean {
+    function isActiveTab(tab: "overview" | "packages" | "incidents"): boolean {
         const base = `/hosts/${hostId}`;
-        if (tab === 'overview') return currentPath === base;
+        if (tab === "overview") return currentPath === base;
         return currentPath.startsWith(`${base}/${tab}`);
     }
 
@@ -88,12 +140,14 @@
 
     onDestroy(() => {
         if (sseUnsubscribe) sseUnsubscribe();
+        if (updateAgentMessageTimeout) clearTimeout(updateAgentMessageTimeout);
+        if (copyErrorTimeout) clearTimeout(copyErrorTimeout);
     });
 
     function handleSSEMessage(event: SSEEvent) {
         handleSSEReactivation(event);
-        if (event.type === 'host_update') {
-            const update = event.data;
+        if (event.type === "host_update") {
+            const update = event.data as HostUpdateEvent;
             if (host && update.id === host.id) {
                 host = {
                     ...host,
@@ -107,13 +161,13 @@
                 clockDesync = update.clock_desync || false;
             }
         }
-        if (event.type === 'metrics_update') {
-            const metric = event.data;
+        if (event.type === "metrics_update") {
+            const metric = event.data as MetricsUpdateEvent;
             if (host && metric.host_id === host.id) {
                 latestMetric = metric;
             }
         }
-        if (event.type === 'package_inventory_update') {
+        if (event.type === "package_inventory_update") {
             const update = event.data as { host_id: string };
             if (host && update.host_id === host.id) {
                 packageInventorySignal++;
@@ -126,20 +180,25 @@
             const [response] = await Promise.all([
                 api.getHost(hostId),
                 latestAgentVersion === null
-                    ? api.getLatestAgentVersion().then(r => { latestAgentVersion = r.latest_version || null; }).catch(() => {})
+                    ? api
+                          .getLatestAgentVersion()
+                          .then((r) => {
+                              latestAgentVersion = r.latest_version || null;
+                          })
+                          .catch(() => {})
                     : Promise.resolve(),
             ]);
             host = response.host;
             clockDesync = response.clock_desync || false;
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to load host';
+            error = err instanceof Error ? err.message : "Failed to load host";
         } finally {
             loading = false;
         }
         // Load alert rules for bell indicator (non-critical)
         try {
             const rulesData = await api.getHostAlertRules(hostId);
-            hasActiveAlertRules = rulesData.rules.some(r => r.enabled);
+            hasActiveAlertRules = rulesData.rules.some((r) => r.enabled);
         } catch {
             // non-critical
         }
@@ -148,9 +207,10 @@
     async function handleDelete() {
         try {
             await api.deleteHost(hostId);
-            goto('/hosts');
+            goto("/hosts");
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to delete host';
+            error =
+                err instanceof Error ? err.message : "Failed to delete host";
             showDeleteConfirm = false;
         }
     }
@@ -163,7 +223,10 @@
             showRegenerateConfirm = false;
             await loadHost();
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to regenerate token';
+            error =
+                err instanceof Error
+                    ? err.message
+                    : "Failed to regenerate token";
             showRegenerateConfirm = false;
         }
     }
@@ -172,10 +235,11 @@
         try {
             await api.renameHost(hostId, newHostName);
             showRename = false;
-            newHostName = '';
+            newHostName = "";
             await loadHost();
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to rename host';
+            error =
+                err instanceof Error ? err.message : "Failed to rename host";
         }
     }
 
@@ -183,10 +247,10 @@
         try {
             await api.updateConfiguredIP(hostId, newIP);
             showChangeIP = false;
-            newIP = '';
+            newIP = "";
             await loadHost();
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to update IP';
+            error = err instanceof Error ? err.message : "Failed to update IP";
         }
     }
 
@@ -196,7 +260,7 @@
             await api.updateConfiguredIP(host.id, host.ip_address_v4);
             await loadHost();
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to update IP';
+            error = err instanceof Error ? err.message : "Failed to update IP";
         }
     }
 
@@ -206,7 +270,10 @@
             await api.ignoreIPMismatch(host.id);
             await loadHost();
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to ignore IP mismatch';
+            error =
+                err instanceof Error
+                    ? err.message
+                    : "Failed to ignore IP mismatch";
         }
     }
 
@@ -216,7 +283,10 @@
             await api.dismissReactivation(host.id);
             await loadHost();
         } catch (err) {
-            error = err instanceof Error ? err.message : 'Failed to dismiss reactivation';
+            error =
+                err instanceof Error
+                    ? err.message
+                    : "Failed to dismiss reactivation";
         }
     }
 
@@ -225,10 +295,10 @@
         const previousStatus = host.status;
         try {
             await api.pauseHost(host.id);
-            host = { ...host, status: 'paused' };
+            host = { ...host, status: "paused" };
         } catch (err) {
             host = { ...host, status: previousStatus };
-            error = err instanceof Error ? err.message : 'Failed to pause host';
+            error = err instanceof Error ? err.message : "Failed to pause host";
         }
     }
 
@@ -237,29 +307,55 @@
         const previousStatus = host.status;
         try {
             await api.resumeHost(host.id);
-            host = { ...host, status: 'online' };
+            host = { ...host, status: "online" };
         } catch (err) {
             host = { ...host, status: previousStatus };
-            error = err instanceof Error ? err.message : 'Failed to resume host';
+            error =
+                err instanceof Error ? err.message : "Failed to resume host";
         }
     }
 
-    let updateAgentMessage = $state('');
+    const ramPct = $derived(
+        latestMetric && latestMetric.memory_total_bytes > 0
+            ? (latestMetric.memory_used_bytes /
+                  latestMetric.memory_total_bytes) *
+                  100
+            : null,
+    );
+    const diskPct = $derived(
+        latestMetric && latestMetric.disk_total_bytes > 0
+            ? (latestMetric.disk_used_bytes / latestMetric.disk_total_bytes) *
+                  100
+            : null,
+    );
+
+    function metricColor(pct: number | null): string {
+        if (pct === null) return "text-muted-foreground";
+        if (pct >= 90) return "text-danger";
+        if (pct >= 70) return "text-warning";
+        return "text-success";
+    }
+
+    let updateAgentMessage = $state("");
     let updateAgentMessageTimeout: ReturnType<typeof setTimeout> | null = null;
 
     async function handleUpdateAgent() {
         if (!host) return;
-        updateAgentMessage = '';
+        updateAgentMessage = "";
         try {
             await api.triggerAgentUpdate(host.id);
-            updateAgentMessage = 'Update requested';
+            updateAgentMessage = "Update requested";
         } catch (err: unknown) {
-            updateAgentMessage = err instanceof Error ? err.message : 'Failed to request update';
+            updateAgentMessage =
+                err instanceof Error ? err.message : "Failed to request update";
         }
         if (updateAgentMessageTimeout) clearTimeout(updateAgentMessageTimeout);
-        updateAgentMessageTimeout = setTimeout(() => { updateAgentMessage = ''; }, 4000);
+        updateAgentMessageTimeout = setTimeout(() => {
+            updateAgentMessage = "";
+        }, 4000);
     }
 
+    let copyErrorTimeout: ReturnType<typeof setTimeout> | null = null;
     let copyError = $state(false);
 
     async function handleCopy(text: string) {
@@ -267,18 +363,19 @@
             await navigator.clipboard.writeText(text);
         } catch {
             copyError = true;
-            setTimeout(() => copyError = false, 2000);
+            if (copyErrorTimeout) clearTimeout(copyErrorTimeout);
+            copyErrorTimeout = setTimeout(() => (copyError = false), 2000);
         }
     }
 
     function closeChangeIPModal() {
         showChangeIP = false;
-        newIP = '';
+        newIP = "";
     }
 </script>
 
 <svelte:head>
-    <title>{host?.display_name || 'Host'} - Watchflare</title>
+    <title>{host?.display_name || "Host"} - Watchflare</title>
 </svelte:head>
 
 {#if loading}
@@ -298,10 +395,15 @@
         onDelete={() => (showDeleteConfirm = true)}
         onRegenerateToken={() => (showRegenerateConfirm = true)}
         onChangeIP={() => (showChangeIP = true)}
-        onRename={() => { newHostName = host?.display_name || ''; showRename = true; }}
+        onRename={() => {
+            newHostName = host?.display_name || "";
+            showRename = true;
+        }}
         onPause={handlePause}
         onResume={handleResume}
-        onAlertRules={() => { showAlertRules = true; }}
+        onAlertRules={() => {
+            showAlertRules = true;
+        }}
         onUpdateAgent={handleUpdateAgent}
     />
     {#if updateAgentMessage}
@@ -309,19 +411,36 @@
     {/if}
 
     {#if regeneratedToken}
-        <div class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 space-y-3">
+        <div
+            class="mb-6 rounded-lg border border-warning bg-warning/10 p-4 space-y-3"
+        >
             <div class="flex items-center justify-between gap-4 flex-wrap">
-                <p class="text-sm font-medium text-warning">This token is valid for 24 hours and will not be displayed again. Make sure to copy it or use it now.</p>
+                <p class="text-sm font-medium text-warning">
+                    This token is valid for 24 hours and will not be displayed
+                    again. Make sure to copy it or use it now.
+                </p>
                 <div class="flex items-center gap-2 shrink-0">
                     <button
-                        onclick={() => { handleCopy(regeneratedToken); copiedToken = true; setTimeout(() => copiedToken = false, 2000); }}
+                        onclick={() => {
+                            handleCopy(regeneratedToken);
+                            copiedToken = true;
+                            setTimeout(() => (copiedToken = false), 2000);
+                        }}
                         disabled={copiedToken}
-                        class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60 {copyError ? 'text-destructive border-destructive/40' : 'text-foreground'}"
+                        class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60 {copyError
+                            ? 'text-destructive border-destructive/40'
+                            : 'text-foreground'}"
                     >
-                        {copiedToken ? 'Copied!' : copyError ? 'Copy failed' : 'Copy Token'}
+                        {copiedToken
+                            ? "Copied!"
+                            : copyError
+                              ? "Copy failed"
+                              : "Copy Token"}
                     </button>
                     <button
-                        onclick={() => { regeneratedToken = ''; }}
+                        onclick={() => {
+                            regeneratedToken = "";
+                        }}
                         class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                         Dismiss
@@ -349,11 +468,51 @@
         onDismissReactivation={handleDismissReactivation}
     />
 
+    <!-- Live metrics -->
+    <div class="flex flex-wrap gap-3 mb-4">
+        <div
+            class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
+        >
+            <span class="text-xs text-muted-foreground">CPU</span>
+            <span
+                class="text-sm font-semibold tabular-nums {metricColor(
+                    latestMetric?.cpu_usage_percent ?? null,
+                )}"
+                >{latestMetric
+                    ? formatPercent(latestMetric.cpu_usage_percent)
+                    : "—"}</span
+            >
+        </div>
+        <div
+            class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
+        >
+            <span class="text-xs text-muted-foreground">RAM</span>
+            <span
+                class="text-sm font-semibold tabular-nums {metricColor(ramPct)}"
+                >{latestMetric ? formatPercent(ramPct ?? 0) : "—"}</span
+            >
+        </div>
+        <div
+            class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
+        >
+            <span class="text-xs text-muted-foreground">Disk</span>
+            <span
+                class="text-sm font-semibold tabular-nums {metricColor(
+                    diskPct,
+                )}">{latestMetric ? formatPercent(diskPct ?? 0) : "—"}</span
+            >
+        </div>
+    </div>
+
     <!-- Tab Navigation -->
-    <div class="mb-6 flex gap-1 border-b">
+    <div
+        class="mb-6 flex gap-1 border-b overflow-x-auto overflow-y-clip no-scrollbar"
+    >
         <a
             href="/hosts/{hostId}"
-            class="px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px {isActiveTab('overview')
+            class="shrink-0 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px {isActiveTab(
+                'overview',
+            )
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}"
         >
@@ -361,7 +520,9 @@
         </a>
         <a
             href="/hosts/{hostId}/packages"
-            class="px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px {isActiveTab('packages')
+            class="shrink-0 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px {isActiveTab(
+                'packages',
+            )
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}"
         >
@@ -369,7 +530,9 @@
         </a>
         <a
             href="/hosts/{hostId}/incidents"
-            class="px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px {isActiveTab('incidents')
+            class="shrink-0 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px {isActiveTab(
+                'incidents',
+            )
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}"
         >
@@ -380,10 +543,14 @@
     {@render children()}
 
     <HostAlertRulesDrawer
-        hostId={hostId}
+        {hostId}
         open={showAlertRules}
-        onClose={() => { showAlertRules = false; }}
-        onSave={(hasActive) => { hasActiveAlertRules = hasActive; }}
+        onClose={() => {
+            showAlertRules = false;
+        }}
+        onSave={(hasActive) => {
+            hasActiveAlertRules = hasActive;
+        }}
     />
 {/if}
 
@@ -396,8 +563,12 @@
     confirmLabel="Delete Host"
     confirmVariant="destructive"
 >
-    <p class="text-sm text-muted-foreground mb-4">Are you sure you want to delete "{host?.display_name}"?</p>
-    <p class="text-sm font-medium text-destructive">This action cannot be undone.</p>
+    <p class="text-sm text-muted-foreground mb-4">
+        Are you sure you want to delete "{host?.display_name}"?
+    </p>
+    <p class="text-sm font-medium text-destructive">
+        This action cannot be undone.
+    </p>
 </ConfirmDialog>
 
 <ConfirmDialog
@@ -408,16 +579,28 @@
     confirmLabel="Regenerate"
 >
     <p class="text-sm text-muted-foreground">
-        This will generate a new registration token and set the host to pending until the agent
-        re-registers. Use the new token to run <code class="font-mono">watchflare-agent register</code>
+        This will generate a new registration token and set the host to pending
+        until the agent re-registers. Use the new token to run <code
+            class="font-mono">watchflare-agent register</code
+        >
         on the host.
     </p>
 </ConfirmDialog>
 
-<Modal open={showRename} onClose={() => { showRename = false; newHostName = ''; }}>
+<Modal
+    open={showRename}
+    onClose={() => {
+        showRename = false;
+        newHostName = "";
+    }}
+>
     <h3 class="text-lg font-semibold text-foreground mb-3">Rename Host</h3>
     <div class="mb-4">
-        <label for="newname" class="block text-sm font-medium text-foreground mb-2">New Name</label>
+        <label
+            for="newname"
+            class="block text-sm font-medium text-foreground mb-2"
+            >New Name</label
+        >
         <input
             id="newname"
             type="text"
@@ -428,7 +611,10 @@
     </div>
     <div class="flex gap-3 justify-end">
         <button
-            onclick={() => { showRename = false; newHostName = ''; }}
+            onclick={() => {
+                showRename = false;
+                newHostName = "";
+            }}
             class="rounded-lg border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
         >
             Cancel
@@ -444,9 +630,15 @@
 </Modal>
 
 <Modal open={showChangeIP} onClose={closeChangeIPModal}>
-    <h3 class="text-lg font-semibold text-foreground mb-3">Change Configured IP</h3>
+    <h3 class="text-lg font-semibold text-foreground mb-3">
+        Change Configured IP
+    </h3>
     <div class="mb-4">
-        <label for="newip" class="block text-sm font-medium text-foreground mb-2">New IP Address</label>
+        <label
+            for="newip"
+            class="block text-sm font-medium text-foreground mb-2"
+            >New IP Address</label
+        >
         <input
             id="newip"
             type="text"
