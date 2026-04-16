@@ -150,6 +150,7 @@ func (r *CollectorRegistry) registerLanguageUpdateCheckers() {
 		&NpmUpdateChecker{},
 		&PipUpdateChecker{},
 		&GemUpdateChecker{},
+		&ComposerUpdateChecker{},
 	)
 }
 
