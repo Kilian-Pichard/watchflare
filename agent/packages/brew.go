@@ -23,10 +23,11 @@ func (b *BrewCollector) Name() string {
 
 // IsAvailable checks if brew is available
 func (b *BrewCollector) IsAvailable() bool {
-	// Common brew locations (Apple Silicon and Intel Macs)
+	// Common brew locations
 	brewPaths := []string{
-		"/opt/homebrew/bin/brew", // Apple Silicon
-		"/usr/local/bin/brew",    // Intel Macs
+		"/opt/homebrew/bin/brew",              // Apple Silicon
+		"/usr/local/bin/brew",                 // Intel Macs
+		"/home/linuxbrew/.linuxbrew/bin/brew", // Linux
 	}
 
 	for _, path := range brewPaths {
