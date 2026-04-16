@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -49,16 +51,33 @@ func (c *ComposerCollector) Collect() ([]*Package, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, c.composerPath, "global", "show", "--format=json")
-	output, err := cmd.CombinedOutput()
+	cmd.Env = composerEnvWithHome()
+	output, err := cmd.Output()
 	if err != nil {
-		// Composer exits non-zero when no global packages are installed
-		if len(output) == 0 {
-			return []*Package{}, nil
-		}
-		return nil, fmt.Errorf("composer global show failed: %w (output: %s)", err, string(output))
+		// Composer exits non-zero when no global packages are installed (no composer.json).
+		// In that case stdout is empty or non-JSON — return empty list.
+		return []*Package{}, nil
 	}
 
 	return parseComposerJSON(output)
+}
+
+// composerEnvWithHome returns the environment for composer commands with COMPOSER_HOME
+// redirected to /tmp. When the service user has a non-writable home (e.g. /var/empty),
+// composer fails trying to access ~/.config/composer. Redirecting COMPOSER_HOME to a
+// writable temp directory prevents this.
+func composerEnvWithHome() []string {
+	const tmpDir = "/tmp/watchflare-composer"
+	_ = os.MkdirAll(tmpDir, 0700)
+
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "COMPOSER_HOME=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env, "COMPOSER_HOME="+tmpDir)
 }
 
 // parseComposerJSON parses the JSON output of "composer global show --format=json".
