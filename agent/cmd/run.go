@@ -39,11 +39,13 @@ func Run() {
 		logger.Fatal("configuration error", "error", err)
 	}
 
-	// Redirect logs to file if configured
+	// Apply log level from config (WATCHFLARE_DEBUG env var takes priority)
 	if cfg.LogFile != "" {
-		if err := logger.InitWithFile(cfg.LogFile); err != nil {
+		if err := logger.InitWithFile(cfg.LogFile, cfg.LogLevel); err != nil {
 			logger.Fatal("failed to open log file", "error", err)
 		}
+	} else {
+		logger.SetLevel(cfg.LogLevel)
 	}
 
 	// Ensure directories exist

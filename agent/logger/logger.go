@@ -111,32 +111,54 @@ func writeAttr(buf *bytes.Buffer, a slog.Attr) {
 	}
 }
 
-// logLevel returns INFO by default, DEBUG when WATCHFLARE_DEBUG is set.
-func logLevel() slog.Level {
+// parseLevel returns the slog.Level for a config string.
+// Priority: WATCHFLARE_DEBUG env var > cfgLevel > default (info).
+func parseLevel(cfgLevel string) slog.Level {
 	if os.Getenv("WATCHFLARE_DEBUG") != "" {
 		return slog.LevelDebug
 	}
-	return slog.LevelInfo
+	switch strings.ToLower(cfgLevel) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
 
 // Init initialises the global slog logger with the clean text handler.
 // Must be called once at startup before any log call.
 // If the WATCHFLARE_DEBUG environment variable is set, DEBUG level is enabled.
 func Init() {
-	slog.SetDefault(slog.New(newHandler(os.Stdout, logLevel())))
+	slog.SetDefault(slog.New(newHandler(os.Stdout, parseLevel(""))))
 }
 
 // InitWithFile redirects the global slog logger to write to path instead of stdout.
 // The file is opened in append mode and created if it does not exist.
-// This is called after loading config when log_file is set.
+// cfgLevel is the log_level value from config (e.g. "debug", "info").
 // The file handle is intentionally kept open for the lifetime of the process.
-func InitWithFile(path string) error {
+func InitWithFile(path string, cfgLevel string) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file %s: %w", path, err)
 	}
-	slog.SetDefault(slog.New(newHandler(f, logLevel())))
+	slog.SetDefault(slog.New(newHandler(f, parseLevel(cfgLevel))))
 	return nil
+}
+
+// SetLevel reconfigures the log level on the current handler without changing the writer.
+// Called after config is loaded when no log_file is set.
+// WATCHFLARE_DEBUG env var always takes priority over cfgLevel.
+func SetLevel(cfgLevel string) {
+	current := slog.Default().Handler()
+	if h, ok := current.(*handler); ok {
+		h.mu.Lock()
+		h.level = parseLevel(cfgLevel)
+		h.mu.Unlock()
+	}
 }
 
 // Fatal logs at ERROR level then exits with code 1.

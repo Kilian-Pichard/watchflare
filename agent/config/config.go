@@ -113,6 +113,10 @@ type Config struct {
 	// Log file path (optional — empty means stdout, captured by service manager)
 	LogFile string `toml:"log_file"`
 
+	// Log level: "debug", "info", "warn", "error" (default: "info")
+	// WATCHFLARE_DEBUG=1 env var overrides this to "debug"
+	LogLevel string `toml:"log_level"`
+
 	// Docker metrics (opt-in: requires Docker socket access)
 	DockerMetrics *bool `toml:"docker_metrics"` // Enable Docker container metrics (default: false)
 }
