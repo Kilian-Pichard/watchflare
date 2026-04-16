@@ -25,6 +25,7 @@ func NewRegistry() *CollectorRegistry {
 
 	// Register update checkers for installed package managers
 	registry.registerUpdateCheckers()
+	registry.registerLanguageUpdateCheckers()
 
 	return registry
 }
@@ -140,6 +141,18 @@ func (r *CollectorRegistry) registerUpdateCheckers() {
 			&BrewUpdateChecker{}, // Homebrew on macOS
 		)
 	}
+}
+
+// registerLanguageUpdateCheckers registers update checkers for language package managers.
+// These are cross-platform and self-disable via IsAvailable() if the tool is not installed.
+func (r *CollectorRegistry) registerLanguageUpdateCheckers() {
+	r.updateCheckers = append(r.updateCheckers,
+		&NpmUpdateChecker{},
+		&PnpmUpdateChecker{},
+		&PipUpdateChecker{},
+		&GemUpdateChecker{},
+		&ComposerUpdateChecker{},
+	)
 }
 
 // GetAvailableUpdateCheckers returns only update checkers whose tools are installed

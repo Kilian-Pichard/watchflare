@@ -66,6 +66,16 @@ func TestParsePnpmLine(t *testing.T) {
 			name:    "mypackage",
 			version: "",
 		},
+		{
+			// Summary line "1 package" — skip
+			input:   "1 package",
+			wantNil: true,
+		},
+		{
+			// Summary line "3 packages" — skip
+			input:   "3 packages",
+			wantNil: true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -32,6 +32,40 @@ func TestParseYarnNameVersion(t *testing.T) {
 	}
 }
 
+func TestParseYarnInfoLine(t *testing.T) {
+	tests := []struct {
+		input   string
+		wantNil bool
+		name    string
+		version string
+	}{
+		{`"typescript@6.0.2" has binaries:`, false, "typescript", "6.0.2"},
+		{`"@angular/cli@17.1.0" has binaries:`, false, "@angular/cli", "17.1.0"},
+		{`"some other info message"`, true, "", ""},
+		{`"noversion" has binaries:`, true, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			pkg := parseYarnInfoLine(tt.input)
+			if tt.wantNil {
+				if pkg != nil {
+					t.Errorf("expected nil, got %+v", pkg)
+				}
+				return
+			}
+			if pkg == nil {
+				t.Fatal("expected package, got nil")
+			}
+			if pkg.Name != tt.name {
+				t.Errorf("name: got %q, want %q", pkg.Name, tt.name)
+			}
+			if pkg.Version != tt.version {
+				t.Errorf("version: got %q, want %q", pkg.Version, tt.version)
+			}
+		})
+	}
+}
+
 func TestParseYarnTreeNode(t *testing.T) {
 	tests := []struct {
 		name    string

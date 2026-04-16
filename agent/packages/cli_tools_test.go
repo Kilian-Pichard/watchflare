@@ -57,6 +57,10 @@ func TestParseVersion(t *testing.T) {
 		{"terraform v1.6.4", "1.6.4"},
 		{`helm version.BuildInfo{Version:"v3.13.2"`, "3.13.2"},
 		{"cargo 1.74.0", "1.74.0"},
+		// X.Y format (e.g. jq)
+		{"jq-1.6", "1.6"},
+		{"jq-1.7", "1.7"},
+		{"jq-1.6\n", "1.6"},
 		// Edge cases
 		{"", ""},
 		{"no version here", ""},

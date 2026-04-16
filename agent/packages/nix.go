@@ -22,10 +22,17 @@ func (n *NixCollector) Name() string {
 	return "nix"
 }
 
-// IsAvailable checks if nix-env is available
+// IsAvailable checks if nix-env is available and accessible.
+// nix-env requires access to the Nix daemon socket — service users without
+// the required permissions will get "Permission denied" even if the binary exists.
 func (n *NixCollector) IsAvailable() bool {
 	nixEnvPath, err := exec.LookPath("nix-env")
 	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, nixEnvPath, "--query", "--installed").Run(); err != nil {
 		return false
 	}
 	n.nixEnvPath = nixEnvPath

@@ -17,12 +17,13 @@ type BrewUpdateChecker struct {
 	brewPath string
 }
 
-func (b *BrewUpdateChecker) Name() string { return "brew-outdated" }
+func (b *BrewUpdateChecker) Name() string { return "brew" }
 
 func (b *BrewUpdateChecker) IsAvailable() bool {
 	brewPaths := []string{
-		"/opt/homebrew/bin/brew", // Apple Silicon
-		"/usr/local/bin/brew",    // Intel Macs and Linux
+		"/opt/homebrew/bin/brew",              // Apple Silicon
+		"/usr/local/bin/brew",                 // Intel Macs
+		"/home/linuxbrew/.linuxbrew/bin/brew", // Linux
 	}
 	for _, path := range brewPaths {
 		if _, err := os.Stat(path); err == nil {

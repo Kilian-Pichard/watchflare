@@ -22,10 +22,18 @@ func (f *FlatpakCollector) Name() string {
 	return "flatpak"
 }
 
-// IsAvailable checks if flatpak is available
+// IsAvailable checks if flatpak is available and accessible.
+// flatpak requires a D-Bus session — service users without a session
+// will get "Permission denied" even if the binary exists.
 func (f *FlatpakCollector) IsAvailable() bool {
 	flatpakPath, err := exec.LookPath("flatpak")
 	if err != nil {
+		return false
+	}
+	// Probe with a quick non-destructive command to verify D-Bus access.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, flatpakPath, "list", "--app", "--columns=name").Run(); err != nil {
 		return false
 	}
 	f.flatpakPath = flatpakPath
