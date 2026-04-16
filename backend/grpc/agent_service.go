@@ -517,6 +517,15 @@ func (s *AgentServer) SendPackageInventory(ctx context.Context, req *pb.SendPack
 		"duration_ms", req.CollectionDurationMs,
 	)
 
+	// Bulk-mark packages from package managers that have update checkers as update_checked = true.
+	// This is done using a static list of checkable package managers so that packages
+	// not included in a delta (unchanged, up-to-date packages) are also marked correctly.
+	if err := database.DB.Model(&models.Package{}).
+		Where("host_id = ? AND package_manager IN ?", host.ID, models.CheckablePackageManagers).
+		Update("update_checked", true).Error; err != nil {
+		slog.Warn("failed to bulk-mark packages as update_checked", "host_id", host.ID, "error", err)
+	}
+
 	sse.GetBroker().BroadcastPackageInventoryUpdate(sse.PackageInventoryUpdate{
 		HostID:         host.ID,
 		CollectionType: req.InventoryType,

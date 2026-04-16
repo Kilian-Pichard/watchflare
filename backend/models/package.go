@@ -24,6 +24,23 @@ const (
 	PackageCollectionStatusPartial = "partial"
 )
 
+// CheckablePackageManagers is the static list of package managers that have
+// update checkers on the agent side. After any inventory, the backend bulk-marks
+// all packages belonging to these managers as update_checked = true.
+var CheckablePackageManagers = []string{
+	"dpkg",         // apt (Debian/Ubuntu)
+	"rpm",          // dnf/yum (Fedora/RHEL/CentOS)
+	"apk",          // apk (Alpine)
+	"pacman",       // pacman/checkupdates (Arch)
+	"brew-formula", // brew formulae (macOS)
+	"brew-cask",    // brew casks (macOS)
+	"npm",          // npm global packages
+	"pip",          // pip (Python)
+	"gem",          // gem (Ruby)
+	"composer",     // composer (PHP)
+	"pnpm-global",  // pnpm global packages
+}
+
 // Package represents current package state on a host
 type Package struct {
 	ID                int64      `gorm:"primaryKey" json:"id"`
@@ -38,6 +55,7 @@ type Package struct {
 	Description       string     `gorm:"type:varchar(100)" json:"description"`
 	AvailableVersion  string     `gorm:"type:varchar(100)" json:"available_version"`   // Empty if up to date
 	HasSecurityUpdate bool       `gorm:"not null;default:false" json:"has_security_update"`
+	UpdateChecked     bool       `gorm:"not null;default:false" json:"update_checked"` // True if an update checker covers this package manager
 	FirstSeen         time.Time  `gorm:"not null;default:now()" json:"first_seen"`
 	LastSeen          time.Time  `gorm:"not null;default:now()" json:"last_seen"`
 }

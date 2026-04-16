@@ -193,6 +193,7 @@ export interface Package {
   description: string;
   available_version: string | null;
   has_security_update: boolean;
+  update_checked: boolean;
   first_seen: string;
   last_seen: string;
 }

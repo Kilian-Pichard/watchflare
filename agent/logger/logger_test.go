@@ -148,20 +148,34 @@ func TestHandler_WithGroup_NoOp(t *testing.T) {
 	}
 }
 
-// --- logLevel ---
+// --- parseLevel ---
 
-func TestLogLevel_DefaultInfo(t *testing.T) {
+func TestParseLevel_DefaultInfo(t *testing.T) {
 	os.Unsetenv("WATCHFLARE_DEBUG")
-	if logLevel() != slog.LevelInfo {
-		t.Errorf("expected LevelInfo when WATCHFLARE_DEBUG unset")
+	if parseLevel("") != slog.LevelInfo {
+		t.Errorf("expected LevelInfo when WATCHFLARE_DEBUG unset and no cfgLevel")
 	}
 }
 
-func TestLogLevel_DebugWhenEnvSet(t *testing.T) {
+func TestParseLevel_DebugWhenEnvSet(t *testing.T) {
 	os.Setenv("WATCHFLARE_DEBUG", "1")
 	defer os.Unsetenv("WATCHFLARE_DEBUG")
-	if logLevel() != slog.LevelDebug {
+	if parseLevel("") != slog.LevelDebug {
 		t.Errorf("expected LevelDebug when WATCHFLARE_DEBUG set")
+	}
+}
+
+func TestParseLevel_CfgLevelDebug(t *testing.T) {
+	os.Unsetenv("WATCHFLARE_DEBUG")
+	if parseLevel("debug") != slog.LevelDebug {
+		t.Errorf("expected LevelDebug for cfgLevel=debug")
+	}
+}
+
+func TestParseLevel_CfgLevelWarn(t *testing.T) {
+	os.Unsetenv("WATCHFLARE_DEBUG")
+	if parseLevel("warn") != slog.LevelWarn {
+		t.Errorf("expected LevelWarn for cfgLevel=warn")
 	}
 }
 
@@ -171,7 +185,7 @@ func TestInitWithFile_WritesToFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
 
-	if err := InitWithFile(path); err != nil {
+	if err := InitWithFile(path, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -190,7 +204,7 @@ func TestInitWithFile_WritesToFile(t *testing.T) {
 }
 
 func TestInitWithFile_InvalidPath_ReturnsError(t *testing.T) {
-	err := InitWithFile("/nonexistent/path/test.log")
+	err := InitWithFile("/nonexistent/path/test.log", "")
 	if err == nil {
 		t.Fatal("expected error for invalid path, got nil")
 	}

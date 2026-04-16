@@ -141,7 +141,9 @@
                             ? "0"
                             : p.available_version
                               ? "1"
-                              : "2";
+                              : p.update_checked
+                                ? "2"
+                                : "3";
                     valA = statusOrder(a);
                     valB = statusOrder(b);
                     break;
@@ -734,10 +736,15 @@
                                 class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-500 border-amber-500/20"
                                 >Outdated</span
                             >
-                        {:else}
+                        {:else if pkg.update_checked}
                             <span
                                 class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-success/10 text-success border-success/20"
                                 >Up to date</span
+                            >
+                        {:else}
+                            <span
+                                class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground border-border"
+                                >Not checked</span
                             >
                         {/if}
                     </div>
@@ -973,10 +980,15 @@
                                             class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-500 border-amber-500/20"
                                             >Outdated</span
                                         >
-                                    {:else}
+                                    {:else if pkg.update_checked}
                                         <span
                                             class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-success/10 text-success border-success/20"
                                             >Up to date</span
+                                        >
+                                    {:else}
+                                        <span
+                                            class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground border-border"
+                                            >Not checked</span
                                         >
                                     {/if}
                                 </td>

@@ -20,12 +20,17 @@ type AptUpdateChecker struct {
 func (a *AptUpdateChecker) Name() string { return "apt" }
 
 func (a *AptUpdateChecker) IsAvailable() bool {
-	path, err := exec.LookPath("apt")
-	if err != nil {
-		return false
+	candidates := []string{
+		"/usr/bin/apt",
+		"/usr/local/bin/apt",
 	}
-	a.aptPath = path
-	return true
+	for _, p := range candidates {
+		if resolved, err := exec.LookPath(p); err == nil {
+			a.aptPath = resolved
+			return true
+		}
+	}
+	return false
 }
 
 func (a *AptUpdateChecker) PackageManagers() []string {

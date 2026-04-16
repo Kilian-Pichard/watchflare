@@ -21,10 +21,10 @@ func TestParsePipxVenv(t *testing.T) {
 				"metadata": map[string]interface{}{
 					"main_package": map[string]interface{}{
 						"package_version": "23.12.1",
+						"apps":            []interface{}{"black", "blackd"},
 					},
 					"python_version": "3.11.5",
 				},
-				"apps": []interface{}{"black", "blackd"},
 			},
 			wantName:    "black",
 			wantVersion: "23.12.1",

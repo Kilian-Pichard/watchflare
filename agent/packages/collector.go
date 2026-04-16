@@ -51,7 +51,7 @@ func CollectAll() ([]*Package, error) {
 		allPackages = append(allPackages, pkgs...)
 	}
 
-	// Enrich packages with update availability
+	// Enrich packages with update availability.
 	availableCheckers := registry.GetAvailableUpdateCheckers()
 	for _, checker := range availableCheckers {
 		slog.Debug("checking updates", "checker", checker.Name())
