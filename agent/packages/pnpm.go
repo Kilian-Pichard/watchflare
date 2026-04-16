@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -39,9 +40,11 @@ func (p *PnpmCollector) Collect() ([]*Package, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, p.pnpmPath, "list", "-g", "--depth", "0")
+	cmd.Env = pnpmEnvWithDirs()
+	cmd.Dir = "/tmp/watchflare-pnpm"
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pnpm list failed: %w", err)
+		return []*Package{}, nil
 	}
 
 	var packages []*Package
@@ -56,6 +59,26 @@ func (p *PnpmCollector) Collect() ([]*Package, error) {
 	}
 
 	return packages, nil
+}
+
+// pnpmEnvWithDirs returns the environment for pnpm commands with HOME and PNPM_HOME
+// redirected to /tmp. When the service user has a non-writable home (e.g. /var/empty),
+// pnpm fails trying to access ~/.local/share/pnpm.
+func pnpmEnvWithDirs() []string {
+	const tmpDir = "/tmp/watchflare-pnpm"
+	_ = os.MkdirAll(tmpDir, 0700)
+
+	env := make([]string, 0, len(os.Environ())+2)
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "HOME=") || strings.HasPrefix(e, "PNPM_HOME=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env,
+		"HOME="+tmpDir,
+		"PNPM_HOME="+tmpDir,
+	)
 }
 
 // parsePnpmLine parses a single line of "pnpm list -g --depth 0" output.
@@ -74,6 +97,11 @@ func parsePnpmLine(line string) *Package {
 		return nil
 	}
 	if strings.HasPrefix(line, "Legend:") {
+		return nil
+	}
+
+	// Skip summary lines like "1 package" or "3 packages"
+	if strings.HasSuffix(line, " package") || strings.HasSuffix(line, " packages") {
 		return nil
 	}
 

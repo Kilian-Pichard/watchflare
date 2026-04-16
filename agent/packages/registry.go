@@ -148,6 +148,7 @@ func (r *CollectorRegistry) registerUpdateCheckers() {
 func (r *CollectorRegistry) registerLanguageUpdateCheckers() {
 	r.updateCheckers = append(r.updateCheckers,
 		&NpmUpdateChecker{},
+		&PnpmUpdateChecker{},
 		&PipUpdateChecker{},
 		&GemUpdateChecker{},
 		&ComposerUpdateChecker{},
