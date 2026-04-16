@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -39,12 +40,34 @@ func (p *PipxCollector) Collect() ([]*Package, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, p.pipxPath, "list", "--json")
+	cmd.Env = pipxEnvWithDirs()
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("pipx list failed: %w", err)
 	}
 
 	return parsePipxOutput(output)
+}
+
+// pipxEnvWithDirs returns the environment for pipx commands with HOME and PIPX_HOME
+// redirected to /tmp. When the service user has a non-writable home (e.g. /var/empty),
+// pipx fails trying to access ~/.local/share/pipx. Redirecting both HOME and PIPX_HOME
+// to a writable temp directory prevents this.
+func pipxEnvWithDirs() []string {
+	const tmpDir = "/tmp/watchflare-pipx"
+	_ = os.MkdirAll(tmpDir, 0700)
+
+	env := make([]string, 0, len(os.Environ())+2)
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "HOME=") || strings.HasPrefix(e, "PIPX_HOME=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env,
+		"HOME="+tmpDir,
+		"PIPX_HOME="+tmpDir,
+	)
 }
 
 // parsePipxOutput parses the JSON output of "pipx list --json".
@@ -73,23 +96,22 @@ func parsePipxVenv(appName string, venvData map[string]interface{}) *Package {
 	version := ""
 	pythonVersion := ""
 
+	var commands []string
 	if metadata, ok := venvData["metadata"].(map[string]interface{}); ok {
 		if mainPkg, ok := metadata["main_package"].(map[string]interface{}); ok {
 			version, _ = mainPkg["package_version"].(string)
 			if appName == "" {
 				appName, _ = mainPkg["package"].(string)
 			}
-		}
-		pythonVersion, _ = metadata["python_version"].(string)
-	}
-
-	var commands []string
-	if apps, ok := venvData["apps"].([]interface{}); ok {
-		for _, app := range apps {
-			if appStr, ok := app.(string); ok {
-				commands = append(commands, appStr)
+			if apps, ok := mainPkg["apps"].([]interface{}); ok {
+				for _, app := range apps {
+					if appStr, ok := app.(string); ok {
+						commands = append(commands, appStr)
+					}
+				}
 			}
 		}
+		pythonVersion, _ = metadata["python_version"].(string)
 	}
 
 	var description string
