@@ -6,12 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
 
 const yarnTimeout = 30 * time.Second
+
+// yarnInfoRegex matches the package@version string from yarn info events.
+// Yarn 1.x outputs: {"type":"info","data":"\"typescript@6.0.2\" has binaries:"}
+var yarnInfoRegex = regexp.MustCompile(`^"([^"]+)" has binaries:`)
 
 // YarnCollector collects globally installed Yarn packages
 type YarnCollector struct {
@@ -40,6 +46,8 @@ func (y *YarnCollector) Collect() ([]*Package, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, y.yarnPath, "global", "list", "--json")
+	cmd.Env = yarnEnvWithDirs()
+	cmd.Dir = "/tmp/watchflare-yarn"
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("yarn global list failed: %w", err)
@@ -56,16 +64,24 @@ func (y *YarnCollector) Collect() ([]*Package, error) {
 		if err := json.Unmarshal(line, &data); err != nil {
 			continue
 		}
-		if data["type"] != "tree" {
-			continue
-		}
-		dataObj, _ := data["data"].(map[string]interface{})
-		trees, _ := dataObj["trees"].([]interface{})
-		for _, tree := range trees {
-			if treeMap, ok := tree.(map[string]interface{}); ok {
-				if pkg := parseYarnTreeNode(treeMap); pkg != nil {
-					packages = append(packages, pkg)
+		switch data["type"] {
+		case "tree":
+			// Older yarn 1.x format: one tree event with all packages.
+			dataObj, _ := data["data"].(map[string]interface{})
+			trees, _ := dataObj["trees"].([]interface{})
+			for _, tree := range trees {
+				if treeMap, ok := tree.(map[string]interface{}); ok {
+					if pkg := parseYarnTreeNode(treeMap); pkg != nil {
+						packages = append(packages, pkg)
+					}
 				}
+			}
+		case "info":
+			// Yarn 1.22+ format: one info event per package.
+			// data: "\"typescript@6.0.2\" has binaries:"
+			infoStr, _ := data["data"].(string)
+			if pkg := parseYarnInfoLine(infoStr); pkg != nil {
+				packages = append(packages, pkg)
 			}
 		}
 	}
@@ -83,6 +99,45 @@ func parseYarnTreeNode(node map[string]interface{}) *Package {
 		return nil
 	}
 	name, version := parseYarnNameVersion(nameStr)
+	return &Package{
+		Name:           name,
+		Version:        version,
+		PackageManager: "yarn-global",
+		Source:         "npmjs.com",
+	}
+}
+
+// yarnEnvWithDirs returns the environment for yarn commands with HOME and
+// YARN_CACHE_FOLDER redirected to /tmp. When the service user has a non-writable
+// home (e.g. /var/empty), yarn fails trying to read ~/.yarnrc.
+func yarnEnvWithDirs() []string {
+	const tmpDir = "/tmp/watchflare-yarn"
+	_ = os.MkdirAll(tmpDir, 0700)
+
+	env := make([]string, 0, len(os.Environ())+2)
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "HOME=") || strings.HasPrefix(e, "YARN_CACHE_FOLDER=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env,
+		"HOME="+tmpDir,
+		"YARN_CACHE_FOLDER="+tmpDir,
+	)
+}
+
+// parseYarnInfoLine parses a yarn 1.22+ info line into a Package.
+// Input: "\"typescript@6.0.2\" has binaries:"
+func parseYarnInfoLine(infoStr string) *Package {
+	matches := yarnInfoRegex.FindStringSubmatch(infoStr)
+	if len(matches) < 2 {
+		return nil
+	}
+	name, version := parseYarnNameVersion(matches[1])
+	if name == "" || version == "" {
+		return nil
+	}
 	return &Package{
 		Name:           name,
 		Version:        version,
