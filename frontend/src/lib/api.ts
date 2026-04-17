@@ -14,6 +14,8 @@ import type {
   GetPackageStatsResponse,
   GetPackageCollectionsResponse,
   GetPackageHistoryResponse,
+  ListGlobalPackagesResponse,
+  ListGlobalPackagesParams,
   CurrentUserResponse,
   MetricsQueryParams,
   User,
@@ -509,6 +511,21 @@ export async function getPackageHistory(
   return apiRequest<GetPackageHistoryResponse>(
     `/hosts/${hostId}/packages/history${query}`,
   );
+}
+
+export async function listAllPackages(
+  params: ListGlobalPackagesParams = {},
+): Promise<ListGlobalPackagesResponse> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.offset !== undefined) qs.set("offset", String(params.offset));
+  if (params.sort_by) qs.set("sort_by", params.sort_by);
+  if (params.sort_order) qs.set("sort_order", params.sort_order);
+  for (const s of params.status ?? []) qs.append("status", s);
+  for (const m of params.manager ?? []) qs.append("manager", m);
+  const query = qs.toString() ? "?" + qs.toString() : "";
+  return apiRequest<ListGlobalPackagesResponse>(`/packages${query}`);
 }
 
 export async function getLatestAgentVersion(): Promise<{

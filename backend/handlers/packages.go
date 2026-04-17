@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 	"watchflare/backend/cache"
 	"watchflare/backend/database"
@@ -211,6 +213,190 @@ func TriggerPackageCollect(c *gin.Context) {
 	slog.Info("package collect command enqueued", "host_id", hostID, "command_id", cmdID)
 
 	c.JSON(http.StatusAccepted, gin.H{"message": "collection requested", "command_id": cmdID})
+}
+
+// globalPackage is the response shape for ListAllPackages — one row per (name, package_manager).
+type globalPackage struct {
+	Name              string `json:"name"`
+	PackageManager    string `json:"package_manager"`
+	HostCount         int64  `json:"host_count"`
+	AvailableVersion  string `json:"available_version"`
+	HasSecurityUpdate bool   `json:"has_security_update"`
+	UpdateChecked     bool   `json:"update_checked"`
+}
+
+// ListAllPackages returns a deduplicated view of all packages across all hosts,
+// grouped by (name, package_manager) with aggregated status.
+// GET /api/v1/packages
+func ListAllPackages(c *gin.Context) {
+	q := c.Query("q")
+	statusFilters := c.QueryArray("status")
+	managerFilters := c.QueryArray("manager")
+
+	limitStr := c.DefaultQuery("limit", "50")
+	offsetStr := c.DefaultQuery("offset", "0")
+	sortBy := c.DefaultQuery("sort_by", "name")
+	sortOrder := c.DefaultQuery("sort_order", "asc")
+
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(offsetStr)
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "asc"
+	}
+
+	// ORDER BY — references aliases from the SELECT, safe allowlist
+	var orderClause string
+	switch sortBy {
+	case "host_count":
+		orderClause = "host_count " + sortOrder
+	case "manager":
+		orderClause = "package_manager " + sortOrder + ", name ASC"
+	case "available_version":
+		orderClause = "available_version " + sortOrder + ", name ASC"
+	case "status":
+		orderClause = fmt.Sprintf(
+			"CASE WHEN BOOL_OR(has_security_update) THEN 0 WHEN MAX(available_version) != '' THEN 1 WHEN BOOL_AND(update_checked) THEN 2 ELSE 3 END %s, name ASC",
+			sortOrder,
+		)
+	default:
+		orderClause = "name " + sortOrder
+	}
+
+	// WHERE conditions — user values always via ? placeholders
+	whereClauses := []string{"1=1"}
+	var whereArgs []interface{}
+	if q != "" {
+		whereClauses = append(whereClauses, "name ILIKE ?")
+		whereArgs = append(whereArgs, "%"+q+"%")
+	}
+	if len(managerFilters) > 0 {
+		whereClauses = append(whereClauses, "package_manager IN ?")
+		whereArgs = append(whereArgs, managerFilters)
+	}
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	// HAVING conditions for status filters — OR semantics, multiple statuses allowed
+	var havingParts []string
+	for _, s := range statusFilters {
+		switch s {
+		case "security":
+			havingParts = append(havingParts, "BOOL_OR(has_security_update) = true")
+		case "outdated":
+			havingParts = append(havingParts, "(MAX(available_version) != '' AND NOT BOOL_OR(has_security_update))")
+		case "up_to_date":
+			havingParts = append(havingParts, "(MAX(available_version) = '' AND BOOL_AND(update_checked) = true)")
+		case "not_checked":
+			havingParts = append(havingParts, "(MAX(available_version) = '' AND BOOL_AND(update_checked) = false)")
+		}
+	}
+	var havingSQL string
+	if len(havingParts) > 0 {
+		havingSQL = "HAVING " + strings.Join(havingParts, " OR ")
+	}
+
+	// Global stats — always unfiltered, used for the stats cards at the top of the page
+	type statsRow struct {
+		TotalPackages int64
+		OutdatedCount int64
+		SecurityCount int64
+	}
+	var stats statsRow
+	statsSQL := `
+		SELECT
+			COUNT(*) AS total_packages,
+			COUNT(*) FILTER (WHERE available_version != '') AS outdated_count,
+			COUNT(*) FILTER (WHERE has_security_update) AS security_count
+		FROM (
+			SELECT
+				MAX(available_version) AS available_version,
+				BOOL_OR(has_security_update) AS has_security_update
+			FROM packages
+			GROUP BY name, package_manager
+		) AS sub`
+	if err := database.DB.Raw(statsSQL).Scan(&stats).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch package stats"})
+		return
+	}
+
+	// Hosts with at least one outdated or security package — unfiltered
+	var outdatedHostsCount int64
+	if err := database.DB.Model(&models.Package{}).
+		Distinct("host_id").
+		Where("available_version != '' OR has_security_update = true").
+		Count(&outdatedHostsCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count outdated hosts"})
+		return
+	}
+
+	// Available managers — unfiltered, used to populate the manager filter dropdown
+	var availableManagers []string
+	if err := database.DB.Model(&models.Package{}).
+		Distinct("package_manager").
+		Order("package_manager").
+		Pluck("package_manager", &availableManagers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch managers"})
+		return
+	}
+	if availableManagers == nil {
+		availableManagers = []string{}
+	}
+
+	// Filtered count for pagination
+	countSQL := fmt.Sprintf(`
+		SELECT COUNT(*) FROM (
+			SELECT name
+			FROM packages
+			WHERE %s
+			GROUP BY name, package_manager
+			%s
+		) AS sub`, whereSQL, havingSQL)
+	var totalCount int64
+	if err := database.DB.Raw(countSQL, whereArgs...).Scan(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count packages"})
+		return
+	}
+
+	// Paginated results
+	mainSQL := fmt.Sprintf(`
+		SELECT
+			name,
+			package_manager,
+			COUNT(DISTINCT host_id) AS host_count,
+			MAX(available_version) AS available_version,
+			BOOL_OR(has_security_update) AS has_security_update,
+			BOOL_AND(update_checked) AS update_checked
+		FROM packages
+		WHERE %s
+		GROUP BY name, package_manager
+		%s
+		ORDER BY %s
+		LIMIT ? OFFSET ?`, whereSQL, havingSQL, orderClause)
+
+	mainArgs := append(whereArgs, limit, offset)
+
+	packages := []globalPackage{}
+	if err := database.DB.Raw(mainSQL, mainArgs...).Scan(&packages).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch packages"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"packages":             packages,
+		"total_count":          totalCount,
+		"total_packages":       stats.TotalPackages,
+		"outdated_count":       stats.OutdatedCount,
+		"security_count":       stats.SecurityCount,
+		"outdated_hosts_count": outdatedHostsCount,
+		"available_managers":   availableManagers,
+		"limit":                limit,
+		"offset":               offset,
+	})
 }
 
 // GetPackageStats returns aggregated package statistics
