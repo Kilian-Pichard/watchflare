@@ -10,7 +10,6 @@ export const COLLECTIONS_PER_PAGE = 10;
 
 // Polling intervals (ms)
 export const DROPPED_METRICS_POLL_INTERVAL = 3_600_000;  // 1 hour
-export const TREND_24H_POLL_INTERVAL = 300_000;           // 5 minutes
 export const AGENT_STATUS_POLL_INTERVAL = 5_000;          // 5 seconds
 
 // Debounce (ms)

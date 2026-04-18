@@ -5,6 +5,7 @@ import type {
   RegenerateTokenResponse,
   GetHostResponse,
   ListHostsResponse,
+  HostStatsResponse,
   GetMetricsResponse,
   GetAggregatedMetricsResponse,
   GetDroppedMetricsResponse,
@@ -276,6 +277,10 @@ export async function listHosts(params?: {
   return apiRequest<ListHostsResponse>(`/hosts${query}`, {
     signal: params?.signal,
   });
+}
+
+export async function getHostStats(): Promise<HostStatsResponse> {
+  return apiRequest<HostStatsResponse>('/hosts/stats');
 }
 
 export async function getHost(id: string): Promise<GetHostResponse> {

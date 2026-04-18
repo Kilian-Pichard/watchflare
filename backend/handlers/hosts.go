@@ -384,6 +384,33 @@ func TriggerAgentUpdate(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"message": "update requested", "command_id": cmdID})
 }
 
+// GetHostStats returns host counts grouped by status.
+func GetHostStats(c *gin.Context) {
+	var result struct {
+		Total      int `json:"total"`
+		Online     int `json:"online"`
+		Offline    int `json:"offline"`
+		Pending    int `json:"pending"`
+		Paused     int `json:"paused"`
+		IPMismatch int `json:"ip_mismatch"`
+	}
+	err := database.DB.Raw(`
+		SELECT
+			COUNT(*) FILTER (WHERE status != 'pending') AS total,
+			COUNT(*) FILTER (WHERE status = 'online')   AS online,
+			COUNT(*) FILTER (WHERE status = 'offline')  AS offline,
+			COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
+			COUNT(*) FILTER (WHERE status = 'paused')   AS paused,
+			COUNT(*) FILTER (WHERE status = 'ip_mismatch') AS ip_mismatch
+		FROM hosts
+	`).Scan(&result).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch host stats"})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 // GetDroppedMetrics returns summary of dropped metrics for the last 24 hours
 func GetDroppedMetrics(c *gin.Context) {
 	alerts, err := services.GetDroppedMetrics()

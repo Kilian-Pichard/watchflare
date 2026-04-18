@@ -232,6 +232,7 @@ func setupRouter() *gin.Engine {
 		hostGroup.GET("", handlers.ListHosts)
 		hostGroup.GET("/events", handlers.HostEvents)
 		hostGroup.GET("/:id/events", handlers.HostDetailEvents)
+		hostGroup.GET("/stats", handlers.GetHostStats)
 		hostGroup.GET("/dropped-metrics", handlers.GetDroppedMetrics)
 		hostGroup.GET("/metrics/aggregated", handlers.GetAggregatedMetrics)
 

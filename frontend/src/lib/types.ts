@@ -336,6 +336,15 @@ export interface ListHostsResponse {
   per_page: number;
 }
 
+export interface HostStatsResponse {
+  total: number;       // all hosts excluding pending
+  online: number;
+  offline: number;
+  pending: number;
+  paused: number;
+  ip_mismatch: number;
+}
+
 export interface GetMetricsResponse {
   metrics: Metric[];
 }

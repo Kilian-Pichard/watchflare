@@ -8,9 +8,6 @@
         avgCPU: number;
         avgMemory: number;
         avgDisk: number;
-        cpuTrend: number;
-        memoryTrend: number;
-        diskTrend: number;
     }
 
     const { stats }: { stats: Stats } = $props();

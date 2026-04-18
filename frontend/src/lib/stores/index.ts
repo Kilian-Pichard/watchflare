@@ -20,6 +20,7 @@ export { userStore, currentUser, userLoading } from './user';
 // Hosts store
 export {
 	hostsStore,
+	hostStatsStore,
 	hosts,
 	onlineHosts,
 	offlineHosts,
@@ -33,7 +34,6 @@ export { metricsStore, metricsData, latestMetrics } from './metrics';
 export {
 	aggregatedStore,
 	aggregatedMetrics,
-	aggregatedMetrics24h,
 	currentTimeRange,
 	dashboardStats
 } from './aggregated';

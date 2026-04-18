@@ -1,15 +1,13 @@
 import { writable, derived } from 'svelte/store';
 import type { AggregatedMetric, TimeRange } from '$lib/types';
 import { getAggregatedMetrics } from '$lib/api';
-import { hostsStore } from './hosts';
+import { hostStatsStore } from './hosts';
 import { logger } from '$lib/utils';
 import { MAX_AGGREGATED_POINTS } from '$lib/constants';
 
 interface AggregatedState {
 	// Current time range metrics (for charts)
 	metrics: AggregatedMetric[];
-	// 24h metrics for trend calculation
-	metrics24h: AggregatedMetric[];
 	// Latest real-time metric (for stats cards, independent of time range)
 	latestMetric: AggregatedMetric | null;
 	// Current time range
@@ -21,7 +19,6 @@ interface AggregatedState {
 function createAggregatedStore() {
 	const { subscribe, set, update } = writable<AggregatedState>({
 		metrics: [],
-		metrics24h: [],
 		latestMetric: null,
 		timeRange: '1h',
 		loading: false,
@@ -68,20 +65,6 @@ function createAggregatedStore() {
 	return {
 		subscribe,
 		load,
-
-		// Load 24h metrics for trend calculation
-		async load24h(): Promise<void> {
-			try {
-				const data = await getAggregatedMetrics('24h');
-
-				update(state => ({
-					...state,
-					metrics24h: data.metrics || []
-				}));
-			} catch (err) {
-				logger.error('Failed to load 24h aggregated metrics for trends:', err);
-			}
-		},
 
 		// Update metrics (add new point from SSE)
 		addMetricPoint(metric: AggregatedMetric): void {
@@ -134,7 +117,6 @@ function createAggregatedStore() {
 		clear(): void {
 			set({
 				metrics: [],
-				metrics24h: [],
 				latestMetric: null,
 				timeRange: '1h',
 				loading: false,
@@ -148,19 +130,16 @@ export const aggregatedStore = createAggregatedStore();
 
 // Derived stores for convenience
 export const aggregatedMetrics = derived(aggregatedStore, $store => $store.metrics);
-export const aggregatedMetrics24h = derived(aggregatedStore, $store => $store.metrics24h);
 export const currentTimeRange = derived(aggregatedStore, $store => $store.timeRange);
 
 // Derived store for computed stats (memoized to avoid recalculation on irrelevant store changes)
 let cachedStats: ReturnType<typeof computeStats> | null = null;
 let cachedLastPoint: AggregatedMetric | null = null;
-let cachedFirstPoint24h: AggregatedMetric | null = null;
 let cachedOnlineCount = -1;
 let cachedTotalCount = -1;
 
 function computeStats(
 	lastPoint: AggregatedMetric | null,
-	firstPoint24h: AggregatedMetric | null,
 	totalHosts: number,
 	onlineHosts: number
 ) {
@@ -170,60 +149,27 @@ function computeStats(
 	const totalDisk = lastPoint?.disk_total_bytes || 0;
 	const usedDisk = lastPoint?.disk_used_bytes || 0;
 
-	// Calculate trends (comparing current to 24h ago)
-	const cpuTrend =
-		firstPoint24h && firstPoint24h.cpu_usage_percent > 0
-			? ((avgCPU - firstPoint24h.cpu_usage_percent) / firstPoint24h.cpu_usage_percent) * 100
-			: 0;
-
-	const memoryPercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
-	const compareMemoryPercent =
-		firstPoint24h && firstPoint24h.memory_total_bytes > 0
-			? (firstPoint24h.memory_used_bytes / firstPoint24h.memory_total_bytes) * 100
-			: memoryPercent;
-	const memoryTrend =
-		compareMemoryPercent > 0
-			? ((memoryPercent - compareMemoryPercent) / compareMemoryPercent) * 100
-			: 0;
-
-	const diskPercent = totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0;
-	const compareDiskPercent =
-		firstPoint24h && firstPoint24h.disk_total_bytes > 0
-			? (firstPoint24h.disk_used_bytes / firstPoint24h.disk_total_bytes) * 100
-			: diskPercent;
-	const diskTrend =
-		compareDiskPercent > 0
-			? ((diskPercent - compareDiskPercent) / compareDiskPercent) * 100
-			: 0;
-
 	return {
 		totalHosts,
 		onlineHosts,
 		offlineHosts: totalHosts - onlineHosts,
 		avgCPU,
-		avgMemory: memoryPercent,
-		avgDisk: diskPercent,
+		avgMemory: totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0,
+		avgDisk: totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0,
 		totalMemory,
 		usedMemory,
 		totalDisk,
 		usedDisk,
-		cpuTrend: isFinite(cpuTrend) ? cpuTrend : 0,
-		memoryTrend: isFinite(memoryTrend) ? memoryTrend : 0,
-		diskTrend: isFinite(diskTrend) ? diskTrend : 0
 	};
 }
 
 export const dashboardStats = derived(
-	[aggregatedStore, hostsStore],
-	([$aggregated, $hosts]) => {
+	[aggregatedStore, hostStatsStore],
+	([$aggregated, $hostStats]) => {
 		// Use latestMetric (real-time SSE) for stats cards, independent of time range
 		const lastPoint = $aggregated.latestMetric;
-		const firstPoint24h =
-			$aggregated.metrics24h.length > 0 ? $aggregated.metrics24h[0] : null;
-
-		const activeHosts = $hosts.hosts.filter(s => s.host.status !== 'pending');
-		const onlineCount = activeHosts.filter(s => s.host.status === 'online').length;
-		const totalCount = activeHosts.length;
+		const onlineCount = $hostStats.online;
+		const totalCount = $hostStats.total;
 
 		// Skip recalculation if inputs haven't changed (compare by value for SSE objects)
 		if (
@@ -231,7 +177,6 @@ export const dashboardStats = derived(
 			lastPoint?.timestamp === cachedLastPoint?.timestamp &&
 			lastPoint?.cpu_usage_percent === cachedLastPoint?.cpu_usage_percent &&
 			lastPoint?.memory_used_bytes === cachedLastPoint?.memory_used_bytes &&
-			firstPoint24h?.timestamp === cachedFirstPoint24h?.timestamp &&
 			onlineCount === cachedOnlineCount &&
 			totalCount === cachedTotalCount
 		) {
@@ -239,10 +184,9 @@ export const dashboardStats = derived(
 		}
 
 		cachedLastPoint = lastPoint;
-		cachedFirstPoint24h = firstPoint24h;
 		cachedOnlineCount = onlineCount;
 		cachedTotalCount = totalCount;
-		cachedStats = computeStats(lastPoint, firstPoint24h, totalCount, onlineCount);
+		cachedStats = computeStats(lastPoint, totalCount, onlineCount);
 		return cachedStats;
 	}
 );

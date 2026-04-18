@@ -2,14 +2,11 @@
     import { onMount, onDestroy } from "svelte";
     import { slide } from "svelte/transition";
     import { formatPercent, handleSSEReactivation, logger } from "$lib/utils";
-    import {
-        DROPPED_METRICS_POLL_INTERVAL,
-        TREND_24H_POLL_INTERVAL,
-    } from "$lib/constants";
+    import { DROPPED_METRICS_POLL_INTERVAL } from "$lib/constants";
     import {
         userStore,
         currentUser,
-        hostsStore,
+        hostStatsStore,
         aggregatedStore,
         aggregatedMetrics,
         currentTimeRange,
@@ -23,7 +20,7 @@
     import DroppedMetricsAlert from "$lib/components/dashboard/DroppedMetricsAlert.svelte";
     import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
     import { ChevronUp, ChevronDown } from "lucide-svelte";
-    import type { SSEEvent, TimeRange, HostUpdateEvent, AggregatedMetricsUpdateEvent } from "$lib/types";
+    import type { SSEEvent, TimeRange, AggregatedMetricsUpdateEvent } from "$lib/types";
 
     // SSE unsubscribe function
     let sseUnsubscribe: (() => void) | null = null;
@@ -51,12 +48,11 @@
                 (userTimeRange as string) === "6h" ? "12h" : userTimeRange;
             aggregatedStore.setTimeRange(migratedTimeRange);
 
-            // Load hosts (for stats) and aggregated metrics in parallel
+            // Load host counts and aggregated metrics in parallel
             await Promise.all([
-                hostsStore.load(),
+                hostStatsStore.load(),
                 alertsStore.load(),
                 aggregatedStore.load(migratedTimeRange),
-                aggregatedStore.load24h(),
             ]);
         } catch (err) {
             logger.error("Failed to load data:", err);
@@ -74,8 +70,7 @@
         handleSSEReactivation(event);
 
         if (event.type === "host_update") {
-            const update = event.data as HostUpdateEvent;
-            hostsStore.updateStatus(update.id, update.status, update.last_seen);
+            hostStatsStore.load();
         } else if (event.type === "aggregated_metrics_update") {
             aggregatedStore.addMetricPoint(event.data as AggregatedMetricsUpdateEvent);
         }
@@ -92,15 +87,8 @@
             DROPPED_METRICS_POLL_INTERVAL,
         );
 
-        // Refresh 24h metrics for trend calculation every 5 minutes
-        const trend24hInterval = setInterval(
-            () => aggregatedStore.load24h(),
-            TREND_24H_POLL_INTERVAL,
-        );
-
         return () => {
             clearInterval(droppedMetricsInterval);
-            clearInterval(trend24hInterval);
         };
     });
 
