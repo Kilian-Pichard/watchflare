@@ -5,7 +5,7 @@ export const MAX_AGGREGATED_POINTS = 200;
 
 // Pagination
 export const HOSTS_PER_PAGE = 20;
-export const PACKAGES_PER_PAGE = 50;
+export const PACKAGES_PER_PAGE = 25;
 export const COLLECTIONS_PER_PAGE = 10;
 
 // Polling intervals (ms)

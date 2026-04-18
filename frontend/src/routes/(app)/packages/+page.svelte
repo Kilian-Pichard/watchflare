@@ -20,7 +20,7 @@
         Server,
     } from "lucide-svelte";
 
-    const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
+    const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
     type StatusFilter = GlobalPackageStatus;
     const STATUS_LABELS: Record<StatusFilter, string> = {
@@ -33,6 +33,7 @@
     // Data
     let packages: GlobalPackage[] = $state([]);
     let totalCount = $state(0);
+    let totalPages = $state(1);
     let totalPackages = $state(0);
     let outdatedCount = $state(0);
     let securityCount = $state(0);
@@ -58,7 +59,6 @@
     let offset = $state(0);
 
     const currentPage = $derived(Math.floor(offset / limit) + 1);
-    const totalPages = $derived(Math.max(1, Math.ceil(totalCount / limit)));
     const isStatusFiltered = $derived(selectedStatuses.size > 0);
     const isManagerFiltered = $derived(selectedManagers.size > 0);
     const hasActiveFilters = $derived(
@@ -99,7 +99,8 @@
                 sort_order: sortOrder,
             });
             packages = resp.packages ?? [];
-            totalCount = resp.total_count ?? 0;
+            totalCount = resp.pagination?.total ?? 0;
+            totalPages = resp.pagination?.pages ?? 1;
             totalPackages = resp.total_packages ?? 0;
             outdatedCount = resp.outdated_count ?? 0;
             securityCount = resp.security_count ?? 0;

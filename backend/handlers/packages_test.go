@@ -68,7 +68,8 @@ func TestGetHostPackages_ReturnsEmptyList(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NotNil(t, resp["packages"])
-	assert.Equal(t, float64(0), resp["total_count"])
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(0), pagination["total"])
 }
 
 func TestGetHostPackages_LimitClamped(t *testing.T) {
@@ -80,7 +81,7 @@ func TestGetHostPackages_LimitClamped(t *testing.T) {
 
 	host, _, _, _ := services.CreateAgent("pkg-host", "10.0.0.1", false)
 
-	// limit=0 → clamped to 1000
+	// limit=0 → clamped to default 25
 	req, _ := http.NewRequest("GET", fmt.Sprintf("/hosts/%s/packages?limit=0", host.ID), nil)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
@@ -88,7 +89,8 @@ func TestGetHostPackages_LimitClamped(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.Equal(t, float64(1000), resp["limit"])
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(25), pagination["limit"])
 }
 
 func TestGetHostPackageHistory_InvalidChangeType(t *testing.T) {
@@ -148,7 +150,8 @@ func TestGetHostPackageCollections_OffsetClamped(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.Equal(t, float64(0), resp["offset"])
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(1), pagination["page"])
 }
 
 func TestGetPackageStats_ReturnsStats(t *testing.T) {
@@ -204,9 +207,10 @@ func TestListAllPackages_Empty(t *testing.T) {
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, float64(0), resp["total_packages"])
-	assert.Equal(t, float64(0), resp["total_count"])
 	assert.Equal(t, float64(0), resp["outdated_count"])
 	assert.Equal(t, float64(0), resp["security_count"])
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(0), pagination["total"])
 	packages := resp["packages"].([]interface{})
 	assert.Len(t, packages, 0)
 }
@@ -243,7 +247,8 @@ func TestListAllPackages_DeduplicatesAcrossHosts(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 
 	// 2 distinct (name, package_manager) pairs
-	assert.Equal(t, float64(2), resp["total_count"])
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(2), pagination["total"])
 	packages := resp["packages"].([]interface{})
 	assert.Len(t, packages, 2)
 
@@ -310,7 +315,8 @@ func TestListAllPackages_StatusFilter(t *testing.T) {
 			assert.Equal(t, http.StatusOK, w.Code)
 			var resp map[string]interface{}
 			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-			assert.Equal(t, tt.expectedCount, resp["total_count"], "status=%s", tt.status)
+			pagination := resp["pagination"].(map[string]interface{})
+			assert.Equal(t, tt.expectedCount, pagination["total"], "status=%s", tt.status)
 			// Global stats should always show all 4
 			assert.Equal(t, float64(4), resp["total_packages"])
 		})
@@ -343,8 +349,9 @@ func TestListAllPackages_SearchFilter(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(2), resp["total_count"])       // curl + libcurl4
-	assert.Equal(t, float64(3), resp["total_packages"])    // global stat, unfiltered
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(2), pagination["total"])     // curl + libcurl4
+	assert.Equal(t, float64(3), resp["total_packages"]) // global stat, unfiltered
 }
 
 func TestListAllPackages_ManagerFilter(t *testing.T) {
@@ -370,7 +377,8 @@ func TestListAllPackages_ManagerFilter(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(1), resp["total_count"])
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(1), pagination["total"])
 	packages := resp["packages"].([]interface{})
 	assert.Equal(t, "curl", packages[0].(map[string]interface{})["name"])
 }
@@ -397,7 +405,8 @@ func TestListAllPackages_Pagination(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(5), resp["total_count"])
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(5), pagination["total"])
 	packages := resp["packages"].([]interface{})
 	assert.Len(t, packages, 2)
 	assert.Equal(t, "ccc", packages[0].(map[string]interface{})["name"])
@@ -429,7 +438,8 @@ func TestListAllPackages_GlobalStatsUnaffectedByFilter(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(1), resp["total_count"])    // filtered
-	assert.Equal(t, float64(2), resp["total_packages"]) // global, unfiltered
-	assert.Equal(t, float64(1), resp["security_count"]) // global, unfiltered
+	pagination := resp["pagination"].(map[string]interface{})
+	assert.Equal(t, float64(1), pagination["total"])     // filtered
+	assert.Equal(t, float64(2), resp["total_packages"])  // global, unfiltered
+	assert.Equal(t, float64(1), resp["security_count"])  // global, unfiltered
 }

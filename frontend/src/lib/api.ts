@@ -448,16 +448,26 @@ export async function getAggregatedMetrics(
 interface PackageQueryParams {
   limit?: number;
   offset?: number;
+  q?: string;
+  manager?: string[];
+  status?: string[];
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 export async function getHostPackages(
   hostId: string,
   params: PackageQueryParams = {},
 ): Promise<GetPackagesResponse> {
-  const query = buildQueryString({
-    limit: params.limit,
-    offset: params.offset,
-  });
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
+  if (params.sort_by) qs.set('sort_by', params.sort_by);
+  if (params.sort_order) qs.set('sort_order', params.sort_order);
+  for (const m of params.manager ?? []) qs.append('manager', m);
+  for (const s of params.status ?? []) qs.append('status', s);
+  const query = qs.toString() ? '?' + qs.toString() : '';
   return apiRequest<GetPackagesResponse>(`/hosts/${hostId}/packages${query}`);
 }
 

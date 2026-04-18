@@ -353,11 +353,16 @@ export interface GetSensorReadingsResponse {
   data: SensorDataPoint[];
 }
 
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
 export interface GetPackagesResponse {
   packages: Package[];
-  total_count: number;
-  limit: number;
-  offset: number;
+  pagination: Pagination;
 }
 
 export interface GetPackageStatsResponse extends PackageStats {
@@ -366,16 +371,12 @@ export interface GetPackageStatsResponse extends PackageStats {
 
 export interface GetPackageCollectionsResponse {
   collections: PackageCollection[];
-  total_count: number;
-  limit: number;
-  offset: number;
+  pagination: Pagination;
 }
 
 export interface GetPackageHistoryResponse {
   history: PackageHistory[];
-  total_count: number;
-  limit: number;
-  offset: number;
+  pagination: Pagination;
 }
 
 // Global package view — deduplicated across all hosts
@@ -396,14 +397,12 @@ export interface GlobalPackage {
 
 export interface ListGlobalPackagesResponse {
   packages: GlobalPackage[];
-  total_count: number; // filtered count (for pagination)
+  pagination: Pagination;
   total_packages: number; // global unfiltered count
   outdated_count: number; // global unfiltered
   security_count: number; // global unfiltered
   outdated_hosts_count: number; // global unfiltered — hosts with ≥1 outdated/security package
   available_managers: string[]; // global unfiltered, for the manager filter dropdown
-  limit: number;
-  offset: number;
 }
 
 export interface ListGlobalPackagesParams {

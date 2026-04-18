@@ -48,11 +48,18 @@
         timeRange: TimeRange;
     } | null = $state(null);
     let packagesCache: {
-        allPackages: Package[];
+        packages: Package[];
+        totalCount: number;
+        totalPages: number;
         stats: PackageStats | null;
         searchTerm: string;
         allManagerKeys: string[];
         selectedManagers: string[];
+        selectedStatuses: string[];
+        sortColumn: string;
+        sortOrder: 'asc' | 'desc';
+        offset: number;
+        limit: number;
         visibleColumns: string[];
     } | null = $state(null);
     let incidentsCache: {

@@ -17,46 +17,123 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetHostPackages returns current packages for a host
+// paginationResult is the pagination envelope returned by package list endpoints.
+type paginationResult struct {
+	Page  int   `json:"page"`
+	Limit int   `json:"limit"`
+	Total int64 `json:"total"`
+	Pages int   `json:"pages"`
+}
+
+func buildPagination(total int64, limit, offset int) paginationResult {
+	if limit <= 0 {
+		limit = 25
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	pages := int((total + int64(limit) - 1) / int64(limit))
+	if pages < 1 {
+		pages = 1
+	}
+	return paginationResult{
+		Page:  offset/limit + 1,
+		Limit: limit,
+		Total: total,
+		Pages: pages,
+	}
+}
+
+// GetHostPackages returns current packages for a host with server-side filtering, sorting, and pagination.
 // GET /api/v1/hosts/:id/packages
 func GetHostPackages(c *gin.Context) {
 	hostID := c.Param("id")
 
-	// Query parameters
-	limitStr := c.DefaultQuery("limit", "10000")
-	offsetStr := c.DefaultQuery("offset", "0")
-
-	limit, _ := strconv.Atoi(limitStr)
-	offset, _ := strconv.Atoi(offsetStr)
-	if limit <= 0 || limit > 10000 {
-		limit = 10000
+	// Pagination
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "25"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if limit <= 0 || limit > 200 {
+		limit = 25
 	}
 	if offset < 0 {
 		offset = 0
 	}
 
-	// Build query
+	// Filters
+	q := c.Query("q")
+	managerFilters := c.QueryArray("manager")
+	statusFilters := c.QueryArray("status")
+	sortBy := c.DefaultQuery("sort_by", "name")
+	sortOrder := c.DefaultQuery("sort_order", "asc")
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "asc"
+	}
+
+	// Build base query
 	query := database.DB.Where("host_id = ?", hostID)
 
-	// Get total count
+	if q != "" {
+		query = query.Where("name ILIKE ?", "%"+q+"%")
+	}
+	if len(managerFilters) > 0 {
+		query = query.Where("package_manager IN ?", managerFilters)
+	}
+	if len(statusFilters) > 0 {
+		var parts []string
+		for _, s := range statusFilters {
+			switch s {
+			case "security":
+				parts = append(parts, "has_security_update = true")
+			case "outdated":
+				parts = append(parts, "(COALESCE(available_version, '') != '' AND has_security_update = false)")
+			case "up_to_date":
+				parts = append(parts, "(COALESCE(available_version, '') = '' AND update_checked = true AND has_security_update = false)")
+			case "not_checked":
+				parts = append(parts, "(update_checked = false AND COALESCE(available_version, '') = '' AND has_security_update = false)")
+			}
+		}
+		if len(parts) > 0 {
+			query = query.Where("(" + strings.Join(parts, " OR ") + ")")
+		}
+	}
+
+	// Sort order
+	switch sortBy {
+	case "version":
+		query = query.Order("version " + sortOrder + ", name ASC")
+	case "manager":
+		query = query.Order("package_manager " + sortOrder + ", name ASC")
+	case "status":
+		query = query.Order(fmt.Sprintf(
+			"CASE WHEN has_security_update THEN 0 WHEN COALESCE(available_version,'') != '' THEN 1 WHEN update_checked THEN 2 ELSE 3 END %s, name ASC",
+			sortOrder,
+		))
+	case "latest_version":
+		query = query.Order("COALESCE(available_version, '') " + sortOrder + ", name ASC")
+	default:
+		query = query.Order("name " + sortOrder)
+	}
+
+	// Count
 	var totalCount int64
 	if err := query.Model(&models.Package{}).Count(&totalCount).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count packages"})
 		return
 	}
 
-	// Get packages
+	// Fetch page
 	var packages []models.Package
-	if err := query.Order("name ASC").Limit(limit).Offset(offset).Find(&packages).Error; err != nil {
+	if err := query.Limit(limit).Offset(offset).Find(&packages).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch packages"})
 		return
 	}
+	if packages == nil {
+		packages = []models.Package{}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"packages":    packages,
-		"total_count": totalCount,
-		"limit":       limit,
-		"offset":      offset,
+		"packages":   packages,
+		"pagination": buildPagination(totalCount, limit, offset),
 	})
 }
 
@@ -133,10 +210,8 @@ func GetHostPackageHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"history":     history,
-		"total_count": totalCount,
-		"limit":       limit,
-		"offset":      offset,
+		"history":    history,
+		"pagination": buildPagination(totalCount, limit, offset),
 	})
 }
 
@@ -179,9 +254,7 @@ func GetHostPackageCollections(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"collections": collections,
-		"total_count": totalCount,
-		"limit":       limit,
-		"offset":      offset,
+		"pagination":  buildPagination(totalCount, limit, offset),
 	})
 }
 
@@ -233,15 +306,15 @@ func ListAllPackages(c *gin.Context) {
 	statusFilters := c.QueryArray("status")
 	managerFilters := c.QueryArray("manager")
 
-	limitStr := c.DefaultQuery("limit", "50")
+	limitStr := c.DefaultQuery("limit", "25")
 	offsetStr := c.DefaultQuery("offset", "0")
 	sortBy := c.DefaultQuery("sort_by", "name")
 	sortOrder := c.DefaultQuery("sort_order", "asc")
 
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
-	if limit <= 0 || limit > 500 {
-		limit = 500
+	if limit <= 0 || limit > 200 {
+		limit = 25
 	}
 	if offset < 0 {
 		offset = 0
@@ -388,14 +461,12 @@ func ListAllPackages(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"packages":             packages,
-		"total_count":          totalCount,
+		"pagination":           buildPagination(totalCount, limit, offset),
 		"total_packages":       stats.TotalPackages,
 		"outdated_count":       stats.OutdatedCount,
 		"security_count":       stats.SecurityCount,
 		"outdated_hosts_count": outdatedHostsCount,
 		"available_managers":   availableManagers,
-		"limit":                limit,
-		"offset":               offset,
 	})
 }
 

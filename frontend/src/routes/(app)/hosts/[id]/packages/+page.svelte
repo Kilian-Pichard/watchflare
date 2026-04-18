@@ -50,12 +50,21 @@
         (c) => c.defaultVisible,
     ).map((c) => c.key) as ColumnKey[];
 
+    type StatusFilter = "outdated" | "security" | "up_to_date" | "not_checked";
+
     type PackagesCache = {
-        allPackages: Package[];
+        packages: Package[];
+        totalCount: number;
+        totalPages: number;
         stats: PackageStats | null;
         searchTerm: string;
         allManagerKeys: string[];
         selectedManagers: string[];
+        selectedStatuses: string[];
+        sortColumn: string;
+        sortOrder: 'asc' | 'desc';
+        offset: number;
+        limit: number;
         visibleColumns: string[];
     };
     const ctx = getContext<{
@@ -66,125 +75,39 @@
     }>("hostDetail");
 
     const cached = ctx.packagesCache;
-    // allPackages = full list fetched once from API; all filtering/sorting/pagination is client-side
-    let allPackages: Package[] = $state(cached?.allPackages ?? []);
+    let packages: Package[] = $state(cached?.packages ?? []);
+    let totalCount = $state(cached?.totalCount ?? 0);
+    let totalPages = $state(cached?.totalPages ?? 1);
     let stats: PackageStats | null = $state(cached?.stats ?? null);
     let loading = $state(!cached);
+    let tableLoading = $state(false);
     let error = $state("");
     let searchTerm = $state(cached?.searchTerm ?? "");
-    let selectedManagers: Set<string> = $state(
-        new Set(cached?.selectedManagers ?? []),
-    );
+    let selectedManagers: Set<string> = $state(new Set(cached?.selectedManagers ?? []));
     let allManagerKeys: string[] = $state(cached?.allManagerKeys ?? []);
     let visibleColumns: Set<ColumnKey> = $state(
-        new Set(
-            (cached?.visibleColumns ?? DEFAULT_VISIBLE_COLUMNS) as ColumnKey[],
-        ),
+        new Set((cached?.visibleColumns ?? DEFAULT_VISIBLE_COLUMNS) as ColumnKey[]),
     );
-    let offset = $state(0);
-    type StatusFilter = "outdated" | "security" | "up_to_date" | "not_checked";
+    let offset = $state(cached?.offset ?? 0);
     const STATUS_LABELS: Record<StatusFilter, string> = {
         outdated: "Outdated",
         security: "Security update",
         up_to_date: "Up to date",
         not_checked: "Not checked",
     };
-    let selectedStatuses: Set<StatusFilter> = $state(new Set());
+    let selectedStatuses: Set<StatusFilter> = $state(
+        new Set((cached?.selectedStatuses ?? []) as StatusFilter[]),
+    );
 
-    const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
-    let limit = $state(PACKAGES_PER_PAGE);
+    const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+    let limit = $state(cached?.limit ?? PACKAGES_PER_PAGE);
+    let sortColumn = $state(cached?.sortColumn ?? "name");
+    let sortOrder = $state<"asc" | "desc">(cached?.sortOrder ?? "asc");
     const hostId = $derived($page.params.id);
 
     const col = $derived((key: ColumnKey) => visibleColumns.has(key));
 
-    // Client-side filtering
-    const filteredPackages = $derived(() => {
-        let result = allPackages;
-        if (searchTerm) {
-            const q = searchTerm.toLowerCase();
-            result = result.filter((p) => p.name.toLowerCase().includes(q));
-        }
-        if (selectedManagers.size > 0) {
-            result = result.filter((p) =>
-                selectedManagers.has(p.package_manager),
-            );
-        }
-        if (selectedStatuses.size > 0) {
-            result = result.filter((p) => {
-                if (selectedStatuses.has("security") && p.has_security_update) return true;
-                if (selectedStatuses.has("outdated") && p.available_version && !p.has_security_update) return true;
-                if (selectedStatuses.has("up_to_date") && p.update_checked && !p.available_version && !p.has_security_update) return true;
-                if (selectedStatuses.has("not_checked") && !p.update_checked && !p.available_version && !p.has_security_update) return true;
-                return false;
-            });
-        }
-        return result;
-    });
-
-    // Client-side sorting
-    let sortColumn = $state("name");
-    let sortOrder = $state<"asc" | "desc">("asc");
-
-    const sortedPackages = $derived(() => {
-        return [...filteredPackages()].sort((a, b) => {
-            let valA: string;
-            let valB: string;
-            switch (sortColumn) {
-                case "version":
-                    valA = a.version || "";
-                    valB = b.version || "";
-                    break;
-                case "manager":
-                    valA = a.package_manager || "";
-                    valB = b.package_manager || "";
-                    break;
-                case "status": {
-                    const statusOrder = (p: Package) =>
-                        p.has_security_update
-                            ? "0"
-                            : p.available_version
-                              ? "1"
-                              : p.update_checked
-                                ? "2"
-                                : "3";
-                    valA = statusOrder(a);
-                    valB = statusOrder(b);
-                    break;
-                }
-                case "latest_version":
-                    valA = a.available_version || "";
-                    valB = b.available_version || "";
-                    break;
-                case "arch":
-                    valA = a.architecture || "";
-                    valB = b.architecture || "";
-                    break;
-                case "first_seen":
-                    valA = a.first_seen || "";
-                    valB = b.first_seen || "";
-                    break;
-                case "last_seen":
-                    valA = a.last_seen || "";
-                    valB = b.last_seen || "";
-                    break;
-                default:
-                    valA = a.name || "";
-                    valB = b.name || "";
-                    break;
-            }
-            if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-            if (valA > valB) return sortOrder === "asc" ? 1 : -1;
-            return 0;
-        });
-    });
-
-    // Client-side pagination
-    const paginatedPackages = $derived(() =>
-        sortedPackages().slice(offset, offset + limit),
-    );
-    const totalCount = $derived(filteredPackages().length);
-    const currentPage = $derived(Math.floor(offset / limit) + 1);
-    const totalPages = $derived(Math.ceil(totalCount / limit));
+    const currentPage = $derived(limit > 0 ? Math.floor(offset / limit) + 1 : 1);
     const isStatusFiltered = $derived(selectedStatuses.size > 0);
     const statusFilterLabel = $derived(
         selectedStatuses.size === 0
@@ -236,42 +159,61 @@
 
     function saveToCache() {
         ctx.setPackagesCache({
-            allPackages,
+            packages,
+            totalCount,
+            totalPages,
             stats,
             searchTerm,
             allManagerKeys,
             selectedManagers: [...selectedManagers],
+            selectedStatuses: [...selectedStatuses],
+            sortColumn,
+            sortOrder,
+            offset,
+            limit,
             visibleColumns: [...visibleColumns],
         });
     }
 
     async function loadData(silent = false) {
-        if (!silent) loading = true;
+        if (!silent) {
+            if (cached && packages.length > 0) {
+                tableLoading = true;
+            } else {
+                loading = true;
+            }
+        }
+        error = "";
         try {
             const [packagesData, statsData] = await Promise.all([
-                api.getHostPackages(hostId),
+                api.getHostPackages(hostId, {
+                    limit,
+                    offset,
+                    q: searchTerm || undefined,
+                    manager: selectedManagers.size > 0 ? [...selectedManagers] : undefined,
+                    status: selectedStatuses.size > 0 ? [...selectedStatuses] : undefined,
+                    sort_by: sortColumn,
+                    sort_order: sortOrder,
+                }),
                 api.getPackageStats(hostId),
             ]);
 
-            allPackages = packagesData.packages || [];
+            packages = packagesData.packages || [];
+            totalCount = packagesData.pagination?.total ?? 0;
+            totalPages = packagesData.pagination?.pages ?? 1;
             stats = statsData;
 
-            if (
-                allManagerKeys.length === 0 &&
-                statsData.by_package_manager?.length > 0
-            ) {
+            if (allManagerKeys.length === 0 && statsData.by_package_manager?.length > 0) {
                 allManagerKeys = statsData.by_package_manager.map(
                     (pm: { package_manager: string }) => pm.package_manager,
                 );
             }
         } catch (err: unknown) {
             if (!silent)
-                error =
-                    err instanceof Error
-                        ? err.message
-                        : "Failed to load packages";
+                error = err instanceof Error ? err.message : "Failed to load packages";
         } finally {
-            if (!silent) loading = false;
+            loading = false;
+            tableLoading = false;
             saveToCache();
         }
     }
@@ -280,24 +222,23 @@
 
     function handleSearchInput() {
         offset = 0;
-        clearTimeout(searchDebounce);
-        searchDebounce = setTimeout(() => saveToCache(), 300);
+        if (searchDebounce) clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => loadData(), 300);
     }
 
     function toggleManager(manager: string) {
         const next = new Set(selectedManagers);
-        if (next.has(manager)) {
-            next.delete(manager);
-        } else {
-            next.add(manager);
-        }
+        if (next.has(manager)) next.delete(manager);
+        else next.add(manager);
         selectedManagers = next;
         offset = 0;
+        loadData();
     }
 
     function clearFilter() {
         selectedManagers = new Set();
         offset = 0;
+        loadData();
     }
 
     const hasActiveFilters = $derived(
@@ -309,37 +250,35 @@
         selectedStatuses = new Set();
         selectedManagers = new Set();
         offset = 0;
+        loadData();
     }
 
     function toggleColumn(key: ColumnKey) {
         const next = new Set(visibleColumns);
-        if (next.has(key)) {
-            next.delete(key);
-        } else {
-            next.add(key);
-        }
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
         visibleColumns = next;
         saveToCache();
     }
 
     function toggleStatusFilter(status: StatusFilter) {
         const next = new Set(selectedStatuses);
-        if (next.has(status)) {
-            next.delete(status);
-        } else {
-            next.add(status);
-        }
+        if (next.has(status)) next.delete(status);
+        else next.add(status);
         selectedStatuses = next;
         offset = 0;
+        loadData();
     }
 
     function handlePageChange(newPage: number) {
         offset = (newPage - 1) * limit;
+        loadData();
     }
 
     function handlePageSizeChange(size: number) {
         limit = size;
         offset = 0;
+        loadData();
     }
 
     function handleSort(column: string) {
@@ -347,10 +286,10 @@
             sortOrder = sortOrder === "asc" ? "desc" : "asc";
         } else {
             sortColumn = column;
-            // For latest_version, default to desc so packages with updates appear first
             sortOrder = column === "latest_version" ? "desc" : "asc";
         }
         offset = 0;
+        loadData();
     }
 
     let collecting = $state(false);
@@ -457,9 +396,9 @@
             oninput={handleSearchInput}
             onkeydown={(e) => {
                 if (e.key === "Enter") {
-                    clearTimeout(searchDebounce);
+                    if (searchDebounce) clearTimeout(searchDebounce);
                     offset = 0;
-                    saveToCache();
+                    loadData();
                 }
             }}
             placeholder="Search packages..."
@@ -565,7 +504,7 @@
                 {#if isStatusFiltered}
                     <DropdownMenu.Separator />
                     <DropdownMenu.Item
-                        onclick={() => { selectedStatuses = new Set(); offset = 0; }}
+                        onclick={() => { selectedStatuses = new Set(); offset = 0; loadData(); }}
                         class="text-muted-foreground"
                     >
                         Clear filter
@@ -733,7 +672,7 @@
 {/snippet}
 
 <!-- Packages Table/Cards -->
-<div class="rounded-xl border bg-card overflow-hidden mb-6">
+<div class="rounded-xl border bg-card overflow-hidden mb-6 {tableLoading ? 'opacity-60 pointer-events-none' : ''}">
     {#if loading}
         <!-- Mobile: skeleton cards -->
         <div class="md:hidden p-3 flex flex-col gap-2">
@@ -757,7 +696,7 @@
     {:else}
         <!-- Mobile: cards -->
         <div class="md:hidden p-3 flex flex-col gap-2">
-            {#each paginatedPackages() as pkg}
+            {#each packages as pkg}
                 <div class="rounded-lg border bg-card">
                     <!-- Header: name + status badge -->
                     <div
@@ -993,7 +932,7 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                    {#each paginatedPackages() as pkg}
+                    {#each packages as pkg}
                         <tr class="hover:bg-muted/20 transition-colors">
                             {#if col("name")}
                                 <td class="px-4 py-3">
