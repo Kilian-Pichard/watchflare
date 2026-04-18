@@ -27,6 +27,7 @@ import type {
   GetHostIncidentsResponse,
   IncidentStatusFilter,
   AlertMetricType,
+  HostStatus,
 } from "./types";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
@@ -262,20 +263,19 @@ export async function changeUsername(
 export async function listHosts(params?: {
   page?: number;
   perPage?: number;
-  sort?: string;
-  order?: "asc" | "desc";
-  status?: string;
+  status?: HostStatus;
   search?: string;
+  signal?: AbortSignal;
 }): Promise<ListHostsResponse> {
   const query = buildQueryString({
     page: params?.page,
     per_page: params?.perPage,
-    sort: params?.sort,
-    order: params?.order,
     status: params?.status,
     search: params?.search,
   });
-  return apiRequest<ListHostsResponse>(`/hosts${query}`);
+  return apiRequest<ListHostsResponse>(`/hosts${query}`, {
+    signal: params?.signal,
+  });
 }
 
 export async function getHost(id: string): Promise<GetHostResponse> {
@@ -337,9 +337,16 @@ export async function renameHost(
   id: string,
   newName: string,
 ): Promise<{ message: string }> {
+  const trimmed = newName.trim();
+  if (trimmed.length < 2) {
+    throw new Error("Host name must be at least 2 characters");
+  }
+  if (trimmed.length > 255) {
+    throw new Error("Host name must not exceed 255 characters");
+  }
   return apiRequest<{ message: string }>(`/hosts/${id}/rename`, {
     method: "PUT",
-    body: JSON.stringify({ new_name: newName }),
+    body: JSON.stringify({ new_name: trimmed }),
   });
 }
 
@@ -452,7 +459,7 @@ interface PackageQueryParams {
   manager?: string[];
   status?: string[];
   sort_by?: string;
-  sort_order?: 'asc' | 'desc';
+  sort_order?: "asc" | "desc";
 }
 
 export async function getHostPackages(
@@ -460,14 +467,14 @@ export async function getHostPackages(
   params: PackageQueryParams = {},
 ): Promise<GetPackagesResponse> {
   const qs = new URLSearchParams();
-  if (params.q) qs.set('q', params.q);
-  if (params.limit !== undefined) qs.set('limit', String(params.limit));
-  if (params.offset !== undefined) qs.set('offset', String(params.offset));
-  if (params.sort_by) qs.set('sort_by', params.sort_by);
-  if (params.sort_order) qs.set('sort_order', params.sort_order);
-  for (const m of params.manager ?? []) qs.append('manager', m);
-  for (const s of params.status ?? []) qs.append('status', s);
-  const query = qs.toString() ? '?' + qs.toString() : '';
+  if (params.q) qs.set("q", params.q);
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.offset !== undefined) qs.set("offset", String(params.offset));
+  if (params.sort_by) qs.set("sort_by", params.sort_by);
+  if (params.sort_order) qs.set("sort_order", params.sort_order);
+  for (const m of params.manager ?? []) qs.append("manager", m);
+  for (const s of params.status ?? []) qs.append("status", s);
+  const query = qs.toString() ? "?" + qs.toString() : "";
   return apiRequest<GetPackagesResponse>(`/hosts/${hostId}/packages${query}`);
 }
 

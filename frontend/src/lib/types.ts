@@ -83,6 +83,9 @@ export interface Host {
   reactivated_at: string | null;
   agent_version: string | null;
   agent_uuid: string;
+  // Package update counts — included in list responses
+  outdated_count?: number;
+  security_count?: number;
 }
 
 export interface HostWithMetrics {

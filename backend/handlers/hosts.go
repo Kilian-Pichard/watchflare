@@ -7,12 +7,27 @@ import (
 	"net/http"
 	"strconv"
 	"watchflare/backend/cache"
+	"watchflare/backend/database"
 	"watchflare/backend/models"
 	"watchflare/backend/services"
 	"watchflare/backend/sse"
 
 	"github.com/gin-gonic/gin"
 )
+
+// HostListItem extends Host with per-host package update counts.
+type HostListItem struct {
+	models.Host
+	OutdatedCount int `json:"outdated_count"`
+	SecurityCount int `json:"security_count"`
+}
+
+// packageCountRow is used to scan the package counts query result.
+type packageCountRow struct {
+	HostID        string `gorm:"column:host_id"`
+	OutdatedCount int    `gorm:"column:outdated_count"`
+	SecurityCount int    `gorm:"column:security_count"`
+}
 
 // CreateAgentRequest represents the create agent request body
 type CreateAgentRequest struct {
@@ -96,8 +111,42 @@ func ListHosts(c *gin.Context) {
 		return
 	}
 
+	// Build host ID list and fetch package counts in a single query.
+	items := make([]HostListItem, len(hosts))
+	for i, h := range hosts {
+		items[i] = HostListItem{Host: h}
+	}
+
+	if len(hosts) > 0 {
+		hostIDs := make([]string, len(hosts))
+		for i, h := range hosts {
+			hostIDs[i] = h.ID
+		}
+
+		var counts []packageCountRow
+		database.DB.Raw(`
+			SELECT host_id,
+				COUNT(*) FILTER (WHERE available_version IS NOT NULL AND available_version != '') AS outdated_count,
+				COUNT(*) FILTER (WHERE has_security_update) AS security_count
+			FROM packages
+			WHERE host_id IN ?
+			GROUP BY host_id
+		`, hostIDs).Scan(&counts)
+
+		countMap := make(map[string]packageCountRow, len(counts))
+		for _, row := range counts {
+			countMap[row.HostID] = row
+		}
+		for i := range items {
+			if row, ok := countMap[items[i].ID]; ok {
+				items[i].OutdatedCount = row.OutdatedCount
+				items[i].SecurityCount = row.SecurityCount
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"hosts":    hosts,
+		"hosts":    items,
 		"total":    total,
 		"page":     params.Page,
 		"per_page": params.PerPage,
