@@ -20,7 +20,7 @@
     import DroppedMetricsAlert from "$lib/components/dashboard/DroppedMetricsAlert.svelte";
     import TimeRangeSelector from "$lib/components/TimeRangeSelector.svelte";
     import { ChevronUp, ChevronDown } from "lucide-svelte";
-    import type { SSEEvent, TimeRange, AggregatedMetricsUpdateEvent } from "$lib/types";
+    import type { SSEEvent, TimeRange, HostUpdateEvent, AggregatedMetricsUpdateEvent } from "$lib/types";
 
     // SSE unsubscribe function
     let sseUnsubscribe: (() => void) | null = null;
@@ -70,7 +70,8 @@
         handleSSEReactivation(event);
 
         if (event.type === "host_update") {
-            hostStatsStore.load();
+            const update = event.data as HostUpdateEvent;
+            hostStatsStore.applyUpdate(update.id, update.status);
         } else if (event.type === "aggregated_metrics_update") {
             aggregatedStore.addMetricPoint(event.data as AggregatedMetricsUpdateEvent);
         }

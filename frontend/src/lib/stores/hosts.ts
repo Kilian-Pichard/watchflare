@@ -112,6 +112,9 @@ function createHostStatsStore() {
     loading: false,
   });
 
+  // Tracks per-host status to compute deltas on SSE updates (avoids API refetch on every heartbeat)
+  const statusMap = new Map<string, HostStatus>();
+
   return {
     subscribe,
 
@@ -119,11 +122,34 @@ function createHostStatsStore() {
       update((s) => ({ ...s, loading: true }));
       try {
         const data = await getHostStats();
+        statusMap.clear();
         set({ total: data.total, online: data.online, loading: false });
       } catch (err) {
         logger.error("Failed to load host stats:", err);
         update((s) => ({ ...s, loading: false }));
       }
+    },
+
+    // Apply a host status change from SSE without an API call.
+    // Heartbeats that keep the same status are no-ops.
+    applyUpdate(id: string, newStatus: HostStatus): void {
+      const prevStatus = statusMap.get(id);
+      if (prevStatus === newStatus) return;
+      statusMap.set(id, newStatus);
+
+      if (prevStatus === undefined) {
+        // First SSE for this host — counts are already correct from load()
+        return;
+      }
+
+      update((s) => {
+        let { total, online } = s;
+        if (prevStatus !== "pending") total--;
+        if (prevStatus === "online") online--;
+        if (newStatus !== "pending") total++;
+        if (newStatus === "online") online++;
+        return { ...s, total, online };
+      });
     },
   };
 }
