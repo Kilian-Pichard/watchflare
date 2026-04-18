@@ -17,6 +17,7 @@ func setupSSERouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/events", HostEvents)
+	router.GET("/:id/events", HostDetailEvents)
 	return router
 }
 
@@ -135,5 +136,40 @@ func TestHostEvents_DisconnectsCleanly(t *testing.T) {
 	runSSE(t, req, cancel)
 
 	// Client must be removed from broker after disconnect.
+	assert.Equal(t, clientsBefore, broker.ClientCount())
+}
+
+// ===== HostDetailEvents =====
+
+func TestHostDetailEvents_ConnectedEvent(t *testing.T) {
+	config.AppConfig = &config.Config{
+		CORSOrigins: []string{"http://localhost:5173"},
+		JWTSecret:   "test-secret-key-must-be-32-chars!!",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, _ := http.NewRequestWithContext(ctx, "GET", "/host-abc/events", nil)
+
+	w := runSSE(t, req, cancel)
+
+	body := w.Body.String()
+	assert.Contains(t, body, sse.EventTypeConnected)
+	assert.Contains(t, body, "client_id")
+}
+
+func TestHostDetailEvents_DisconnectsCleanly(t *testing.T) {
+	config.AppConfig = &config.Config{
+		CORSOrigins: []string{},
+		JWTSecret:   "test-secret-key-must-be-32-chars!!",
+	}
+
+	broker := sse.GetBroker()
+	clientsBefore := broker.ClientCount()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, _ := http.NewRequestWithContext(ctx, "GET", "/host-abc/events", nil)
+
+	runSSE(t, req, cancel)
+
 	assert.Equal(t, clientsBefore, broker.ClientCount())
 }

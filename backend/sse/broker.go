@@ -17,10 +17,13 @@ const (
 	EventTypePackageInventoryUpdate  = "package_inventory_update"
 )
 
-// Event represents a host event
+// Event represents a host event.
+// HostID is an internal routing field used by Broadcast to filter per-host clients.
+// It is never serialized — FormatSSE only marshals Data.
 type Event struct {
-	Type string `json:"type"`
-	Data any    `json:"data"`
+	Type   string `json:"type"`
+	Data   any    `json:"data"`
+	HostID string `json:"-"` // empty = send to all clients; set = send only to matching host-filtered clients
 }
 
 // HostUpdate represents a host status update
@@ -142,9 +145,11 @@ type PackageInventoryUpdate struct {
 	ChangesCount   int    `json:"changes_count"`
 }
 
-// Client represents an SSE client connection
+// Client represents an SSE client connection.
+// HostID is non-empty for per-host detail pages; empty clients receive all events.
 type Client struct {
 	ID      string
+	HostID  string // empty = global; non-empty = only receive events for this host
 	Channel chan Event
 }
 
@@ -177,6 +182,16 @@ func GetBroker() *Broker {
 }
 
 func (b *Broker) AddClient(clientID string) *Client {
+	return b.addClient(clientID, "")
+}
+
+// AddClientWithHostFilter registers a client that only receives events for the given host.
+// aggregated_metrics_update events are never delivered to host-filtered clients.
+func (b *Broker) AddClientWithHostFilter(clientID, hostID string) *Client {
+	return b.addClient(clientID, hostID)
+}
+
+func (b *Broker) addClient(clientID, hostID string) *Client {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -188,10 +203,15 @@ func (b *Broker) AddClient(clientID string) *Client {
 
 	client := &Client{
 		ID:      clientID,
+		HostID:  hostID,
 		Channel: make(chan Event, 10),
 	}
 	b.clients[clientID] = client
-	slog.Info("SSE client connected", "client_id", clientID, "total", len(b.clients))
+	if hostID != "" {
+		slog.Info("SSE host-filtered client connected", "client_id", clientID, "host_id", hostID, "total", len(b.clients))
+	} else {
+		slog.Info("SSE client connected", "client_id", clientID, "total", len(b.clients))
+	}
 
 	return client
 }
@@ -212,6 +232,17 @@ func (b *Broker) Broadcast(event Event) {
 	defer b.mu.RUnlock()
 
 	for _, client := range b.clients {
+		// Per-host clients: apply filtering rules.
+		if client.HostID != "" {
+			// Aggregated metrics are not meaningful on a single-host detail page.
+			if event.Type == EventTypeAggregatedMetricsUpdate {
+				continue
+			}
+			// Skip events that belong to a different host.
+			if event.HostID != "" && event.HostID != client.HostID {
+				continue
+			}
+		}
 		select {
 		case client.Channel <- event:
 		default:
@@ -221,23 +252,25 @@ func (b *Broker) Broadcast(event Event) {
 }
 
 func (b *Broker) BroadcastHostUpdate(update HostUpdate) {
-	b.Broadcast(Event{Type: EventTypeHostUpdate, Data: update})
+	b.Broadcast(Event{Type: EventTypeHostUpdate, Data: update, HostID: update.ID})
 }
 
 func (b *Broker) BroadcastMetricsUpdate(update MetricsUpdate) {
-	b.Broadcast(Event{Type: EventTypeMetricsUpdate, Data: toMinifiedMetrics(update)})
+	b.Broadcast(Event{Type: EventTypeMetricsUpdate, Data: toMinifiedMetrics(update), HostID: update.HostID})
 }
 
+// BroadcastAggregatedMetricsUpdate sends aggregated (cross-host) metrics.
+// Per-host filtered clients never receive this event.
 func (b *Broker) BroadcastAggregatedMetricsUpdate(update AggregatedMetricsUpdate) {
 	b.Broadcast(Event{Type: EventTypeAggregatedMetricsUpdate, Data: update})
 }
 
 func (b *Broker) BroadcastContainerMetricsUpdate(update ContainerMetricsUpdate) {
-	b.Broadcast(Event{Type: EventTypeContainerMetricsUpdate, Data: update})
+	b.Broadcast(Event{Type: EventTypeContainerMetricsUpdate, Data: update, HostID: update.HostID})
 }
 
 func (b *Broker) BroadcastPackageInventoryUpdate(update PackageInventoryUpdate) {
-	b.Broadcast(Event{Type: EventTypePackageInventoryUpdate, Data: update})
+	b.Broadcast(Event{Type: EventTypePackageInventoryUpdate, Data: update, HostID: update.HostID})
 }
 
 // toMinifiedMetrics converts a MetricsUpdate to the compact wire format.

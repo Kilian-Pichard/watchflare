@@ -3,7 +3,8 @@
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
     import * as api from "$lib/api.js";
-    import { sseStore } from "$lib/stores/sse";
+    import { API_BASE_URL } from "$lib/api.js";
+    import { SSEManager } from "$lib/sse/manager.js";
     import { handleSSEReactivation, formatOfflineDuration } from "$lib/utils";
     import type {
         Host,
@@ -136,10 +137,12 @@
         return currentPath.startsWith(`${base}/${tab}`);
     }
 
-    let sseUnsubscribe: (() => void) | null = null;
+    let hostSseManager: SSEManager | null = null;
 
     onMount(() => {
-        sseUnsubscribe = sseStore.connect(handleSSEMessage);
+        hostSseManager = new SSEManager(`${API_BASE_URL}/hosts/${hostId}/events`);
+        hostSseManager.onMessage(handleSSEMessage);
+        hostSseManager.connect();
         loadHost();
         nowTimer = setInterval(() => { now = Date.now(); }, 30_000);
         const state = $page.state as { newHostToken?: string };
@@ -150,7 +153,8 @@
     });
 
     onDestroy(() => {
-        if (sseUnsubscribe) sseUnsubscribe();
+        hostSseManager?.disconnect();
+        hostSseManager = null;
         if (nowTimer) clearInterval(nowTimer);
         if (updateAgentMessageTimeout) clearTimeout(updateAgentMessageTimeout);
         if (copyErrorTimeout) clearTimeout(copyErrorTimeout);

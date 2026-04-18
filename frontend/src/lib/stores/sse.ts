@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import { SSEManager, type ConnectionState } from '../sse/manager';
+import { API_BASE_URL } from '../api';
 import type { SSEEvent } from '../types';
 
 interface SSEState {
@@ -34,7 +35,7 @@ function createSSEStore() {
 		if (manager) return;
 
 		// Create manager with configuration
-		manager = new SSEManager({
+		manager = new SSEManager(`${API_BASE_URL}/hosts/events`, {
 			initialRetryDelay: 1000,      // Start with 1s
 			maxRetryDelay: 30000,          // Cap at 30s
 			maxRetries: Infinity,          // Retry indefinitely

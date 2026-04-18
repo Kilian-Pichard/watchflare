@@ -142,9 +142,12 @@ interface SSEManagerConfig {
 }
 
 /**
- * Advanced SSE Manager with reconnection and buffering
+ * Advanced SSE Manager with reconnection and buffering.
+ * Pass a url to connect to a specific SSE endpoint (e.g. per-host stream).
+ * Defaults to the global host events stream.
  */
 export class SSEManager {
+	private url: string;
 	private eventSource: EventSource | null = null;
 	private state: ConnectionState = 'disconnected';
 	private retryCount = 0;
@@ -160,7 +163,8 @@ export class SSEManager {
 	private onStateChangeCallback?: (state: ConnectionState) => void;
 	private onErrorCallback?: (error: Event | Error) => void;
 
-	constructor(config: SSEManagerConfig = {}) {
+	constructor(url = `${API_BASE_URL}/hosts/events`, config: SSEManagerConfig = {}) {
+		this.url = url;
 		this.config = {
 			initialRetryDelay: config.initialRetryDelay ?? 1000,
 			maxRetryDelay: config.maxRetryDelay ?? 30000,
@@ -182,7 +186,7 @@ export class SSEManager {
 		this.setState('connecting');
 
 		try {
-			this.eventSource = new EventSource(`${API_BASE_URL}/hosts/events`, {
+			this.eventSource = new EventSource(this.url, {
 				withCredentials: true
 			});
 

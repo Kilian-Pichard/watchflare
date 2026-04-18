@@ -193,6 +193,100 @@ func TestBroadcastMetricsUpdate_Minified(t *testing.T) {
 	}
 }
 
+// --- AddClientWithHostFilter ---
+
+func TestAddClientWithHostFilter_SetsHostID(t *testing.T) {
+	b := newTestBroker()
+
+	client := b.AddClientWithHostFilter("c1", "host-abc")
+
+	if client.HostID != "host-abc" {
+		t.Errorf("HostID: got %q, want %q", client.HostID, "host-abc")
+	}
+	if _, ok := b.clients["c1"]; !ok {
+		t.Error("expected client in broker map")
+	}
+}
+
+// --- Per-host filtering ---
+
+func TestBroadcast_HostFilteredClient_ReceivesMatchingHostEvents(t *testing.T) {
+	b := newTestBroker()
+	c := b.AddClientWithHostFilter("c1", "host-A")
+
+	b.BroadcastHostUpdate(HostUpdate{ID: "host-A", Status: "online"})
+
+	select {
+	case got := <-c.Channel:
+		if got.Type != EventTypeHostUpdate {
+			t.Errorf("expected host_update, got %s", got.Type)
+		}
+	default:
+		t.Error("expected event for matching host, got nothing")
+	}
+}
+
+func TestBroadcast_HostFilteredClient_SkipsOtherHostEvents(t *testing.T) {
+	b := newTestBroker()
+	c := b.AddClientWithHostFilter("c1", "host-A")
+
+	b.BroadcastHostUpdate(HostUpdate{ID: "host-B", Status: "online"})
+	b.BroadcastMetricsUpdate(MetricsUpdate{HostID: "host-B"})
+
+	// Channel must remain empty — no events for host-B should reach c.
+	if len(c.Channel) != 0 {
+		t.Errorf("expected empty channel, got %d events", len(c.Channel))
+	}
+}
+
+func TestBroadcast_HostFilteredClient_SkipsAggregatedMetrics(t *testing.T) {
+	b := newTestBroker()
+	c := b.AddClientWithHostFilter("c1", "host-A")
+
+	b.BroadcastAggregatedMetricsUpdate(AggregatedMetricsUpdate{CPUUsagePercent: 42.0})
+
+	if len(c.Channel) != 0 {
+		t.Errorf("expected aggregated_metrics_update to be filtered, got %d events", len(c.Channel))
+	}
+}
+
+func TestBroadcast_GlobalClient_ReceivesAllHostEvents(t *testing.T) {
+	b := newTestBroker()
+	global := b.AddClient("global")
+
+	b.BroadcastHostUpdate(HostUpdate{ID: "host-A", Status: "online"})
+	b.BroadcastHostUpdate(HostUpdate{ID: "host-B", Status: "online"})
+	b.BroadcastAggregatedMetricsUpdate(AggregatedMetricsUpdate{CPUUsagePercent: 10.0})
+
+	if len(global.Channel) != 3 {
+		t.Errorf("global client: expected 3 events, got %d", len(global.Channel))
+	}
+}
+
+func TestBroadcast_MixedClients_FilteredAndGlobal(t *testing.T) {
+	b := newTestBroker()
+	global := b.AddClient("global")
+	filtered := b.AddClientWithHostFilter("filtered", "host-A")
+
+	b.BroadcastHostUpdate(HostUpdate{ID: "host-A", Status: "online"})
+	b.BroadcastHostUpdate(HostUpdate{ID: "host-B", Status: "offline"})
+	b.BroadcastAggregatedMetricsUpdate(AggregatedMetricsUpdate{CPUUsagePercent: 5.0})
+
+	// Global receives all 3 events.
+	if len(global.Channel) != 3 {
+		t.Errorf("global client: expected 3 events, got %d", len(global.Channel))
+	}
+	// Filtered receives only the host-A event.
+	if len(filtered.Channel) != 1 {
+		t.Errorf("filtered client: expected 1 event, got %d", len(filtered.Channel))
+	}
+	got := <-filtered.Channel
+	update := got.Data.(HostUpdate)
+	if update.ID != "host-A" {
+		t.Errorf("filtered client: expected host-A, got %s", update.ID)
+	}
+}
+
 // --- BroadcastAggregatedMetricsUpdate ---
 
 func TestBroadcastAggregatedMetricsUpdate(t *testing.T) {

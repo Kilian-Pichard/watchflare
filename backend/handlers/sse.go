@@ -9,13 +9,29 @@ import (
 	"github.com/google/uuid"
 )
 
-// HostEvents handles SSE connections for real-time host updates
+// HostEvents handles the global SSE stream — all host events broadcast to all clients.
+// GET /api/v1/hosts/events
 func HostEvents(c *gin.Context) {
-	// Set CORS headers explicitly for SSE
-	// EventSource requires explicit origin when using credentials
-	requestOrigin := c.Request.Header.Get("Origin")
+	sseConnect(c, func(clientID string) *sse.Client {
+		return sse.GetBroker().AddClient(clientID)
+	})
+}
 
-	// Only reflect the request origin if it is explicitly allowed.
+// HostDetailEvents handles a per-host SSE stream — only events for the given host are delivered.
+// aggregated_metrics_update is never sent on this stream (not meaningful for a single host).
+// GET /api/v1/hosts/:id/events
+func HostDetailEvents(c *gin.Context) {
+	hostID := c.Param("id")
+	sseConnect(c, func(clientID string) *sse.Client {
+		return sse.GetBroker().AddClientWithHostFilter(clientID, hostID)
+	})
+}
+
+// sseConnect sets up SSE headers, registers the client via addClient, streams events
+// until the request context is cancelled, then removes the client from the broker.
+func sseConnect(c *gin.Context, addClient func(clientID string) *sse.Client) {
+	// Reflect the request origin only when it is explicitly allowed.
+	requestOrigin := c.Request.Header.Get("Origin")
 	allowedOrigin := ""
 	for _, origin := range config.AppConfig.CORSOrigins {
 		if origin == requestOrigin {
@@ -23,50 +39,38 @@ func HostEvents(c *gin.Context) {
 			break
 		}
 	}
-
 	if allowedOrigin != "" {
 		c.Header("Access-Control-Allow-Origin", allowedOrigin)
 	}
 	c.Header("Access-Control-Allow-Credentials", "true")
 	c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-	// Set SSE headers
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 
-	// Generate unique client ID
 	clientID := uuid.New().String()
-
-	// Get the SSE broker
 	broker := sse.GetBroker()
-
-	// Register the client
-	client := broker.AddClient(clientID)
+	client := addClient(clientID)
 	defer broker.RemoveClient(clientID)
 
-	// Send initial connection message
+	// Send initial connection confirmation.
 	c.Writer.Write([]byte(sse.FormatSSE(sse.Event{
 		Type: sse.EventTypeConnected,
 		Data: map[string]string{"client_id": clientID},
 	})))
 	c.Writer.Flush()
 
-	// Stream events to the client
 	clientChan := c.Request.Context().Done()
 	for {
 		select {
 		case event := <-client.Channel:
-			// Send event to client
 			msg := sse.FormatSSE(event)
 			if msg != "" {
 				fmt.Fprint(c.Writer, msg)
 				c.Writer.Flush()
 			}
-
 		case <-clientChan:
-			// Client disconnected
 			return
 		}
 	}
