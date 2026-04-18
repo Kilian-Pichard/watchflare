@@ -23,10 +23,18 @@ function fakeMetric(hostId: string, cpu: number) {
 		host_id: hostId,
 		timestamp: new Date().toISOString(),
 		cpu_usage_percent: cpu,
+		cpu_iowait_percent: 0,
+		cpu_steal_percent: 0,
 		memory_total_bytes: 1000,
 		memory_used_bytes: 500,
+		memory_available_bytes: 500,
+		memory_buffers_bytes: 0,
+		memory_cached_bytes: 0,
+		swap_total_bytes: 0,
+		swap_used_bytes: 0,
 		disk_total_bytes: 2000,
-		disk_used_bytes: 1000
+		disk_used_bytes: 1000,
+		processes_count: 0,
 	};
 }
 

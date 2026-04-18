@@ -228,9 +228,15 @@ func TestToMinifiedMetrics(t *testing.T) {
 		HostID:               "srv1",
 		Timestamp:            "2024-01-15T12:00:00Z",
 		CPUUsagePercent:      55.5,
+		CPUIowaitPercent:     3.2,
+		CPUStealPercent:      1.1,
 		MemoryTotalBytes:     8000,
 		MemoryUsedBytes:      4000,
 		MemoryAvailableBytes: 4000,
+		MemoryBuffersBytes:   512,
+		MemoryCachedBytes:    1024,
+		SwapTotalBytes:       2000,
+		SwapUsedBytes:        500,
 		LoadAvg1Min:          1.1,
 		LoadAvg5Min:          1.5,
 		LoadAvg15Min:         1.9,
@@ -242,6 +248,7 @@ func TestToMinifiedMetrics(t *testing.T) {
 		NetworkTxBytesPerSec: 400,
 		CPUTemperatureCelsius: 65.0,
 		UptimeSeconds:        3600,
+		ProcessesCount:       142,
 		SensorReadings:       []SensorReadingMinified{{K: "cpu", V: 65.0}},
 	}
 
@@ -257,6 +264,12 @@ func TestToMinifiedMetrics(t *testing.T) {
 	if got.CPU != 55.5 {
 		t.Errorf("CPU: got %f, want 55.5", got.CPU)
 	}
+	if got.CPUIowait != 3.2 {
+		t.Errorf("CPUIowait: got %f, want 3.2", got.CPUIowait)
+	}
+	if got.CPUSteal != 1.1 {
+		t.Errorf("CPUSteal: got %f, want 1.1", got.CPUSteal)
+	}
 	if got.MemoryTotal != 8000 {
 		t.Errorf("MemoryTotal: got %d, want 8000", got.MemoryTotal)
 	}
@@ -265,6 +278,12 @@ func TestToMinifiedMetrics(t *testing.T) {
 	}
 	if got.MemoryAvailable != 4000 {
 		t.Errorf("MemoryAvailable: got %d, want 4000", got.MemoryAvailable)
+	}
+	if got.MemoryBuffers != 512 {
+		t.Errorf("MemoryBuffers: got %d, want 512", got.MemoryBuffers)
+	}
+	if got.MemoryCached != 1024 {
+		t.Errorf("MemoryCached: got %d, want 1024", got.MemoryCached)
 	}
 	if got.LoadAvg1 != 1.1 {
 		t.Errorf("LoadAvg1: got %f, want 1.1", got.LoadAvg1)
@@ -298,6 +317,15 @@ func TestToMinifiedMetrics(t *testing.T) {
 	}
 	if got.Uptime != 3600 {
 		t.Errorf("Uptime: got %d, want 3600", got.Uptime)
+	}
+	if got.Processes != 142 {
+		t.Errorf("Processes: got %d, want 142", got.Processes)
+	}
+	if got.SwapTotal != 2000 {
+		t.Errorf("SwapTotal: got %d, want 2000", got.SwapTotal)
+	}
+	if got.SwapUsed != 500 {
+		t.Errorf("SwapUsed: got %d, want 500", got.SwapUsed)
 	}
 	if len(got.SensorReadings) != 1 || got.SensorReadings[0].K != "cpu" {
 		t.Error("sensor readings mismatch")

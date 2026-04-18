@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 	"watchflare/backend/database"
 	"watchflare/backend/middleware"
 	"watchflare/backend/models"
@@ -209,7 +210,7 @@ func TestGetHost(t *testing.T) {
 		checkResponse  func(*testing.T, map[string]interface{})
 	}{
 		{
-			name:           "Success - Get existing host",
+			name:           "Success - Get existing host (no metrics yet)",
 			hostID:         host.ID,
 			withCookie:     true,
 			expectedStatus: http.StatusOK,
@@ -217,6 +218,7 @@ func TestGetHost(t *testing.T) {
 				hostData := resp["host"].(map[string]interface{})
 				assert.Equal(t, "host01", hostData["display_name"])
 				assert.Equal(t, models.StatusPending, hostData["status"])
+				assert.Nil(t, resp["latest_metrics"])
 			},
 		},
 		{
@@ -257,6 +259,44 @@ func TestGetHost(t *testing.T) {
 			tt.checkResponse(t, response)
 		})
 	}
+}
+
+func TestGetHost_WithLatestMetrics(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+	defer database.DB.Exec("DELETE FROM metrics")
+
+	router := setupHostRouter()
+	cookie := createTestUser(t)
+
+	host, _, _, _ := services.CreateAgent("host01", "192.168.1.100", false)
+
+	// Insert a recent metric for the host
+	metric := models.Metric{
+		HostID:          host.ID,
+		Timestamp:       time.Now(),
+		CPUUsagePercent: 42.5,
+		MemoryTotalBytes: 8 * 1024 * 1024 * 1024,
+		MemoryUsedBytes:  4 * 1024 * 1024 * 1024,
+		UptimeSeconds:   3600,
+	}
+	database.DB.Create(&metric)
+
+	req, _ := http.NewRequest("GET", "/hosts/"+host.ID, nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	assert.NotNil(t, response["latest_metrics"])
+	m := response["latest_metrics"].(map[string]interface{})
+	assert.InDelta(t, 42.5, m["cpu_usage_percent"], 0.01)
+	assert.InDelta(t, float64(8*1024*1024*1024), m["memory_total_bytes"], 1)
+	assert.InDelta(t, float64(3600), m["uptime_seconds"], 1)
 }
 
 func TestRegenerateToken(t *testing.T) {

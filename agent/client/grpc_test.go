@@ -255,20 +255,27 @@ func TestRegister_FieldsMapping(t *testing.T) {
 	c := startMockServer(t, mock)
 
 	_, err := c.Register(RegisterRequest{
-		Token:            "token123",
-		Hostname:         "myhost",
-		IPv4:             "1.2.3.4",
-		IPv6:             "::1",
-		Platform:         "linux",
-		PlatformVersion:  "6.1",
-		PlatformFamily:   "debian",
-		Architecture:     "amd64",
-		Kernel:           "6.1.0",
-		EnvironmentType:  "vm",
-		Hypervisor:       "kvm",
-		ContainerRuntime: "docker",
-		ExistingUUID:     "old-uuid",
-		AgentVersion:     "1.2.3",
+		Token:                "token123",
+		Hostname:             "myhost",
+		IPv4:                 "1.2.3.4",
+		IPv6:                 "::1",
+		OS:                   "linux",
+		Platform:             "fedora",
+		PlatformVersion:      "43",
+		PlatformFamily:       "rhel",
+		KernelVersion:        "6.1.0",
+		KernelArch:           "aarch64",
+		EnvironmentType:      "vm",
+		VirtualizationSystem: "kvm",
+		VirtualizationRole:   "guest",
+		HostID:               "test-host-uuid-123",
+		ContainerRuntime:     "docker",
+		CPUModelName:         "Apple M1",
+		CPUPhysicalCount:     8,
+		CPULogicalCount:      8,
+		CPUMhz:               3200.0,
+		ExistingUUID:         "old-uuid",
+		AgentVersion:         "1.2.3",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -283,14 +290,18 @@ func TestRegister_FieldsMapping(t *testing.T) {
 		{"Hostname", received.Hostname, "myhost"},
 		{"IpAddressV4", received.IpAddressV4, "1.2.3.4"},
 		{"IpAddressV6", received.IpAddressV6, "::1"},
-		{"Platform", received.Platform, "linux"},
-		{"PlatformVersion", received.PlatformVersion, "6.1"},
-		{"PlatformFamily", received.PlatformFamily, "debian"},
-		{"Architecture", received.Architecture, "amd64"},
-		{"Kernel", received.Kernel, "6.1.0"},
+		{"Os", received.Os, "linux"},
+		{"Platform", received.Platform, "fedora"},
+		{"PlatformVersion", received.PlatformVersion, "43"},
+		{"PlatformFamily", received.PlatformFamily, "rhel"},
+		{"KernelVersion", received.KernelVersion, "6.1.0"},
+		{"KernelArch", received.KernelArch, "aarch64"},
 		{"EnvironmentType", received.EnvironmentType, "vm"},
-		{"Hypervisor", received.Hypervisor, "kvm"},
+		{"VirtualizationSystem", received.VirtualizationSystem, "kvm"},
+		{"VirtualizationRole", received.VirtualizationRole, "guest"},
+		{"HostId", received.HostId, "test-host-uuid-123"},
 		{"ContainerRuntime", received.ContainerRuntime, "docker"},
+		{"CpuModelName", received.CpuModelName, "Apple M1"},
 		{"ExistingAgentUuid", received.ExistingAgentUuid, "old-uuid"},
 		{"AgentVersion", received.AgentVersion, "1.2.3"},
 	}
@@ -298,6 +309,16 @@ func TestRegister_FieldsMapping(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
 		}
+	}
+
+	if received.CpuPhysicalCount != 8 {
+		t.Errorf("CpuPhysicalCount: got %d, want 8", received.CpuPhysicalCount)
+	}
+	if received.CpuLogicalCount != 8 {
+		t.Errorf("CpuLogicalCount: got %d, want 8", received.CpuLogicalCount)
+	}
+	if received.CpuMhz != 3200.0 {
+		t.Errorf("CpuMhz: got %f, want 3200.0", received.CpuMhz)
 	}
 }
 
@@ -404,14 +425,31 @@ func TestSendMetrics_Success(t *testing.T) {
 	c := startMockServer(t, mock)
 
 	m := &metrics.SystemMetrics{
-		CPUUsagePercent:  45.5,
-		MemoryTotalBytes: 8 * 1024 * 1024 * 1024,
-		MemoryUsedBytes:  4 * 1024 * 1024 * 1024,
+		CPUUsagePercent:    45.5,
+		CPUIowaitPercent:   3.2,
+		CPUStealPercent:    1.1,
+		MemoryTotalBytes:   8 * 1024 * 1024 * 1024,
+		MemoryUsedBytes:    4 * 1024 * 1024 * 1024,
+		MemoryBuffersBytes: 512 * 1024 * 1024,
+		MemoryCachedBytes:  1024 * 1024 * 1024,
+		SwapTotalBytes:     2 * 1024 * 1024 * 1024,
+		SwapUsedBytes:      512 * 1024 * 1024,
+		ProcessesCount:     200,
 		SensorReadings: []metrics.SensorReading{
 			{Key: "cpu0", TemperatureCelsius: 55.0},
 		},
 		ContainerMetrics: []metrics.ContainerMetric{
 			{ContainerID: "c1", ContainerName: "app", CPUPercent: 10.0},
+		},
+		HostInfo: metrics.HostInfoSnapshot{
+			PlatformVersion:  "22.04",
+			KernelVersion:    "6.1.0-amd64",
+			KernelArch:       "x86_64",
+			CPUModelName:     "Intel Xeon E5",
+			CPUPhysicalCount: 4,
+			CPULogicalCount:  8,
+			CPUMhz:           2400.0,
+			ContainerRuntime: "docker",
 		},
 	}
 
@@ -421,6 +459,27 @@ func TestSendMetrics_Success(t *testing.T) {
 
 	if received.Metrics.CpuUsagePercent != 45.5 {
 		t.Errorf("CpuUsagePercent: got %v, want 45.5", received.Metrics.CpuUsagePercent)
+	}
+	if received.Metrics.CpuIowaitPercent != 3.2 {
+		t.Errorf("CpuIowaitPercent: got %v, want 3.2", received.Metrics.CpuIowaitPercent)
+	}
+	if received.Metrics.CpuStealPercent != 1.1 {
+		t.Errorf("CpuStealPercent: got %v, want 1.1", received.Metrics.CpuStealPercent)
+	}
+	if received.Metrics.MemoryBuffersBytes != 512*1024*1024 {
+		t.Errorf("MemoryBuffersBytes: got %d, want %d", received.Metrics.MemoryBuffersBytes, 512*1024*1024)
+	}
+	if received.Metrics.MemoryCachedBytes != 1024*1024*1024 {
+		t.Errorf("MemoryCachedBytes: got %d, want %d", received.Metrics.MemoryCachedBytes, 1024*1024*1024)
+	}
+	if received.Metrics.SwapTotalBytes != 2*1024*1024*1024 {
+		t.Errorf("SwapTotalBytes: got %d, want %d", received.Metrics.SwapTotalBytes, 2*1024*1024*1024)
+	}
+	if received.Metrics.SwapUsedBytes != 512*1024*1024 {
+		t.Errorf("SwapUsedBytes: got %d, want %d", received.Metrics.SwapUsedBytes, 512*1024*1024)
+	}
+	if received.Metrics.ProcessesCount != 200 {
+		t.Errorf("ProcessesCount: got %d, want 200", received.Metrics.ProcessesCount)
 	}
 	if len(received.Metrics.SensorReadings) != 1 {
 		t.Errorf("SensorReadings: got %d, want 1", len(received.Metrics.SensorReadings))
@@ -432,6 +491,30 @@ func TestSendMetrics_Success(t *testing.T) {
 	}
 	if received.AgentVersion != "1.0.0" {
 		t.Errorf("AgentVersion: got %q, want %q", received.AgentVersion, "1.0.0")
+	}
+	if received.HostInfo == nil {
+		t.Fatal("HostInfo should not be nil")
+	}
+	if received.HostInfo.PlatformVersion != "22.04" {
+		t.Errorf("HostInfo.PlatformVersion: got %q, want %q", received.HostInfo.PlatformVersion, "22.04")
+	}
+	if received.HostInfo.KernelVersion != "6.1.0-amd64" {
+		t.Errorf("HostInfo.KernelVersion: got %q, want %q", received.HostInfo.KernelVersion, "6.1.0-amd64")
+	}
+	if received.HostInfo.CpuModelName != "Intel Xeon E5" {
+		t.Errorf("HostInfo.CpuModelName: got %q, want %q", received.HostInfo.CpuModelName, "Intel Xeon E5")
+	}
+	if received.HostInfo.CpuPhysicalCount != 4 {
+		t.Errorf("HostInfo.CpuPhysicalCount: got %d, want 4", received.HostInfo.CpuPhysicalCount)
+	}
+	if received.HostInfo.CpuLogicalCount != 8 {
+		t.Errorf("HostInfo.CpuLogicalCount: got %d, want 8", received.HostInfo.CpuLogicalCount)
+	}
+	if received.HostInfo.CpuMhz != 2400.0 {
+		t.Errorf("HostInfo.CpuMhz: got %f, want 2400.0", received.HostInfo.CpuMhz)
+	}
+	if received.HostInfo.ContainerRuntime != "docker" {
+		t.Errorf("HostInfo.ContainerRuntime: got %q, want %q", received.HostInfo.ContainerRuntime, "docker")
 	}
 }
 

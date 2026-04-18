@@ -6,6 +6,7 @@ import {
 	getMetricClass,
 	getStatusClass,
 	formatRelativeTime,
+	formatOfflineDuration,
 	formatDateTime,
 	getIntervalForTimeRange,
 	getTimeRangeTimestamps
@@ -126,6 +127,41 @@ describe('formatRelativeTime', () => {
 	it('returns seconds ago for recent timestamps', () => {
 		const now = new Date().toISOString();
 		expect(formatRelativeTime(now)).toBe('0s ago');
+	});
+});
+
+describe('formatOfflineDuration', () => {
+	it('returns "Offline" for null', () => {
+		expect(formatOfflineDuration(null, Date.now())).toBe('Offline');
+	});
+
+	it('returns "Offline" for undefined', () => {
+		expect(formatOfflineDuration(undefined, Date.now())).toBe('Offline');
+	});
+
+	it('returns "Offline" when diff is 0 or negative (clock skew)', () => {
+		const future = new Date(Date.now() + 5000).toISOString();
+		expect(formatOfflineDuration(future, Date.now())).toBe('Offline');
+	});
+
+	it('formats seconds', () => {
+		const lastSeen = new Date(Date.now() - 30_000).toISOString();
+		expect(formatOfflineDuration(lastSeen, Date.now())).toBe('Offline for 30s');
+	});
+
+	it('formats minutes', () => {
+		const lastSeen = new Date(Date.now() - 5 * 60_000).toISOString();
+		expect(formatOfflineDuration(lastSeen, Date.now())).toBe('Offline for 5m');
+	});
+
+	it('formats hours', () => {
+		const lastSeen = new Date(Date.now() - 3 * 3600_000).toISOString();
+		expect(formatOfflineDuration(lastSeen, Date.now())).toBe('Offline for 3h');
+	});
+
+	it('formats days', () => {
+		const lastSeen = new Date(Date.now() - 2 * 86400_000).toISOString();
+		expect(formatOfflineDuration(lastSeen, Date.now())).toBe('Offline for 2d');
 	});
 });
 

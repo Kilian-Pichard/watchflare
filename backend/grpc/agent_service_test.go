@@ -170,12 +170,26 @@ func TestRegisterHost_Success(t *testing.T) {
 	const token = "wf_reg_successtoken0001"
 	host := createPendingHost(t, token)
 
+	cpuPhys := int32(8)
+	cpuLog := int32(16)
 	req := &pb.RegisterHostRequest{
-		RegistrationToken: token,
-		Hostname:          "my-host",
-		IpAddressV4:       "1.2.3.4",
-		Platform:          "Linux",
-		AgentVersion:      "0.28.0",
+		RegistrationToken:    token,
+		Hostname:             "my-host",
+		IpAddressV4:          "1.2.3.4",
+		Os:                   "linux",
+		Platform:             "fedora",
+		PlatformVersion:      "43",
+		PlatformFamily:       "rhel",
+		KernelVersion:        "6.17.1-300.fc43.aarch64",
+		KernelArch:           "aarch64",
+		VirtualizationSystem: "kvm",
+		VirtualizationRole:   "guest",
+		HostId:               "test-host-id-abc",
+		CpuModelName:         "Intel Core i9",
+		CpuPhysicalCount:     cpuPhys,
+		CpuLogicalCount:      cpuLog,
+		CpuMhz:               3600.0,
+		AgentVersion:         "0.28.0",
 	}
 	resp, err := s.RegisterHost(context.Background(), req)
 	require.NoError(t, err)
@@ -183,11 +197,37 @@ func TestRegisterHost_Success(t *testing.T) {
 	assert.NotEmpty(t, resp.AgentId)
 	assert.Equal(t, host.AgentKey, resp.AgentKey)
 
-	// Token must be cleared in DB after successful registration
+	// Verify all new gopsutil fields were persisted correctly
 	var updated models.Host
 	require.NoError(t, database.DB.First(&updated, "id = ?", host.ID).Error)
 	assert.Nil(t, updated.RegistrationToken)
 	assert.Equal(t, "offline", updated.Status)
+	require.NotNil(t, updated.OS)
+	assert.Equal(t, "linux", *updated.OS)
+	require.NotNil(t, updated.Platform)
+	assert.Equal(t, "fedora", *updated.Platform)
+	require.NotNil(t, updated.PlatformVersion)
+	assert.Equal(t, "43", *updated.PlatformVersion)
+	require.NotNil(t, updated.PlatformFamily)
+	assert.Equal(t, "rhel", *updated.PlatformFamily)
+	require.NotNil(t, updated.KernelVersion)
+	assert.Equal(t, "6.17.1-300.fc43.aarch64", *updated.KernelVersion)
+	require.NotNil(t, updated.KernelArch)
+	assert.Equal(t, "aarch64", *updated.KernelArch)
+	require.NotNil(t, updated.VirtualizationSystem)
+	assert.Equal(t, "kvm", *updated.VirtualizationSystem)
+	require.NotNil(t, updated.VirtualizationRole)
+	assert.Equal(t, "guest", *updated.VirtualizationRole)
+	require.NotNil(t, updated.HostID)
+	assert.Equal(t, "test-host-id-abc", *updated.HostID)
+	require.NotNil(t, updated.CPUModelName)
+	assert.Equal(t, "Intel Core i9", *updated.CPUModelName)
+	require.NotNil(t, updated.CPUPhysicalCount)
+	assert.Equal(t, 8, *updated.CPUPhysicalCount)
+	require.NotNil(t, updated.CPULogicalCount)
+	assert.Equal(t, 16, *updated.CPULogicalCount)
+	require.NotNil(t, updated.CPUMhz)
+	assert.Equal(t, 3600.0, *updated.CPUMhz)
 }
 
 func TestSendMetrics_InvalidCredentials(t *testing.T) {
@@ -253,6 +293,110 @@ func TestSendMetrics_NilMetrics(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, resp.Success)
 	assert.Contains(t, resp.Message, "required")
+}
+
+func TestSendMetrics_Success(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	host := &models.Host{
+		ID:          uuid.New().String(),
+		AgentID:     uuid.New().String(),
+		DisplayName: "metrics-host",
+		Status:      models.StatusOnline,
+		AgentKey:    "metrics-agent-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(host).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(host) })
+
+	req := &pb.SendMetricsRequest{
+		AgentId:  host.AgentID,
+		AgentKey: host.AgentKey,
+		Metrics: &pb.Metrics{
+			Timestamp:            time.Now().Unix(),
+			CpuUsagePercent:      42.5,
+			CpuIowaitPercent:     3.2,
+			CpuStealPercent:      1.1,
+			MemoryTotalBytes:     8000000000,
+			MemoryUsedBytes:      4000000000,
+			MemoryAvailableBytes: 4000000000,
+			MemoryBuffersBytes:   512000000,
+			MemoryCachedBytes:    1024000000,
+			SwapTotalBytes:       2000000000,
+			SwapUsedBytes:        500000000,
+			ProcessesCount:       142,
+		},
+	}
+	resp, err := s.SendMetrics(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+
+	// Verify all new fields were persisted
+	var stored models.Metric
+	require.NoError(t, database.DB.Where("host_id = ?", host.ID).Last(&stored).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(&stored) })
+	assert.Equal(t, 42.5, stored.CPUUsagePercent)
+	assert.Equal(t, 3.2, stored.CPUIowaitPercent)
+	assert.Equal(t, 1.1, stored.CPUStealPercent)
+	assert.Equal(t, uint64(512000000), stored.MemoryBuffersBytes)
+	assert.Equal(t, uint64(1024000000), stored.MemoryCachedBytes)
+	assert.Equal(t, uint64(2000000000), stored.SwapTotalBytes)
+	assert.Equal(t, uint64(500000000), stored.SwapUsedBytes)
+	assert.Equal(t, uint64(142), stored.ProcessesCount)
+}
+
+func TestSendMetrics_HostInfoUpdate(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	host := &models.Host{
+		ID:          uuid.New().String(),
+		AgentID:     uuid.New().String(),
+		DisplayName: "hostinfo-update-host",
+		Status:      models.StatusOnline,
+		AgentKey:    "hostinfo-agent-key-abc123",
+	}
+	require.NoError(t, database.DB.Create(host).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(host) })
+
+	req := &pb.SendMetricsRequest{
+		AgentId:  host.AgentID,
+		AgentKey: host.AgentKey,
+		Metrics:  &pb.Metrics{Timestamp: time.Now().Unix()},
+		HostInfo: &pb.HostInfo{
+			PlatformVersion:  "22.04",
+			KernelVersion:    "6.1.0-amd64",
+			KernelArch:       "x86_64",
+			CpuModelName:     "Intel Xeon E5",
+			CpuPhysicalCount: 4,
+			CpuLogicalCount:  8,
+			CpuMhz:           2400.0,
+			ContainerRuntime: "docker",
+		},
+	}
+	resp, err := s.SendMetrics(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+
+	// Verify HostInfo fields were persisted
+	var updated models.Host
+	require.NoError(t, database.DB.First(&updated, "id = ?", host.ID).Error)
+	require.NotNil(t, updated.PlatformVersion)
+	assert.Equal(t, "22.04", *updated.PlatformVersion)
+	require.NotNil(t, updated.KernelVersion)
+	assert.Equal(t, "6.1.0-amd64", *updated.KernelVersion)
+	require.NotNil(t, updated.KernelArch)
+	assert.Equal(t, "x86_64", *updated.KernelArch)
+	require.NotNil(t, updated.CPUModelName)
+	assert.Equal(t, "Intel Xeon E5", *updated.CPUModelName)
+	require.NotNil(t, updated.CPUPhysicalCount)
+	assert.Equal(t, 4, *updated.CPUPhysicalCount)
+	require.NotNil(t, updated.CPULogicalCount)
+	assert.Equal(t, 8, *updated.CPULogicalCount)
+	require.NotNil(t, updated.CPUMhz)
+	assert.Equal(t, 2400.0, *updated.CPUMhz)
+	require.NotNil(t, updated.ContainerRuntime)
+	assert.Equal(t, "docker", *updated.ContainerRuntime)
 }
 
 func TestHeartbeat_InvalidCredentials(t *testing.T) {
