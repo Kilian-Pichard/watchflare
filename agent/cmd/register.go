@@ -75,7 +75,7 @@ func runRegistration(token, host, port string) (bool, error) {
 	slog.Info("system info",
 		"hostname", info.Hostname,
 		"platform", info.Platform+" "+info.PlatformVersion,
-		"arch", info.Architecture,
+		"arch", info.KernelArch,
 		"ipv4", info.IPv4Address)
 	if info.IPv6Address != "" {
 		slog.Info("IPv6 detected", "ipv6", info.IPv6Address)
@@ -102,20 +102,27 @@ func runRegistration(token, host, port string) (bool, error) {
 
 	slog.Info("registering agent")
 	regResp, err := grpcClient.Register(client.RegisterRequest{
-		Token:            token,
-		Hostname:         info.Hostname,
-		IPv4:             info.IPv4Address,
-		IPv6:             info.IPv6Address,
-		Platform:         info.Platform,
-		PlatformVersion:  info.PlatformVersion,
-		PlatformFamily:   info.PlatformFamily,
-		Architecture:     info.Architecture,
-		Kernel:           info.Kernel,
-		EnvironmentType:  string(env.Type),
-		Hypervisor:       env.Hypervisor,
-		ContainerRuntime: env.ContainerRuntime,
-		ExistingUUID:     existingUUID,
-		AgentVersion:     AgentVersion,
+		Token:                token,
+		Hostname:             info.Hostname,
+		IPv4:                 info.IPv4Address,
+		IPv6:                 info.IPv6Address,
+		OS:                   info.OS,
+		Platform:             info.Platform,
+		PlatformFamily:       info.PlatformFamily,
+		PlatformVersion:      info.PlatformVersion,
+		KernelVersion:        info.KernelVersion,
+		KernelArch:           info.KernelArch,
+		VirtualizationSystem: info.VirtualizationSystem,
+		VirtualizationRole:   info.VirtualizationRole,
+		HostID:               info.HostID,
+		EnvironmentType:      string(env.Type),
+		ContainerRuntime:     env.ContainerRuntime,
+		CPUModelName:         info.CPUModelName,
+		CPUPhysicalCount:     int32(info.CPUPhysicalCount),
+		CPULogicalCount:      int32(info.CPULogicalCount),
+		CPUMhz:               info.CPUMhz,
+		ExistingUUID:         existingUUID,
+		AgentVersion:         AgentVersion,
 	})
 	if err != nil {
 		return false, fmt.Errorf("registration failed: %w", err)

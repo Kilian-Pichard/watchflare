@@ -7,10 +7,14 @@
 	function normalize(platform: string | undefined): 'linux' | 'macos' | 'windows' | 'docker' | 'other' {
 		if (!platform) return 'other';
 		const p = platform.toLowerCase();
+		// gopsutil OS values ("linux", "darwin", "windows") and legacy names
 		if (p === 'linux') return 'linux';
 		if (p === 'darwin' || p === 'macos') return 'macos';
 		if (p === 'windows') return 'windows';
 		if (p === 'docker') return 'docker';
+		// gopsutil Platform values (distro names) — map to OS family
+		const linuxDistros = ['fedora', 'ubuntu', 'debian', 'centos', 'rhel', 'arch', 'alpine', 'opensuse', 'suse', 'mint', 'kali', 'manjaro', 'rocky', 'almalinux', 'oracle', 'amazon', 'gentoo', 'void', 'nixos', 'slackware', 'mageia', 'clearlinux', 'raspbian', 'pop', 'elementary', 'zorin', 'linuxmint', 'arcolinux', 'endeavouros', 'garuda'];
+		if (linuxDistros.includes(p)) return 'linux';
 		return 'other';
 	}
 

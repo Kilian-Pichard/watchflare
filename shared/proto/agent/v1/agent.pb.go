@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.4
-// source: agent/v1/agent.proto
+// source: shared/proto/agent/v1/agent.proto
 
 package proto
 
@@ -28,27 +28,35 @@ type RegisterHostRequest struct {
 	Hostname          string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	IpAddressV4       string                 `protobuf:"bytes,3,opt,name=ip_address_v4,json=ipAddressV4,proto3" json:"ip_address_v4,omitempty"`
 	IpAddressV6       string                 `protobuf:"bytes,4,opt,name=ip_address_v6,json=ipAddressV6,proto3" json:"ip_address_v6,omitempty"`
-	Platform          string                 `protobuf:"bytes,5,opt,name=platform,proto3" json:"platform,omitempty"`                                      // "macOS", "Linux", "Windows"
-	PlatformVersion   string                 `protobuf:"bytes,6,opt,name=platform_version,json=platformVersion,proto3" json:"platform_version,omitempty"` // "15.6.1", "22.04.3"
-	PlatformFamily    string                 `protobuf:"bytes,7,opt,name=platform_family,json=platformFamily,proto3" json:"platform_family,omitempty"`    // "darwin", "linux", "windows"
-	Architecture      string                 `protobuf:"bytes,8,opt,name=architecture,proto3" json:"architecture,omitempty"`                              // "arm64", "amd64"
-	Kernel            string                 `protobuf:"bytes,9,opt,name=kernel,proto3" json:"kernel,omitempty"`                                          // "24.6.0", "5.15.0-97-generic"
+	Platform          string                 `protobuf:"bytes,5,opt,name=platform,proto3" json:"platform,omitempty"`                                      // gopsutil Platform: distro name ("fedora", "ubuntu", "macos")
+	PlatformVersion   string                 `protobuf:"bytes,6,opt,name=platform_version,json=platformVersion,proto3" json:"platform_version,omitempty"` // gopsutil PlatformVersion: "43", "22.04"
+	PlatformFamily    string                 `protobuf:"bytes,7,opt,name=platform_family,json=platformFamily,proto3" json:"platform_family,omitempty"`    // gopsutil PlatformFamily: "rhel", "debian"
+	KernelArch        string                 `protobuf:"bytes,8,opt,name=kernel_arch,json=kernelArch,proto3" json:"kernel_arch,omitempty"`                // gopsutil KernelArch: "aarch64", "x86_64"
+	KernelVersion     string                 `protobuf:"bytes,9,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`       // gopsutil KernelVersion: "6.17.1-300.fc43.aarch64"
 	Timestamp         int64                  `protobuf:"varint,10,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                                  // Unix timestamp in seconds (for anti-replay)
-	// Environment detection (added for smart metrics collection)
-	EnvironmentType  string `protobuf:"bytes,11,opt,name=environment_type,json=environmentType,proto3" json:"environment_type,omitempty"`    // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
-	Hypervisor       string `protobuf:"bytes,12,opt,name=hypervisor,proto3" json:"hypervisor,omitempty"`                                     // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
-	ContainerRuntime string `protobuf:"bytes,13,opt,name=container_runtime,json=containerRuntime,proto3" json:"container_runtime,omitempty"` // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
+	// Environment detection
+	EnvironmentType      string `protobuf:"bytes,11,opt,name=environment_type,json=environmentType,proto3" json:"environment_type,omitempty"`                // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
+	VirtualizationSystem string `protobuf:"bytes,12,opt,name=virtualization_system,json=virtualizationSystem,proto3" json:"virtualization_system,omitempty"` // gopsutil VirtualizationSystem: "kvm", "vmware", "xen" (empty if physical)
+	ContainerRuntime     string `protobuf:"bytes,13,opt,name=container_runtime,json=containerRuntime,proto3" json:"container_runtime,omitempty"`             // "docker", "lxc", "podman", "kubernetes" (empty if not in container)
 	// Existing agent UUID (for re-registration without creating new agent)
 	// If provided and exists in DB, the agent will be reactivated instead of creating a new one
 	ExistingAgentUuid string `protobuf:"bytes,14,opt,name=existing_agent_uuid,json=existingAgentUuid,proto3" json:"existing_agent_uuid,omitempty"` // UUID from /var/lib/watchflare/agent.uuid (empty if first registration)
 	AgentVersion      string `protobuf:"bytes,15,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                  // Agent binary version (e.g. "0.27.3"), set via ldflags
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Additional gopsutil fields
+	Os                 string  `protobuf:"bytes,16,opt,name=os,proto3" json:"os,omitempty"`                                                           // gopsutil OS: "linux", "darwin", "windows"
+	VirtualizationRole string  `protobuf:"bytes,17,opt,name=virtualization_role,json=virtualizationRole,proto3" json:"virtualization_role,omitempty"` // gopsutil VirtualizationRole: "guest", "host" (empty if physical)
+	HostId             string  `protobuf:"bytes,18,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`                                     // gopsutil HostID: unique OS-provided UUID
+	CpuModelName       string  `protobuf:"bytes,19,opt,name=cpu_model_name,json=cpuModelName,proto3" json:"cpu_model_name,omitempty"`                 // gopsutil cpu.InfoStat.ModelName: "Apple M4 Max", "Intel Xeon E5-2690"
+	CpuPhysicalCount   int32   `protobuf:"varint,20,opt,name=cpu_physical_count,json=cpuPhysicalCount,proto3" json:"cpu_physical_count,omitempty"`    // gopsutil cpu.Counts(false): physical core count
+	CpuLogicalCount    int32   `protobuf:"varint,21,opt,name=cpu_logical_count,json=cpuLogicalCount,proto3" json:"cpu_logical_count,omitempty"`       // gopsutil cpu.Counts(true): logical thread count
+	CpuMhz             float64 `protobuf:"fixed64,22,opt,name=cpu_mhz,json=cpuMhz,proto3" json:"cpu_mhz,omitempty"`                                   // gopsutil cpu.InfoStat.Mhz: base frequency
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *RegisterHostRequest) Reset() {
 	*x = RegisterHostRequest{}
-	mi := &file_agent_v1_agent_proto_msgTypes[0]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60,7 +68,7 @@ func (x *RegisterHostRequest) String() string {
 func (*RegisterHostRequest) ProtoMessage() {}
 
 func (x *RegisterHostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[0]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73,7 +81,7 @@ func (x *RegisterHostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterHostRequest.ProtoReflect.Descriptor instead.
 func (*RegisterHostRequest) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{0}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *RegisterHostRequest) GetRegistrationToken() string {
@@ -125,16 +133,16 @@ func (x *RegisterHostRequest) GetPlatformFamily() string {
 	return ""
 }
 
-func (x *RegisterHostRequest) GetArchitecture() string {
+func (x *RegisterHostRequest) GetKernelArch() string {
 	if x != nil {
-		return x.Architecture
+		return x.KernelArch
 	}
 	return ""
 }
 
-func (x *RegisterHostRequest) GetKernel() string {
+func (x *RegisterHostRequest) GetKernelVersion() string {
 	if x != nil {
-		return x.Kernel
+		return x.KernelVersion
 	}
 	return ""
 }
@@ -153,9 +161,9 @@ func (x *RegisterHostRequest) GetEnvironmentType() string {
 	return ""
 }
 
-func (x *RegisterHostRequest) GetHypervisor() string {
+func (x *RegisterHostRequest) GetVirtualizationSystem() string {
 	if x != nil {
-		return x.Hypervisor
+		return x.VirtualizationSystem
 	}
 	return ""
 }
@@ -181,6 +189,55 @@ func (x *RegisterHostRequest) GetAgentVersion() string {
 	return ""
 }
 
+func (x *RegisterHostRequest) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
+func (x *RegisterHostRequest) GetVirtualizationRole() string {
+	if x != nil {
+		return x.VirtualizationRole
+	}
+	return ""
+}
+
+func (x *RegisterHostRequest) GetHostId() string {
+	if x != nil {
+		return x.HostId
+	}
+	return ""
+}
+
+func (x *RegisterHostRequest) GetCpuModelName() string {
+	if x != nil {
+		return x.CpuModelName
+	}
+	return ""
+}
+
+func (x *RegisterHostRequest) GetCpuPhysicalCount() int32 {
+	if x != nil {
+		return x.CpuPhysicalCount
+	}
+	return 0
+}
+
+func (x *RegisterHostRequest) GetCpuLogicalCount() int32 {
+	if x != nil {
+		return x.CpuLogicalCount
+	}
+	return 0
+}
+
+func (x *RegisterHostRequest) GetCpuMhz() float64 {
+	if x != nil {
+		return x.CpuMhz
+	}
+	return 0
+}
+
 // RegisterHostResponse is sent back after successful registration
 type RegisterHostResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -197,7 +254,7 @@ type RegisterHostResponse struct {
 
 func (x *RegisterHostResponse) Reset() {
 	*x = RegisterHostResponse{}
-	mi := &file_agent_v1_agent_proto_msgTypes[1]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -209,7 +266,7 @@ func (x *RegisterHostResponse) String() string {
 func (*RegisterHostResponse) ProtoMessage() {}
 
 func (x *RegisterHostResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[1]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -222,7 +279,7 @@ func (x *RegisterHostResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterHostResponse.ProtoReflect.Descriptor instead.
 func (*RegisterHostResponse) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{1}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RegisterHostResponse) GetSuccess() bool {
@@ -288,7 +345,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_agent_v1_agent_proto_msgTypes[2]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -300,7 +357,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[2]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -313,7 +370,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{2}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *HeartbeatRequest) GetAgentId() string {
@@ -363,7 +420,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_agent_v1_agent_proto_msgTypes[3]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -375,7 +432,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[3]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -388,7 +445,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{3}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *HeartbeatResponse) GetSuccess() bool {
@@ -423,7 +480,7 @@ type PendingCommand struct {
 
 func (x *PendingCommand) Reset() {
 	*x = PendingCommand{}
-	mi := &file_agent_v1_agent_proto_msgTypes[4]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -435,7 +492,7 @@ func (x *PendingCommand) String() string {
 func (*PendingCommand) ProtoMessage() {}
 
 func (x *PendingCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[4]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -448,7 +505,7 @@ func (x *PendingCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingCommand.ProtoReflect.Descriptor instead.
 func (*PendingCommand) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{4}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PendingCommand) GetCommandId() string {
@@ -489,13 +546,24 @@ type Metrics struct {
 	CpuTemperatureCelsius float64 `protobuf:"fixed64,16,opt,name=cpu_temperature_celsius,json=cpuTemperatureCelsius,proto3" json:"cpu_temperature_celsius,omitempty"`
 	// All temperature sensor readings (one entry per sensor key)
 	SensorReadings []*SensorReading `protobuf:"bytes,17,rep,name=sensor_readings,json=sensorReadings,proto3" json:"sensor_readings,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Swap memory
+	SwapTotalBytes uint64 `protobuf:"varint,18,opt,name=swap_total_bytes,json=swapTotalBytes,proto3" json:"swap_total_bytes,omitempty"`
+	SwapUsedBytes  uint64 `protobuf:"varint,19,opt,name=swap_used_bytes,json=swapUsedBytes,proto3" json:"swap_used_bytes,omitempty"`
+	// Process count
+	ProcessesCount uint64 `protobuf:"varint,20,opt,name=processes_count,json=processesCount,proto3" json:"processes_count,omitempty"`
+	// Memory breakdown (Linux only, 0 on other platforms)
+	MemoryBuffersBytes uint64 `protobuf:"varint,21,opt,name=memory_buffers_bytes,json=memoryBuffersBytes,proto3" json:"memory_buffers_bytes,omitempty"` // Kernel buffer cache
+	MemoryCachedBytes  uint64 `protobuf:"varint,22,opt,name=memory_cached_bytes,json=memoryCachedBytes,proto3" json:"memory_cached_bytes,omitempty"`    // Page cache
+	// CPU time breakdown (Linux only, 0 on other platforms)
+	CpuIowaitPercent float64 `protobuf:"fixed64,23,opt,name=cpu_iowait_percent,json=cpuIowaitPercent,proto3" json:"cpu_iowait_percent,omitempty"` // Waiting for I/O completion
+	CpuStealPercent  float64 `protobuf:"fixed64,24,opt,name=cpu_steal_percent,json=cpuStealPercent,proto3" json:"cpu_steal_percent,omitempty"`    // CPU stolen by hypervisor (VMs only)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Metrics) Reset() {
 	*x = Metrics{}
-	mi := &file_agent_v1_agent_proto_msgTypes[5]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -507,7 +575,7 @@ func (x *Metrics) String() string {
 func (*Metrics) ProtoMessage() {}
 
 func (x *Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[5]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -520,7 +588,7 @@ func (x *Metrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Metrics.ProtoReflect.Descriptor instead.
 func (*Metrics) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{5}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Metrics) GetCpuUsagePercent() float64 {
@@ -642,6 +710,55 @@ func (x *Metrics) GetSensorReadings() []*SensorReading {
 	return nil
 }
 
+func (x *Metrics) GetSwapTotalBytes() uint64 {
+	if x != nil {
+		return x.SwapTotalBytes
+	}
+	return 0
+}
+
+func (x *Metrics) GetSwapUsedBytes() uint64 {
+	if x != nil {
+		return x.SwapUsedBytes
+	}
+	return 0
+}
+
+func (x *Metrics) GetProcessesCount() uint64 {
+	if x != nil {
+		return x.ProcessesCount
+	}
+	return 0
+}
+
+func (x *Metrics) GetMemoryBuffersBytes() uint64 {
+	if x != nil {
+		return x.MemoryBuffersBytes
+	}
+	return 0
+}
+
+func (x *Metrics) GetMemoryCachedBytes() uint64 {
+	if x != nil {
+		return x.MemoryCachedBytes
+	}
+	return 0
+}
+
+func (x *Metrics) GetCpuIowaitPercent() float64 {
+	if x != nil {
+		return x.CpuIowaitPercent
+	}
+	return 0
+}
+
+func (x *Metrics) GetCpuStealPercent() float64 {
+	if x != nil {
+		return x.CpuStealPercent
+	}
+	return 0
+}
+
 // SensorReading represents a single temperature sensor reading
 type SensorReading struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
@@ -653,7 +770,7 @@ type SensorReading struct {
 
 func (x *SensorReading) Reset() {
 	*x = SensorReading{}
-	mi := &file_agent_v1_agent_proto_msgTypes[6]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -665,7 +782,7 @@ func (x *SensorReading) String() string {
 func (*SensorReading) ProtoMessage() {}
 
 func (x *SensorReading) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[6]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -678,7 +795,7 @@ func (x *SensorReading) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SensorReading.ProtoReflect.Descriptor instead.
 func (*SensorReading) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{6}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SensorReading) GetKey() string {
@@ -712,7 +829,7 @@ type ContainerMetric struct {
 
 func (x *ContainerMetric) Reset() {
 	*x = ContainerMetric{}
-	mi := &file_agent_v1_agent_proto_msgTypes[7]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -724,7 +841,7 @@ func (x *ContainerMetric) String() string {
 func (*ContainerMetric) ProtoMessage() {}
 
 func (x *ContainerMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[7]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -737,7 +854,7 @@ func (x *ContainerMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerMetric.ProtoReflect.Descriptor instead.
 func (*ContainerMetric) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{7}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ContainerMetric) GetContainerId() string {
@@ -796,6 +913,108 @@ func (x *ContainerMetric) GetNetworkTxBytesPerSec() uint64 {
 	return 0
 }
 
+// HostInfo contains slowly-changing host properties sent with every metrics cycle.
+// The backend only writes to DB if at least one field has changed.
+type HostInfo struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PlatformVersion  string                 `protobuf:"bytes,1,opt,name=platform_version,json=platformVersion,proto3" json:"platform_version,omitempty"`       // gopsutil PlatformVersion: "43", "22.04"
+	KernelVersion    string                 `protobuf:"bytes,2,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`             // gopsutil KernelVersion: "6.17.1-300.fc43.aarch64"
+	KernelArch       string                 `protobuf:"bytes,3,opt,name=kernel_arch,json=kernelArch,proto3" json:"kernel_arch,omitempty"`                      // gopsutil KernelArch: "x86_64", "aarch64"
+	CpuModelName     string                 `protobuf:"bytes,4,opt,name=cpu_model_name,json=cpuModelName,proto3" json:"cpu_model_name,omitempty"`              // gopsutil cpu.InfoStat.ModelName
+	CpuPhysicalCount int32                  `protobuf:"varint,5,opt,name=cpu_physical_count,json=cpuPhysicalCount,proto3" json:"cpu_physical_count,omitempty"` // gopsutil cpu.Counts(false)
+	CpuLogicalCount  int32                  `protobuf:"varint,6,opt,name=cpu_logical_count,json=cpuLogicalCount,proto3" json:"cpu_logical_count,omitempty"`    // gopsutil cpu.Counts(true)
+	CpuMhz           float64                `protobuf:"fixed64,7,opt,name=cpu_mhz,json=cpuMhz,proto3" json:"cpu_mhz,omitempty"`                                // gopsutil cpu.InfoStat.Mhz
+	ContainerRuntime string                 `protobuf:"bytes,8,opt,name=container_runtime,json=containerRuntime,proto3" json:"container_runtime,omitempty"`    // "docker", "kubernetes", etc. (empty if not in container)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *HostInfo) Reset() {
+	*x = HostInfo{}
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostInfo) ProtoMessage() {}
+
+func (x *HostInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostInfo.ProtoReflect.Descriptor instead.
+func (*HostInfo) Descriptor() ([]byte, []int) {
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *HostInfo) GetPlatformVersion() string {
+	if x != nil {
+		return x.PlatformVersion
+	}
+	return ""
+}
+
+func (x *HostInfo) GetKernelVersion() string {
+	if x != nil {
+		return x.KernelVersion
+	}
+	return ""
+}
+
+func (x *HostInfo) GetKernelArch() string {
+	if x != nil {
+		return x.KernelArch
+	}
+	return ""
+}
+
+func (x *HostInfo) GetCpuModelName() string {
+	if x != nil {
+		return x.CpuModelName
+	}
+	return ""
+}
+
+func (x *HostInfo) GetCpuPhysicalCount() int32 {
+	if x != nil {
+		return x.CpuPhysicalCount
+	}
+	return 0
+}
+
+func (x *HostInfo) GetCpuLogicalCount() int32 {
+	if x != nil {
+		return x.CpuLogicalCount
+	}
+	return 0
+}
+
+func (x *HostInfo) GetCpuMhz() float64 {
+	if x != nil {
+		return x.CpuMhz
+	}
+	return 0
+}
+
+func (x *HostInfo) GetContainerRuntime() string {
+	if x != nil {
+		return x.ContainerRuntime
+	}
+	return ""
+}
+
 // SendMetricsRequest contains authentication and metrics data
 type SendMetricsRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -805,13 +1024,14 @@ type SendMetricsRequest struct {
 	Timestamp        int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                                      // Unix timestamp in seconds (for anti-replay)
 	ContainerMetrics []*ContainerMetric     `protobuf:"bytes,5,rep,name=container_metrics,json=containerMetrics,proto3" json:"container_metrics,omitempty"` // Per-container metrics (empty if no containers)
 	AgentVersion     string                 `protobuf:"bytes,6,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`             // Agent binary version, sent to keep DB in sync after upgrades
+	HostInfo         *HostInfo              `protobuf:"bytes,7,opt,name=host_info,json=hostInfo,proto3" json:"host_info,omitempty"`                         // Slowly-changing host properties, updated only on change
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SendMetricsRequest) Reset() {
 	*x = SendMetricsRequest{}
-	mi := &file_agent_v1_agent_proto_msgTypes[8]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -823,7 +1043,7 @@ func (x *SendMetricsRequest) String() string {
 func (*SendMetricsRequest) ProtoMessage() {}
 
 func (x *SendMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[8]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -836,7 +1056,7 @@ func (x *SendMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMetricsRequest.ProtoReflect.Descriptor instead.
 func (*SendMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{8}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SendMetricsRequest) GetAgentId() string {
@@ -881,6 +1101,13 @@ func (x *SendMetricsRequest) GetAgentVersion() string {
 	return ""
 }
 
+func (x *SendMetricsRequest) GetHostInfo() *HostInfo {
+	if x != nil {
+		return x.HostInfo
+	}
+	return nil
+}
+
 // SendMetricsResponse acknowledges metric reception
 type SendMetricsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -892,7 +1119,7 @@ type SendMetricsResponse struct {
 
 func (x *SendMetricsResponse) Reset() {
 	*x = SendMetricsResponse{}
-	mi := &file_agent_v1_agent_proto_msgTypes[9]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +1131,7 @@ func (x *SendMetricsResponse) String() string {
 func (*SendMetricsResponse) ProtoMessage() {}
 
 func (x *SendMetricsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[9]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +1144,7 @@ func (x *SendMetricsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMetricsResponse.ProtoReflect.Descriptor instead.
 func (*SendMetricsResponse) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{9}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SendMetricsResponse) GetSuccess() bool {
@@ -949,7 +1176,7 @@ type BufferedMetric struct {
 
 func (x *BufferedMetric) Reset() {
 	*x = BufferedMetric{}
-	mi := &file_agent_v1_agent_proto_msgTypes[10]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -961,7 +1188,7 @@ func (x *BufferedMetric) String() string {
 func (*BufferedMetric) ProtoMessage() {}
 
 func (x *BufferedMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[10]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -974,7 +1201,7 @@ func (x *BufferedMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BufferedMetric.ProtoReflect.Descriptor instead.
 func (*BufferedMetric) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{10}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BufferedMetric) GetAgentId() string {
@@ -1028,7 +1255,7 @@ type ReportDroppedMetricsRequest struct {
 
 func (x *ReportDroppedMetricsRequest) Reset() {
 	*x = ReportDroppedMetricsRequest{}
-	mi := &file_agent_v1_agent_proto_msgTypes[11]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1040,7 +1267,7 @@ func (x *ReportDroppedMetricsRequest) String() string {
 func (*ReportDroppedMetricsRequest) ProtoMessage() {}
 
 func (x *ReportDroppedMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[11]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1053,7 +1280,7 @@ func (x *ReportDroppedMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportDroppedMetricsRequest.ProtoReflect.Descriptor instead.
 func (*ReportDroppedMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{11}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ReportDroppedMetricsRequest) GetAgentId() string {
@@ -1116,7 +1343,7 @@ type ReportDroppedMetricsResponse struct {
 
 func (x *ReportDroppedMetricsResponse) Reset() {
 	*x = ReportDroppedMetricsResponse{}
-	mi := &file_agent_v1_agent_proto_msgTypes[12]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1128,7 +1355,7 @@ func (x *ReportDroppedMetricsResponse) String() string {
 func (*ReportDroppedMetricsResponse) ProtoMessage() {}
 
 func (x *ReportDroppedMetricsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[12]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1141,7 +1368,7 @@ func (x *ReportDroppedMetricsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportDroppedMetricsResponse.ProtoReflect.Descriptor instead.
 func (*ReportDroppedMetricsResponse) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{12}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReportDroppedMetricsResponse) GetSuccess() bool {
@@ -1177,7 +1404,7 @@ type Package struct {
 
 func (x *Package) Reset() {
 	*x = Package{}
-	mi := &file_agent_v1_agent_proto_msgTypes[13]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1189,7 +1416,7 @@ func (x *Package) String() string {
 func (*Package) ProtoMessage() {}
 
 func (x *Package) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[13]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1202,7 +1429,7 @@ func (x *Package) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Package.ProtoReflect.Descriptor instead.
 func (*Package) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{13}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Package) GetName() string {
@@ -1300,7 +1527,7 @@ type SendPackageInventoryRequest struct {
 
 func (x *SendPackageInventoryRequest) Reset() {
 	*x = SendPackageInventoryRequest{}
-	mi := &file_agent_v1_agent_proto_msgTypes[14]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1312,7 +1539,7 @@ func (x *SendPackageInventoryRequest) String() string {
 func (*SendPackageInventoryRequest) ProtoMessage() {}
 
 func (x *SendPackageInventoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[14]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1325,7 +1552,7 @@ func (x *SendPackageInventoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendPackageInventoryRequest.ProtoReflect.Descriptor instead.
 func (*SendPackageInventoryRequest) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{14}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SendPackageInventoryRequest) GetAgentId() string {
@@ -1411,7 +1638,7 @@ type SendPackageInventoryResponse struct {
 
 func (x *SendPackageInventoryResponse) Reset() {
 	*x = SendPackageInventoryResponse{}
-	mi := &file_agent_v1_agent_proto_msgTypes[15]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1423,7 +1650,7 @@ func (x *SendPackageInventoryResponse) String() string {
 func (*SendPackageInventoryResponse) ProtoMessage() {}
 
 func (x *SendPackageInventoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[15]
+	mi := &file_shared_proto_agent_v1_agent_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1436,7 +1663,7 @@ func (x *SendPackageInventoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendPackageInventoryResponse.ProtoReflect.Descriptor instead.
 func (*SendPackageInventoryResponse) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{15}
+	return file_shared_proto_agent_v1_agent_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SendPackageInventoryResponse) GetSuccess() bool {
@@ -1467,11 +1694,11 @@ func (x *SendPackageInventoryResponse) GetChangesDetected() int32 {
 	return 0
 }
 
-var File_agent_v1_agent_proto protoreflect.FileDescriptor
+var File_shared_proto_agent_v1_agent_proto protoreflect.FileDescriptor
 
-const file_agent_v1_agent_proto_rawDesc = "" +
+const file_shared_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x14agent/v1/agent.proto\x12\bagent.v1\"\xbf\x04\n" +
+	"!shared/proto/agent/v1/agent.proto\x12\bagent.v1\"\xd3\x06\n" +
 	"\x13RegisterHostRequest\x12-\n" +
 	"\x12registration_token\x18\x01 \x01(\tR\x11registrationToken\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\"\n" +
@@ -1479,18 +1706,24 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\rip_address_v6\x18\x04 \x01(\tR\vipAddressV6\x12\x1a\n" +
 	"\bplatform\x18\x05 \x01(\tR\bplatform\x12)\n" +
 	"\x10platform_version\x18\x06 \x01(\tR\x0fplatformVersion\x12'\n" +
-	"\x0fplatform_family\x18\a \x01(\tR\x0eplatformFamily\x12\"\n" +
-	"\farchitecture\x18\b \x01(\tR\farchitecture\x12\x16\n" +
-	"\x06kernel\x18\t \x01(\tR\x06kernel\x12\x1c\n" +
+	"\x0fplatform_family\x18\a \x01(\tR\x0eplatformFamily\x12\x1f\n" +
+	"\vkernel_arch\x18\b \x01(\tR\n" +
+	"kernelArch\x12%\n" +
+	"\x0ekernel_version\x18\t \x01(\tR\rkernelVersion\x12\x1c\n" +
 	"\ttimestamp\x18\n" +
 	" \x01(\x03R\ttimestamp\x12)\n" +
-	"\x10environment_type\x18\v \x01(\tR\x0fenvironmentType\x12\x1e\n" +
-	"\n" +
-	"hypervisor\x18\f \x01(\tR\n" +
-	"hypervisor\x12+\n" +
+	"\x10environment_type\x18\v \x01(\tR\x0fenvironmentType\x123\n" +
+	"\x15virtualization_system\x18\f \x01(\tR\x14virtualizationSystem\x12+\n" +
 	"\x11container_runtime\x18\r \x01(\tR\x10containerRuntime\x12.\n" +
 	"\x13existing_agent_uuid\x18\x0e \x01(\tR\x11existingAgentUuid\x12#\n" +
-	"\ragent_version\x18\x0f \x01(\tR\fagentVersion\"\xde\x01\n" +
+	"\ragent_version\x18\x0f \x01(\tR\fagentVersion\x12\x0e\n" +
+	"\x02os\x18\x10 \x01(\tR\x02os\x12/\n" +
+	"\x13virtualization_role\x18\x11 \x01(\tR\x12virtualizationRole\x12\x17\n" +
+	"\ahost_id\x18\x12 \x01(\tR\x06hostId\x12$\n" +
+	"\x0ecpu_model_name\x18\x13 \x01(\tR\fcpuModelName\x12,\n" +
+	"\x12cpu_physical_count\x18\x14 \x01(\x05R\x10cpuPhysicalCount\x12*\n" +
+	"\x11cpu_logical_count\x18\x15 \x01(\x05R\x0fcpuLogicalCount\x12\x17\n" +
+	"\acpu_mhz\x18\x16 \x01(\x01R\x06cpuMhz\"\xde\x01\n" +
 	"\x14RegisterHostResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -1513,7 +1746,7 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\x0ePendingCommand\x12\x1d\n" +
 	"\n" +
 	"command_id\x18\x01 \x01(\tR\tcommandId\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\"\xa2\x06\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\"\xd9\b\n" +
 	"\aMetrics\x12*\n" +
 	"\x11cpu_usage_percent\x18\x01 \x01(\x01R\x0fcpuUsagePercent\x12,\n" +
 	"\x12memory_total_bytes\x18\x02 \x01(\x04R\x10memoryTotalBytes\x12*\n" +
@@ -1532,7 +1765,14 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\x18network_rx_bytes_per_sec\x18\x0e \x01(\x04R\x14networkRxBytesPerSec\x126\n" +
 	"\x18network_tx_bytes_per_sec\x18\x0f \x01(\x04R\x14networkTxBytesPerSec\x126\n" +
 	"\x17cpu_temperature_celsius\x18\x10 \x01(\x01R\x15cpuTemperatureCelsius\x12@\n" +
-	"\x0fsensor_readings\x18\x11 \x03(\v2\x17.agent.v1.SensorReadingR\x0esensorReadings\"R\n" +
+	"\x0fsensor_readings\x18\x11 \x03(\v2\x17.agent.v1.SensorReadingR\x0esensorReadings\x12(\n" +
+	"\x10swap_total_bytes\x18\x12 \x01(\x04R\x0eswapTotalBytes\x12&\n" +
+	"\x0fswap_used_bytes\x18\x13 \x01(\x04R\rswapUsedBytes\x12'\n" +
+	"\x0fprocesses_count\x18\x14 \x01(\x04R\x0eprocessesCount\x120\n" +
+	"\x14memory_buffers_bytes\x18\x15 \x01(\x04R\x12memoryBuffersBytes\x12.\n" +
+	"\x13memory_cached_bytes\x18\x16 \x01(\x04R\x11memoryCachedBytes\x12,\n" +
+	"\x12cpu_iowait_percent\x18\x17 \x01(\x01R\x10cpuIowaitPercent\x12*\n" +
+	"\x11cpu_steal_percent\x18\x18 \x01(\x01R\x0fcpuStealPercent\"R\n" +
 	"\rSensorReading\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12/\n" +
 	"\x13temperature_celsius\x18\x02 \x01(\x01R\x12temperatureCelsius\"\xdc\x02\n" +
@@ -1545,14 +1785,25 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\x11memory_used_bytes\x18\x05 \x01(\x04R\x0fmemoryUsedBytes\x12,\n" +
 	"\x12memory_limit_bytes\x18\x06 \x01(\x04R\x10memoryLimitBytes\x126\n" +
 	"\x18network_rx_bytes_per_sec\x18\a \x01(\x04R\x14networkRxBytesPerSec\x126\n" +
-	"\x18network_tx_bytes_per_sec\x18\b \x01(\x04R\x14networkTxBytesPerSec\"\x84\x02\n" +
+	"\x18network_tx_bytes_per_sec\x18\b \x01(\x04R\x14networkTxBytesPerSec\"\xc3\x02\n" +
+	"\bHostInfo\x12)\n" +
+	"\x10platform_version\x18\x01 \x01(\tR\x0fplatformVersion\x12%\n" +
+	"\x0ekernel_version\x18\x02 \x01(\tR\rkernelVersion\x12\x1f\n" +
+	"\vkernel_arch\x18\x03 \x01(\tR\n" +
+	"kernelArch\x12$\n" +
+	"\x0ecpu_model_name\x18\x04 \x01(\tR\fcpuModelName\x12,\n" +
+	"\x12cpu_physical_count\x18\x05 \x01(\x05R\x10cpuPhysicalCount\x12*\n" +
+	"\x11cpu_logical_count\x18\x06 \x01(\x05R\x0fcpuLogicalCount\x12\x17\n" +
+	"\acpu_mhz\x18\a \x01(\x01R\x06cpuMhz\x12+\n" +
+	"\x11container_runtime\x18\b \x01(\tR\x10containerRuntime\"\xb5\x02\n" +
 	"\x12SendMetricsRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1b\n" +
 	"\tagent_key\x18\x02 \x01(\tR\bagentKey\x12+\n" +
 	"\ametrics\x18\x03 \x01(\v2\x11.agent.v1.MetricsR\ametrics\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12F\n" +
 	"\x11container_metrics\x18\x05 \x03(\v2\x19.agent.v1.ContainerMetricR\x10containerMetrics\x12#\n" +
-	"\ragent_version\x18\x06 \x01(\tR\fagentVersion\"I\n" +
+	"\ragent_version\x18\x06 \x01(\tR\fagentVersion\x12/\n" +
+	"\thost_info\x18\a \x01(\v2\x12.agent.v1.HostInfoR\bhostInfo\"I\n" +
 	"\x13SendMetricsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\xb9\x01\n" +
@@ -1611,19 +1862,19 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\x14SendPackageInventory\x12%.agent.v1.SendPackageInventoryRequest\x1a&.agent.v1.SendPackageInventoryResponseB(Z&watchflare/shared/proto/agent/v1;protob\x06proto3"
 
 var (
-	file_agent_v1_agent_proto_rawDescOnce sync.Once
-	file_agent_v1_agent_proto_rawDescData []byte
+	file_shared_proto_agent_v1_agent_proto_rawDescOnce sync.Once
+	file_shared_proto_agent_v1_agent_proto_rawDescData []byte
 )
 
-func file_agent_v1_agent_proto_rawDescGZIP() []byte {
-	file_agent_v1_agent_proto_rawDescOnce.Do(func() {
-		file_agent_v1_agent_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_agent_v1_agent_proto_rawDesc), len(file_agent_v1_agent_proto_rawDesc)))
+func file_shared_proto_agent_v1_agent_proto_rawDescGZIP() []byte {
+	file_shared_proto_agent_v1_agent_proto_rawDescOnce.Do(func() {
+		file_shared_proto_agent_v1_agent_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_shared_proto_agent_v1_agent_proto_rawDesc), len(file_shared_proto_agent_v1_agent_proto_rawDesc)))
 	})
-	return file_agent_v1_agent_proto_rawDescData
+	return file_shared_proto_agent_v1_agent_proto_rawDescData
 }
 
-var file_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
-var file_agent_v1_agent_proto_goTypes = []any{
+var file_shared_proto_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_shared_proto_agent_v1_agent_proto_goTypes = []any{
 	(*RegisterHostRequest)(nil),          // 0: agent.v1.RegisterHostRequest
 	(*RegisterHostResponse)(nil),         // 1: agent.v1.RegisterHostResponse
 	(*HeartbeatRequest)(nil),             // 2: agent.v1.HeartbeatRequest
@@ -1632,62 +1883,64 @@ var file_agent_v1_agent_proto_goTypes = []any{
 	(*Metrics)(nil),                      // 5: agent.v1.Metrics
 	(*SensorReading)(nil),                // 6: agent.v1.SensorReading
 	(*ContainerMetric)(nil),              // 7: agent.v1.ContainerMetric
-	(*SendMetricsRequest)(nil),           // 8: agent.v1.SendMetricsRequest
-	(*SendMetricsResponse)(nil),          // 9: agent.v1.SendMetricsResponse
-	(*BufferedMetric)(nil),               // 10: agent.v1.BufferedMetric
-	(*ReportDroppedMetricsRequest)(nil),  // 11: agent.v1.ReportDroppedMetricsRequest
-	(*ReportDroppedMetricsResponse)(nil), // 12: agent.v1.ReportDroppedMetricsResponse
-	(*Package)(nil),                      // 13: agent.v1.Package
-	(*SendPackageInventoryRequest)(nil),  // 14: agent.v1.SendPackageInventoryRequest
-	(*SendPackageInventoryResponse)(nil), // 15: agent.v1.SendPackageInventoryResponse
+	(*HostInfo)(nil),                     // 8: agent.v1.HostInfo
+	(*SendMetricsRequest)(nil),           // 9: agent.v1.SendMetricsRequest
+	(*SendMetricsResponse)(nil),          // 10: agent.v1.SendMetricsResponse
+	(*BufferedMetric)(nil),               // 11: agent.v1.BufferedMetric
+	(*ReportDroppedMetricsRequest)(nil),  // 12: agent.v1.ReportDroppedMetricsRequest
+	(*ReportDroppedMetricsResponse)(nil), // 13: agent.v1.ReportDroppedMetricsResponse
+	(*Package)(nil),                      // 14: agent.v1.Package
+	(*SendPackageInventoryRequest)(nil),  // 15: agent.v1.SendPackageInventoryRequest
+	(*SendPackageInventoryResponse)(nil), // 16: agent.v1.SendPackageInventoryResponse
 }
-var file_agent_v1_agent_proto_depIdxs = []int32{
+var file_shared_proto_agent_v1_agent_proto_depIdxs = []int32{
 	4,  // 0: agent.v1.HeartbeatResponse.commands:type_name -> agent.v1.PendingCommand
 	6,  // 1: agent.v1.Metrics.sensor_readings:type_name -> agent.v1.SensorReading
 	5,  // 2: agent.v1.SendMetricsRequest.metrics:type_name -> agent.v1.Metrics
 	7,  // 3: agent.v1.SendMetricsRequest.container_metrics:type_name -> agent.v1.ContainerMetric
-	5,  // 4: agent.v1.BufferedMetric.metrics:type_name -> agent.v1.Metrics
-	13, // 5: agent.v1.SendPackageInventoryRequest.added_packages:type_name -> agent.v1.Package
-	13, // 6: agent.v1.SendPackageInventoryRequest.removed_packages:type_name -> agent.v1.Package
-	13, // 7: agent.v1.SendPackageInventoryRequest.updated_packages:type_name -> agent.v1.Package
-	13, // 8: agent.v1.SendPackageInventoryRequest.all_packages:type_name -> agent.v1.Package
-	0,  // 9: agent.v1.AgentService.RegisterHost:input_type -> agent.v1.RegisterHostRequest
-	2,  // 10: agent.v1.AgentService.Heartbeat:input_type -> agent.v1.HeartbeatRequest
-	8,  // 11: agent.v1.AgentService.SendMetrics:input_type -> agent.v1.SendMetricsRequest
-	11, // 12: agent.v1.AgentService.ReportDroppedMetrics:input_type -> agent.v1.ReportDroppedMetricsRequest
-	14, // 13: agent.v1.AgentService.SendPackageInventory:input_type -> agent.v1.SendPackageInventoryRequest
-	1,  // 14: agent.v1.AgentService.RegisterHost:output_type -> agent.v1.RegisterHostResponse
-	3,  // 15: agent.v1.AgentService.Heartbeat:output_type -> agent.v1.HeartbeatResponse
-	9,  // 16: agent.v1.AgentService.SendMetrics:output_type -> agent.v1.SendMetricsResponse
-	12, // 17: agent.v1.AgentService.ReportDroppedMetrics:output_type -> agent.v1.ReportDroppedMetricsResponse
-	15, // 18: agent.v1.AgentService.SendPackageInventory:output_type -> agent.v1.SendPackageInventoryResponse
-	14, // [14:19] is the sub-list for method output_type
-	9,  // [9:14] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	8,  // 4: agent.v1.SendMetricsRequest.host_info:type_name -> agent.v1.HostInfo
+	5,  // 5: agent.v1.BufferedMetric.metrics:type_name -> agent.v1.Metrics
+	14, // 6: agent.v1.SendPackageInventoryRequest.added_packages:type_name -> agent.v1.Package
+	14, // 7: agent.v1.SendPackageInventoryRequest.removed_packages:type_name -> agent.v1.Package
+	14, // 8: agent.v1.SendPackageInventoryRequest.updated_packages:type_name -> agent.v1.Package
+	14, // 9: agent.v1.SendPackageInventoryRequest.all_packages:type_name -> agent.v1.Package
+	0,  // 10: agent.v1.AgentService.RegisterHost:input_type -> agent.v1.RegisterHostRequest
+	2,  // 11: agent.v1.AgentService.Heartbeat:input_type -> agent.v1.HeartbeatRequest
+	9,  // 12: agent.v1.AgentService.SendMetrics:input_type -> agent.v1.SendMetricsRequest
+	12, // 13: agent.v1.AgentService.ReportDroppedMetrics:input_type -> agent.v1.ReportDroppedMetricsRequest
+	15, // 14: agent.v1.AgentService.SendPackageInventory:input_type -> agent.v1.SendPackageInventoryRequest
+	1,  // 15: agent.v1.AgentService.RegisterHost:output_type -> agent.v1.RegisterHostResponse
+	3,  // 16: agent.v1.AgentService.Heartbeat:output_type -> agent.v1.HeartbeatResponse
+	10, // 17: agent.v1.AgentService.SendMetrics:output_type -> agent.v1.SendMetricsResponse
+	13, // 18: agent.v1.AgentService.ReportDroppedMetrics:output_type -> agent.v1.ReportDroppedMetricsResponse
+	16, // 19: agent.v1.AgentService.SendPackageInventory:output_type -> agent.v1.SendPackageInventoryResponse
+	15, // [15:20] is the sub-list for method output_type
+	10, // [10:15] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
-func init() { file_agent_v1_agent_proto_init() }
-func file_agent_v1_agent_proto_init() {
-	if File_agent_v1_agent_proto != nil {
+func init() { file_shared_proto_agent_v1_agent_proto_init() }
+func file_shared_proto_agent_v1_agent_proto_init() {
+	if File_shared_proto_agent_v1_agent_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_v1_agent_proto_rawDesc), len(file_agent_v1_agent_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_shared_proto_agent_v1_agent_proto_rawDesc), len(file_shared_proto_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_agent_v1_agent_proto_goTypes,
-		DependencyIndexes: file_agent_v1_agent_proto_depIdxs,
-		MessageInfos:      file_agent_v1_agent_proto_msgTypes,
+		GoTypes:           file_shared_proto_agent_v1_agent_proto_goTypes,
+		DependencyIndexes: file_shared_proto_agent_v1_agent_proto_depIdxs,
+		MessageInfos:      file_shared_proto_agent_v1_agent_proto_msgTypes,
 	}.Build()
-	File_agent_v1_agent_proto = out.File
-	file_agent_v1_agent_proto_goTypes = nil
-	file_agent_v1_agent_proto_depIdxs = nil
+	File_shared_proto_agent_v1_agent_proto = out.File
+	file_shared_proto_agent_v1_agent_proto_goTypes = nil
+	file_shared_proto_agent_v1_agent_proto_depIdxs = nil
 }

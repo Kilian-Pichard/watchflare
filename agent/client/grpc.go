@@ -96,20 +96,27 @@ func (c *Client) Close() error {
 
 // RegisterRequest contains all parameters needed to register the agent
 type RegisterRequest struct {
-	Token            string
-	Hostname         string
-	IPv4             string
-	IPv6             string
-	Platform         string
-	PlatformVersion  string
-	PlatformFamily   string
-	Architecture     string
-	Kernel           string
-	EnvironmentType  string
-	Hypervisor       string
-	ContainerRuntime string
-	ExistingUUID     string
-	AgentVersion     string
+	Token                string
+	Hostname             string
+	IPv4                 string
+	IPv6                 string
+	OS                   string
+	Platform             string
+	PlatformFamily       string
+	PlatformVersion      string
+	KernelVersion        string
+	KernelArch           string
+	VirtualizationSystem string
+	VirtualizationRole   string
+	HostID               string
+	EnvironmentType      string
+	ContainerRuntime     string
+	CPUModelName         string
+	CPUPhysicalCount     int32
+	CPULogicalCount      int32
+	CPUMhz               float64
+	ExistingUUID         string
+	AgentVersion         string
 }
 
 // RegistrationResponse contains the result of a successful registration
@@ -130,21 +137,28 @@ func (c *Client) Register(r RegisterRequest) (*RegistrationResponse, error) {
 	// Note: Registration uses token-based auth, not HMAC
 	// HMAC is only used after successful registration
 	req := &pb.RegisterHostRequest{
-		RegistrationToken: r.Token,
-		Hostname:          r.Hostname,
-		IpAddressV4:       r.IPv4,
-		IpAddressV6:       r.IPv6,
-		Platform:          r.Platform,
-		PlatformVersion:   r.PlatformVersion,
-		PlatformFamily:    r.PlatformFamily,
-		Architecture:      r.Architecture,
-		Kernel:            r.Kernel,
-		Timestamp:         time.Now().Unix(), // Anti-replay
-		EnvironmentType:   r.EnvironmentType,
-		Hypervisor:        r.Hypervisor,
-		ContainerRuntime:  r.ContainerRuntime,
-		ExistingAgentUuid: r.ExistingUUID,
-		AgentVersion:      r.AgentVersion,
+		RegistrationToken:    r.Token,
+		Hostname:             r.Hostname,
+		IpAddressV4:          r.IPv4,
+		IpAddressV6:          r.IPv6,
+		Os:                   r.OS,
+		Platform:             r.Platform,
+		PlatformFamily:       r.PlatformFamily,
+		PlatformVersion:      r.PlatformVersion,
+		KernelVersion:        r.KernelVersion,
+		KernelArch:           r.KernelArch,
+		VirtualizationSystem: r.VirtualizationSystem,
+		VirtualizationRole:   r.VirtualizationRole,
+		HostId:               r.HostID,
+		EnvironmentType:      r.EnvironmentType,
+		ContainerRuntime:     r.ContainerRuntime,
+		CpuModelName:         r.CPUModelName,
+		CpuPhysicalCount:     r.CPUPhysicalCount,
+		CpuLogicalCount:      r.CPULogicalCount,
+		CpuMhz:               r.CPUMhz,
+		Timestamp:            time.Now().Unix(), // Anti-replay
+		ExistingAgentUuid:    r.ExistingUUID,
+		AgentVersion:         r.AgentVersion,
 	}
 
 	resp, err := c.client.RegisterHost(ctx, req)
@@ -260,15 +274,22 @@ func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.
 		AgentKey: agentKey,
 		Metrics: &pb.Metrics{
 			CpuUsagePercent:      m.CPUUsagePercent,
+			CpuIowaitPercent:     m.CPUIowaitPercent,
+			CpuStealPercent:      m.CPUStealPercent,
 			MemoryTotalBytes:     m.MemoryTotalBytes,
 			MemoryUsedBytes:      m.MemoryUsedBytes,
 			MemoryAvailableBytes: m.MemoryAvailableBytes,
+			MemoryBuffersBytes:   m.MemoryBuffersBytes,
+			MemoryCachedBytes:    m.MemoryCachedBytes,
+			SwapTotalBytes:       m.SwapTotalBytes,
+			SwapUsedBytes:        m.SwapUsedBytes,
 			LoadAvg_1Min:         m.LoadAvg1Min,
 			LoadAvg_5Min:         m.LoadAvg5Min,
 			LoadAvg_15Min:        m.LoadAvg15Min,
 			DiskTotalBytes:       m.DiskTotalBytes,
 			DiskUsedBytes:        m.DiskUsedBytes,
 			UptimeSeconds:        m.UptimeSeconds,
+			ProcessesCount:       m.ProcessesCount,
 			Timestamp:            m.Timestamp,
 
 			DiskReadBytesPerSec:   m.DiskReadBytesPerSec,
@@ -280,6 +301,16 @@ func (c *Client) SendMetrics(agentID, agentKey, agentVersion string, m *metrics.
 		},
 		Timestamp:    timestamp, // Request-level timestamp for anti-replay
 		AgentVersion: agentVersion,
+		HostInfo: &pb.HostInfo{
+			PlatformVersion:  m.HostInfo.PlatformVersion,
+			KernelVersion:    m.HostInfo.KernelVersion,
+			KernelArch:       m.HostInfo.KernelArch,
+			CpuModelName:     m.HostInfo.CPUModelName,
+			CpuPhysicalCount: m.HostInfo.CPUPhysicalCount,
+			CpuLogicalCount:  m.HostInfo.CPULogicalCount,
+			CpuMhz:           m.HostInfo.CPUMhz,
+			ContainerRuntime: m.HostInfo.ContainerRuntime,
+		},
 	}
 
 	// Map container metrics if present

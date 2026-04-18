@@ -22,9 +22,15 @@ type MetricsQueryParams struct {
 type MetricDataPoint struct {
 	Timestamp             time.Time             `json:"timestamp"`
 	CPUUsagePercent       float64               `json:"cpu_usage_percent"`
+	CPUIowaitPercent      float64               `json:"cpu_iowait_percent"`
+	CPUStealPercent       float64               `json:"cpu_steal_percent"`
 	MemoryTotalBytes      uint64                `json:"memory_total_bytes"`
 	MemoryUsedBytes       uint64                `json:"memory_used_bytes"`
 	MemoryAvailableBytes  uint64                `json:"memory_available_bytes"`
+	MemoryBuffersBytes    uint64                `json:"memory_buffers_bytes"`
+	MemoryCachedBytes     uint64                `json:"memory_cached_bytes"`
+	SwapTotalBytes        uint64                `json:"swap_total_bytes"`
+	SwapUsedBytes         uint64                `json:"swap_used_bytes"`
 	LoadAvg1Min           float64               `json:"load_avg_1min"`
 	LoadAvg5Min           float64               `json:"load_avg_5min"`
 	LoadAvg15Min          float64               `json:"load_avg_15min"`
@@ -36,6 +42,7 @@ type MetricDataPoint struct {
 	NetworkTxBytesPerSec  uint64                `json:"network_tx_bytes_per_sec"`
 	CPUTemperatureCelsius float64               `json:"cpu_temperature_celsius"`
 	UptimeSeconds         uint64                `json:"uptime_seconds"`
+	ProcessesCount        uint64                `json:"processes_count"`
 	SensorReadings        models.SensorReadings `json:"sensor_readings,omitempty"`
 }
 
@@ -85,9 +92,15 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 			results[i] = MetricDataPoint{
 				Timestamp:             m.Timestamp,
 				CPUUsagePercent:       m.CPUUsagePercent,
+				CPUIowaitPercent:      m.CPUIowaitPercent,
+				CPUStealPercent:       m.CPUStealPercent,
 				MemoryTotalBytes:      m.MemoryTotalBytes,
 				MemoryUsedBytes:       m.MemoryUsedBytes,
 				MemoryAvailableBytes:  m.MemoryAvailableBytes,
+				MemoryBuffersBytes:    m.MemoryBuffersBytes,
+				MemoryCachedBytes:     m.MemoryCachedBytes,
+				SwapTotalBytes:        m.SwapTotalBytes,
+				SwapUsedBytes:         m.SwapUsedBytes,
 				LoadAvg1Min:           m.LoadAvg1Min,
 				LoadAvg5Min:           m.LoadAvg5Min,
 				LoadAvg15Min:          m.LoadAvg15Min,
@@ -99,6 +112,7 @@ func GetMetrics(params MetricsQueryParams) ([]MetricDataPoint, error) {
 				NetworkTxBytesPerSec:  m.NetworkTxBytesPerSec,
 				CPUTemperatureCelsius: m.CPUTemperatureCelsius,
 				UptimeSeconds:         m.UptimeSeconds,
+				ProcessesCount:        m.ProcessesCount,
 				SensorReadings:        m.SensorReadings,
 			}
 		}
@@ -216,6 +230,54 @@ func GetContainerMetrics(hostID string, start, end time.Time, interval string) (
 	}
 
 	return metrics, nil
+}
+
+// GetLatestMetric returns the most recent metric row for a host, or nil if none exist yet.
+func GetLatestMetric(hostID string) (*MetricDataPoint, error) {
+	var host models.Host
+	if err := database.DB.Where("id = ?", hostID).First(&host).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrHostNotFound
+		}
+		return nil, err
+	}
+
+	var m models.Metric
+	if err := database.DB.Where("host_id = ?", hostID).
+		Order("timestamp DESC").
+		First(&m).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &MetricDataPoint{
+		Timestamp:             m.Timestamp,
+		CPUUsagePercent:       m.CPUUsagePercent,
+		CPUIowaitPercent:      m.CPUIowaitPercent,
+		CPUStealPercent:       m.CPUStealPercent,
+		MemoryTotalBytes:      m.MemoryTotalBytes,
+		MemoryUsedBytes:       m.MemoryUsedBytes,
+		MemoryAvailableBytes:  m.MemoryAvailableBytes,
+		MemoryBuffersBytes:    m.MemoryBuffersBytes,
+		MemoryCachedBytes:     m.MemoryCachedBytes,
+		SwapTotalBytes:        m.SwapTotalBytes,
+		SwapUsedBytes:         m.SwapUsedBytes,
+		LoadAvg1Min:           m.LoadAvg1Min,
+		LoadAvg5Min:           m.LoadAvg5Min,
+		LoadAvg15Min:          m.LoadAvg15Min,
+		DiskTotalBytes:        m.DiskTotalBytes,
+		DiskUsedBytes:         m.DiskUsedBytes,
+		DiskReadBytesPerSec:   m.DiskReadBytesPerSec,
+		DiskWriteBytesPerSec:  m.DiskWriteBytesPerSec,
+		NetworkRxBytesPerSec:  m.NetworkRxBytesPerSec,
+		NetworkTxBytesPerSec:  m.NetworkTxBytesPerSec,
+		CPUTemperatureCelsius: m.CPUTemperatureCelsius,
+		UptimeSeconds:         m.UptimeSeconds,
+		ProcessesCount:        m.ProcessesCount,
+		SensorReadings:        m.SensorReadings,
+	}, nil
 }
 
 func getContinuousAggregateTable(interval string) (string, error) {

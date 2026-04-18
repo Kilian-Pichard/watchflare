@@ -82,6 +82,7 @@ func Run() {
 	// Detect environment and create metrics config
 	env := sysinfo.DetectEnvironment()
 	metricsConfig := sysinfo.GetMetricsConfig(env, *cfg.DockerMetrics)
+	metricsConfig.ContainerRuntime = env.ContainerRuntime
 	slog.Info("environment detected", "type", env.String())
 	if *cfg.DockerMetrics {
 		slog.Info("Docker container metrics enabled")

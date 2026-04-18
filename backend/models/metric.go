@@ -50,12 +50,20 @@ type Metric struct {
 	HostID    string    `gorm:"type:char(36);index:idx_metrics_host;not null" json:"host_id"`
 
 	// CPU metrics
-	CPUUsagePercent float64 `json:"cpu_usage_percent"`
+	CPUUsagePercent  float64 `json:"cpu_usage_percent"`
+	CPUIowaitPercent float64 `json:"cpu_iowait_percent"` // Linux only: waiting for I/O (0 elsewhere)
+	CPUStealPercent  float64 `json:"cpu_steal_percent"`  // Linux VMs only: stolen by hypervisor (0 elsewhere)
 
 	// Memory metrics (in bytes)
 	MemoryTotalBytes     uint64 `json:"memory_total_bytes"`
 	MemoryUsedBytes      uint64 `json:"memory_used_bytes"`
 	MemoryAvailableBytes uint64 `json:"memory_available_bytes"`
+	MemoryBuffersBytes   uint64 `json:"memory_buffers_bytes"` // Linux only: kernel buffer cache
+	MemoryCachedBytes    uint64 `json:"memory_cached_bytes"`  // Linux only: page cache
+
+	// Swap metrics (in bytes)
+	SwapTotalBytes uint64 `json:"swap_total_bytes"`
+	SwapUsedBytes  uint64 `json:"swap_used_bytes"`
 
 	// Load average
 	LoadAvg1Min  float64 `json:"load_avg_1min"`
@@ -80,8 +88,9 @@ type Metric struct {
 	// All sensor readings (temperature sensors, battery, storage, etc.)
 	SensorReadings SensorReadings `gorm:"type:jsonb" json:"sensor_readings,omitempty"`
 
-	// System uptime
-	UptimeSeconds uint64 `json:"uptime_seconds"`
+	// System uptime and process count
+	UptimeSeconds  uint64 `json:"uptime_seconds"`
+	ProcessesCount uint64 `json:"processes_count"`
 
 	CreatedAt time.Time `json:"created_at"`
 }

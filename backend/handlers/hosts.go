@@ -129,9 +129,18 @@ func GetHost(c *gin.Context) {
 		clockDesync = cachedData.ClockDesync
 	}
 
+	// Include the latest metric so the frontend can display live stats immediately
+	// without waiting for the first SSE event.
+	latestMetric, err := services.GetLatestMetric(hostID)
+	if err != nil {
+		// Non-critical — return the host without metric rather than failing
+		latestMetric = nil
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"host":         host,
-		"clock_desync": clockDesync,
+		"host":           host,
+		"clock_desync":   clockDesync,
+		"latest_metrics": latestMetric,
 	})
 }
 

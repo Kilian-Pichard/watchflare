@@ -9,6 +9,7 @@
 	import DiskIOChart from '$lib/components/DiskIOChart.svelte';
 	import NetworkChart from '$lib/components/NetworkChart.svelte';
 	import TemperatureChart from '$lib/components/TemperatureChart.svelte';
+	import SwapChart from '$lib/components/SwapChart.svelte';
 	import ContainerCPUChart from '$lib/components/ContainerCPUChart.svelte';
 	import ContainerMemoryChart from '$lib/components/ContainerMemoryChart.svelte';
 	import ContainerNetworkChart from '$lib/components/ContainerNetworkChart.svelte';
@@ -146,6 +147,18 @@
 			</div>
 			<NetworkChart data={metrics} {timeRange} />
 		</div>
+		{#if latestMetric && latestMetric.swap_total_bytes > 0}
+			<div class="rounded-lg border bg-card p-4">
+				<div class="mb-3 flex items-center justify-between">
+					<h3 class="text-sm font-medium">Swap Usage</h3>
+					<span class="text-xs text-muted-foreground">
+						<span class="sm:hidden">{formatPercent(latestMetric.swap_total_bytes > 0 ? (latestMetric.swap_used_bytes / latestMetric.swap_total_bytes) * 100 : 0)}</span>
+						<span class="hidden sm:inline">{formatBytes(latestMetric.swap_used_bytes)} / {formatBytes(latestMetric.swap_total_bytes)} ({formatPercent(latestMetric.swap_total_bytes > 0 ? (latestMetric.swap_used_bytes / latestMetric.swap_total_bytes) * 100 : 0)})</span>
+					</span>
+				</div>
+				<SwapChart data={metrics} {timeRange} />
+			</div>
+		{/if}
 		{#if latestMetric && (latestMetric.cpu_temperature_celsius > 0 || (latestMetric.sensor_readings && latestMetric.sensor_readings.length > 0))}
 			<div class="rounded-lg border bg-card p-4">
 				<div class="mb-3 flex items-center justify-between">

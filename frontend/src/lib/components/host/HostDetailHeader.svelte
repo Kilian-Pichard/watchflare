@@ -77,8 +77,8 @@
                       type: 'platform',
                   }
                 : null,
-            host.architecture
-                ? { icon: Cpu, text: host.architecture, type: 'architecture' }
+            host.kernel_arch
+                ? { icon: Cpu, text: host.kernel_arch, type: 'kernel_arch' }
                 : null,
             metric && metric.memory_total_bytes > 0
                 ? { icon: MemoryStick, text: formatBytes(metric.memory_total_bytes), type: 'memory' }
@@ -225,7 +225,7 @@
             {/if}
             <span class="inline-flex items-center gap-1">
                 {#if detail.type === 'platform'}
-                    <OsIcon os={host.platform} class="h-3.5 w-3.5 shrink-0" />
+                    <OsIcon os={host.os ?? host.platform} class="h-3.5 w-3.5 shrink-0" />
                 {:else}
                     <detail.icon class="h-3.5 w-3.5 shrink-0" />
                 {/if}

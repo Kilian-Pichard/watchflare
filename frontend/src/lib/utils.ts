@@ -122,6 +122,18 @@ export function formatRelativeTime(dateString: string | null | undefined): strin
 	return `${Math.floor(diff / 86400)}d ago`;
 }
 
+// Format offline duration ("Offline for 3m", "Offline for 2h", etc.)
+// Accepts a nowMs parameter so the caller can pass a reactive timestamp for live updates.
+export function formatOfflineDuration(lastSeen: string | null | undefined, nowMs: number): string {
+	if (!lastSeen) return 'Offline';
+	const diff = Math.floor((nowMs - new Date(lastSeen).getTime()) / 1000);
+	if (diff <= 0) return 'Offline';
+	if (diff < 60) return `Offline for ${diff}s`;
+	if (diff < 3600) return `Offline for ${Math.floor(diff / 60)}m`;
+	if (diff < 86400) return `Offline for ${Math.floor(diff / 3600)}h`;
+	return `Offline for ${Math.floor(diff / 86400)}d`;
+}
+
 // Format date as locale string
 export function formatDateTime(dateString: string | null | undefined, timeFormat: '12h' | '24h' = '24h'): string {
 	if (!dateString) return '-';

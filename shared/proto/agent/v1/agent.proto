@@ -28,22 +28,31 @@ message RegisterHostRequest {
   string hostname = 2;
   string ip_address_v4 = 3;
   string ip_address_v6 = 4;
-  string platform = 5;              // "macOS", "Linux", "Windows"
-  string platform_version = 6;      // "15.6.1", "22.04.3"
-  string platform_family = 7;       // "darwin", "linux", "windows"
-  string architecture = 8;          // "arm64", "amd64"
-  string kernel = 9;                // "24.6.0", "5.15.0-97-generic"
+  string platform = 5;              // gopsutil Platform: distro name ("fedora", "ubuntu", "macos")
+  string platform_version = 6;      // gopsutil PlatformVersion: "43", "22.04"
+  string platform_family = 7;       // gopsutil PlatformFamily: "rhel", "debian"
+  string kernel_arch = 8;           // gopsutil KernelArch: "aarch64", "x86_64"
+  string kernel_version = 9;        // gopsutil KernelVersion: "6.17.1-300.fc43.aarch64"
   int64 timestamp = 10;             // Unix timestamp in seconds (for anti-replay)
 
-  // Environment detection (added for smart metrics collection)
-  string environment_type = 11;     // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
-  string hypervisor = 12;           // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
-  string container_runtime = 13;    // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
+  // Environment detection
+  string environment_type = 11;        // "physical", "physical_with_containers", "vm", "vm_with_containers", "container"
+  string virtualization_system = 12;   // gopsutil VirtualizationSystem: "kvm", "vmware", "xen" (empty if physical)
+  string container_runtime = 13;       // "docker", "lxc", "podman", "kubernetes" (empty if not in container)
 
   // Existing agent UUID (for re-registration without creating new agent)
   // If provided and exists in DB, the agent will be reactivated instead of creating a new one
   string existing_agent_uuid = 14;  // UUID from /var/lib/watchflare/agent.uuid (empty if first registration)
   string agent_version = 15;        // Agent binary version (e.g. "0.27.3"), set via ldflags
+
+  // Additional gopsutil fields
+  string os = 16;                    // gopsutil OS: "linux", "darwin", "windows"
+  string virtualization_role = 17;   // gopsutil VirtualizationRole: "guest", "host" (empty if physical)
+  string host_id = 18;               // gopsutil HostID: unique OS-provided UUID
+  string cpu_model_name = 19;        // gopsutil cpu.InfoStat.ModelName: "Apple M4 Max", "Intel Xeon E5-2690"
+  int32 cpu_physical_count = 20;     // gopsutil cpu.Counts(false): physical core count
+  int32 cpu_logical_count = 21;      // gopsutil cpu.Counts(true): logical thread count
+  double cpu_mhz = 22;               // gopsutil cpu.InfoStat.Mhz: base frequency
 }
 
 // RegisterHostResponse is sent back after successful registration
@@ -106,6 +115,21 @@ message Metrics {
 
   // All temperature sensor readings (one entry per sensor key)
   repeated SensorReading sensor_readings = 17;
+
+  // Swap memory
+  uint64 swap_total_bytes = 18;
+  uint64 swap_used_bytes = 19;
+
+  // Process count
+  uint64 processes_count = 20;
+
+  // Memory breakdown (Linux only, 0 on other platforms)
+  uint64 memory_buffers_bytes = 21;  // Kernel buffer cache
+  uint64 memory_cached_bytes = 22;   // Page cache
+
+  // CPU time breakdown (Linux only, 0 on other platforms)
+  double cpu_iowait_percent = 23;    // Waiting for I/O completion
+  double cpu_steal_percent = 24;     // CPU stolen by hypervisor (VMs only)
 }
 
 // SensorReading represents a single temperature sensor reading
@@ -126,6 +150,19 @@ message ContainerMetric {
   uint64 network_tx_bytes_per_sec = 8;
 }
 
+// HostInfo contains slowly-changing host properties sent with every metrics cycle.
+// The backend only writes to DB if at least one field has changed.
+message HostInfo {
+  string platform_version = 1;  // gopsutil PlatformVersion: "43", "22.04"
+  string kernel_version = 2;    // gopsutil KernelVersion: "6.17.1-300.fc43.aarch64"
+  string kernel_arch = 3;       // gopsutil KernelArch: "x86_64", "aarch64"
+  string cpu_model_name = 4;    // gopsutil cpu.InfoStat.ModelName
+  int32 cpu_physical_count = 5; // gopsutil cpu.Counts(false)
+  int32 cpu_logical_count = 6;  // gopsutil cpu.Counts(true)
+  double cpu_mhz = 7;           // gopsutil cpu.InfoStat.Mhz
+  string container_runtime = 8; // "docker", "kubernetes", etc. (empty if not in container)
+}
+
 // SendMetricsRequest contains authentication and metrics data
 message SendMetricsRequest {
   string agent_id = 1;   // UUID of the host
@@ -134,6 +171,7 @@ message SendMetricsRequest {
   int64 timestamp = 4;   // Unix timestamp in seconds (for anti-replay)
   repeated ContainerMetric container_metrics = 5;  // Per-container metrics (empty if no containers)
   string agent_version = 6;         // Agent binary version, sent to keep DB in sync after upgrades
+  HostInfo host_info = 7;           // Slowly-changing host properties, updated only on change
 }
 
 // SendMetricsResponse acknowledges metric reception

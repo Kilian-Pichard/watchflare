@@ -58,11 +58,12 @@ export interface Host {
   id: string;
   display_name: string;
   hostname: string;
+  os: string | null;
   platform: string | null;
   platform_version: string | null;
   platform_family: string | null;
-  architecture: string | null;
-  kernel: string | null;
+  kernel_version: string | null;
+  kernel_arch: string | null;
   ip_address_v4: string;
   ip_address_v6: string | null;
   configured_ip: string;
@@ -72,7 +73,13 @@ export interface Host {
   created_at: string;
   environment_type: EnvironmentType;
   container_runtime: string | null;
-  hypervisor: string | null;
+  virtualization_system: string | null;
+  virtualization_role: string | null;
+  host_id: string | null;
+  cpu_model_name: string | null;
+  cpu_physical_count: number | null;
+  cpu_logical_count: number | null;
+  cpu_mhz: number | null;
   reactivated_at: string | null;
   agent_version: string | null;
   agent_uuid: string;
@@ -112,15 +119,22 @@ export interface Metric {
   host_id: string;
   timestamp: string;
   cpu_usage_percent: number;
+  cpu_iowait_percent: number;
+  cpu_steal_percent: number;
   memory_used_bytes: number;
   memory_total_bytes: number;
   memory_available_bytes: number;
+  memory_buffers_bytes: number;
+  memory_cached_bytes: number;
+  swap_total_bytes: number;
+  swap_used_bytes: number;
   disk_used_bytes: number;
   disk_total_bytes: number;
   load_avg_1min: number;
   load_avg_5min: number;
   load_avg_15min: number;
   uptime_seconds: number;
+  processes_count: number;
   disk_read_bytes_per_sec: number;
   disk_write_bytes_per_sec: number;
   network_rx_bytes_per_sec: number;
@@ -309,6 +323,7 @@ export interface RegenerateTokenResponse {
 export interface GetHostResponse {
   host: Host;
   clock_desync: boolean;
+  latest_metrics: Metric | null;
 }
 
 export interface ListHostsResponse {

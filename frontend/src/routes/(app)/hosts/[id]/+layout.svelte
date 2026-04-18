@@ -4,7 +4,7 @@
     import { page } from "$app/stores";
     import * as api from "$lib/api.js";
     import { sseStore } from "$lib/stores/sse";
-    import { handleSSEReactivation, logger, formatPercent } from "$lib/utils";
+    import { handleSSEReactivation, formatOfflineDuration } from "$lib/utils";
     import type {
         Host,
         Metric,
@@ -19,6 +19,7 @@
         ContainerMetric,
     } from "$lib/types";
     import HostDetailHeader from "$lib/components/host/HostDetailHeader.svelte";
+    import HostLiveStats from "$lib/components/host/HostLiveStats.svelte";
     import HostAlerts from "$lib/components/host/HostAlerts.svelte";
     import HostAlertRulesDrawer from "$lib/components/host/HostAlertRulesDrawer.svelte";
     import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -37,6 +38,8 @@
     let latestAgentVersion: string | null = $state(null);
     let latestMetric: Metric | null = $state(null);
     let hasActiveAlertRules = $state(false);
+    let now = $state(Date.now());
+    let nowTimer: ReturnType<typeof setInterval> | null = null;
 
     // Tab data caches — persist between tab switches for the duration of the host detail session
     let overviewCache: {
@@ -131,6 +134,7 @@
     onMount(() => {
         sseUnsubscribe = sseStore.connect(handleSSEMessage);
         loadHost();
+        nowTimer = setInterval(() => { now = Date.now(); }, 30_000);
         const state = $page.state as { newHostToken?: string };
         if (state.newHostToken) {
             regeneratedToken = state.newHostToken;
@@ -140,6 +144,7 @@
 
     onDestroy(() => {
         if (sseUnsubscribe) sseUnsubscribe();
+        if (nowTimer) clearInterval(nowTimer);
         if (updateAgentMessageTimeout) clearTimeout(updateAgentMessageTimeout);
         if (copyErrorTimeout) clearTimeout(copyErrorTimeout);
     });
@@ -175,6 +180,8 @@
         }
     }
 
+    const METRIC_STALE_MS = 5 * 60 * 1000; // 5 minutes
+
     async function loadHost() {
         try {
             const [response] = await Promise.all([
@@ -190,6 +197,12 @@
             ]);
             host = response.host;
             clockDesync = response.clock_desync || false;
+            if (response.latest_metrics) {
+                const age = Date.now() - new Date(response.latest_metrics.timestamp).getTime();
+                if (age <= METRIC_STALE_MS) {
+                    latestMetric = response.latest_metrics;
+                }
+            }
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to load host";
         } finally {
@@ -315,27 +328,6 @@
         }
     }
 
-    const ramPct = $derived(
-        latestMetric && latestMetric.memory_total_bytes > 0
-            ? (latestMetric.memory_used_bytes /
-                  latestMetric.memory_total_bytes) *
-                  100
-            : null,
-    );
-    const diskPct = $derived(
-        latestMetric && latestMetric.disk_total_bytes > 0
-            ? (latestMetric.disk_used_bytes / latestMetric.disk_total_bytes) *
-                  100
-            : null,
-    );
-
-    function metricColor(pct: number | null): string {
-        if (pct === null) return "text-muted-foreground";
-        if (pct >= 90) return "text-danger";
-        if (pct >= 70) return "text-warning";
-        return "text-success";
-    }
-
     let updateAgentMessage = $state("");
     let updateAgentMessageTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -395,13 +387,14 @@
         </div>
     </div>
     <!-- Skeleton: live metric pills -->
-    <div class="flex flex-wrap gap-3 mb-4 animate-pulse">
-        {#each Array(3) as _}
+    <div class="flex gap-3 mb-6 animate-pulse overflow-x-auto">
+        {#each Array(5) as _}
             <div
-                class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
+                class="shrink-0 rounded-lg border bg-card px-3 py-2 flex items-center gap-2"
             >
-                <div class="h-3.5 w-6 rounded bg-muted"></div>
-                <div class="h-5 w-10 rounded bg-muted"></div>
+                <div class="h-3.5 w-3.5 rounded bg-muted"></div>
+                <div class="h-3 w-10 rounded bg-muted"></div>
+                <div class="h-5 w-12 rounded bg-muted"></div>
             </div>
         {/each}
     </div>
@@ -508,41 +501,12 @@
         onDismissReactivation={handleDismissReactivation}
     />
 
-    <!-- Live metrics -->
-    <div class="flex flex-wrap gap-3 mb-4">
-        <div
-            class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
-        >
-            <span class="text-xs text-muted-foreground">CPU</span>
-            <span
-                class="text-sm font-semibold tabular-nums {metricColor(
-                    latestMetric?.cpu_usage_percent ?? null,
-                )}"
-                >{latestMetric
-                    ? formatPercent(latestMetric.cpu_usage_percent)
-                    : "—"}</span
-            >
-        </div>
-        <div
-            class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
-        >
-            <span class="text-xs text-muted-foreground">RAM</span>
-            <span
-                class="text-sm font-semibold tabular-nums {metricColor(ramPct)}"
-                >{latestMetric ? formatPercent(ramPct ?? 0) : "—"}</span
-            >
-        </div>
-        <div
-            class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
-        >
-            <span class="text-xs text-muted-foreground">Disk</span>
-            <span
-                class="text-sm font-semibold tabular-nums {metricColor(
-                    diskPct,
-                )}">{latestMetric ? formatPercent(diskPct ?? 0) : "—"}</span
-            >
-        </div>
-    </div>
+    <HostLiveStats metric={latestMetric} />
+    {#if host.status !== "online" && host.last_seen}
+        <p class="text-xs text-muted-foreground mb-6">
+            {formatOfflineDuration(host.last_seen, now)}
+        </p>
+    {/if}
 
     <!-- Tab Navigation -->
     <div

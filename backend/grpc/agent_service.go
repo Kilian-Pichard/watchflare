@@ -125,23 +125,32 @@ func (s *AgentServer) RegisterHost(ctx context.Context, req *pb.RegisterHostRequ
 
 	// Step 7: Update the agent with registration information
 	now := time.Now()
+	cpuPhysical := int(req.CpuPhysicalCount)
+	cpuLogical := int(req.CpuLogicalCount)
 	updates := map[string]interface{}{
-		"hostname":           req.Hostname,
-		"ip_address_v4":      req.IpAddressV4,
-		"ip_address_v6":      req.IpAddressV6,
-		"platform":           req.Platform,
-		"platform_version":   req.PlatformVersion,
-		"platform_family":    req.PlatformFamily,
-		"architecture":       req.Architecture,
-		"kernel":             req.Kernel,
-		"environment_type":   req.EnvironmentType,
-		"hypervisor":         req.Hypervisor,
-		"container_runtime":  req.ContainerRuntime,
-		"agent_version":      req.AgentVersion,
-		"status":             models.StatusOffline,
-		"last_seen":          &now,
-		"registration_token": nil, // Always clear token after successful registration
-		"expires_at":         nil, // Clear expiration
+		"hostname":              req.Hostname,
+		"ip_address_v4":         req.IpAddressV4,
+		"ip_address_v6":         req.IpAddressV6,
+		"os":                    req.Os,
+		"platform":              req.Platform,
+		"platform_version":      req.PlatformVersion,
+		"platform_family":       req.PlatformFamily,
+		"kernel_version":        req.KernelVersion,
+		"kernel_arch":           req.KernelArch,
+		"environment_type":      req.EnvironmentType,
+		"virtualization_system": req.VirtualizationSystem,
+		"virtualization_role":   req.VirtualizationRole,
+		"container_runtime":     req.ContainerRuntime,
+		"host_id":               req.HostId,
+		"cpu_model_name":        req.CpuModelName,
+		"cpu_physical_count":    &cpuPhysical,
+		"cpu_logical_count":     &cpuLogical,
+		"cpu_mhz":               req.CpuMhz,
+		"agent_version":         req.AgentVersion,
+		"status":                models.StatusOffline,
+		"last_seen":             &now,
+		"registration_token":    nil, // Always clear token after successful registration
+		"expires_at":            nil, // Clear expiration
 	}
 
 	// If this is a reactivation, set reactivated_at timestamp
@@ -226,8 +235,17 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	}
 
 	// Update heartbeat cache (in-memory, no DB write)
+	// Fall back to DB values if heartbeat sends empty IPs (agent uses Heartbeat() not SendHeartbeat())
+	ipv4 := req.IpAddressV4
+	if ipv4 == "" && host.IPAddressV4 != nil {
+		ipv4 = *host.IPAddressV4
+	}
+	ipv6 := req.IpAddressV6
+	if ipv6 == "" && host.IPAddressV6 != nil {
+		ipv6 = *host.IPAddressV6
+	}
 	heartbeatCache := cache.GetCache()
-	heartbeatCache.Update(req.AgentId, req.IpAddressV4, req.IpAddressV6)
+	heartbeatCache.Update(req.AgentId, ipv4, ipv6)
 
 	// Consume any pending commands for this agent
 	pending := heartbeatCache.ConsumeCommands(req.AgentId)
@@ -248,8 +266,8 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	broker.BroadcastHostUpdate(sse.HostUpdate{
 		ID:               host.ID,
 		Status:           models.StatusOnline,
-		IPv4Address:      req.IpAddressV4,
-		IPv6Address:      req.IpAddressV6,
+		IPv4Address:      ipv4,
+		IPv6Address:      ipv6,
 		ConfiguredIP:     configuredIP,
 		IgnoreIPMismatch: host.IgnoreIPMismatch,
 		LastSeen:         time.Now().Format(time.RFC3339),
@@ -290,6 +308,64 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		}
 	}
 
+	// Update slowly-changing host info if any field changed
+	if req.HostInfo != nil {
+		hostInfoUpdates := map[string]interface{}{}
+
+		derefStr := func(p *string) string {
+			if p == nil {
+				return ""
+			}
+			return *p
+		}
+		derefInt := func(p *int) int {
+			if p == nil {
+				return 0
+			}
+			return *p
+		}
+		derefFloat := func(p *float64) float64 {
+			if p == nil {
+				return 0
+			}
+			return *p
+		}
+
+		if req.HostInfo.PlatformVersion != "" && req.HostInfo.PlatformVersion != derefStr(host.PlatformVersion) {
+			hostInfoUpdates["platform_version"] = req.HostInfo.PlatformVersion
+		}
+		if req.HostInfo.KernelVersion != "" && req.HostInfo.KernelVersion != derefStr(host.KernelVersion) {
+			hostInfoUpdates["kernel_version"] = req.HostInfo.KernelVersion
+		}
+		if req.HostInfo.KernelArch != "" && req.HostInfo.KernelArch != derefStr(host.KernelArch) {
+			hostInfoUpdates["kernel_arch"] = req.HostInfo.KernelArch
+		}
+		if req.HostInfo.CpuModelName != "" && req.HostInfo.CpuModelName != derefStr(host.CPUModelName) {
+			hostInfoUpdates["cpu_model_name"] = req.HostInfo.CpuModelName
+		}
+		if req.HostInfo.CpuPhysicalCount != 0 && int(req.HostInfo.CpuPhysicalCount) != derefInt(host.CPUPhysicalCount) {
+			v := int(req.HostInfo.CpuPhysicalCount)
+			hostInfoUpdates["cpu_physical_count"] = &v
+		}
+		if req.HostInfo.CpuLogicalCount != 0 && int(req.HostInfo.CpuLogicalCount) != derefInt(host.CPULogicalCount) {
+			v := int(req.HostInfo.CpuLogicalCount)
+			hostInfoUpdates["cpu_logical_count"] = &v
+		}
+		if req.HostInfo.CpuMhz != 0 && req.HostInfo.CpuMhz != derefFloat(host.CPUMhz) {
+			hostInfoUpdates["cpu_mhz"] = req.HostInfo.CpuMhz
+		}
+		// ContainerRuntime can be empty string (host not in container) — always compare
+		if req.HostInfo.ContainerRuntime != derefStr(host.ContainerRuntime) {
+			hostInfoUpdates["container_runtime"] = req.HostInfo.ContainerRuntime
+		}
+
+		if len(hostInfoUpdates) > 0 {
+			if err := database.DB.Model(&host).Updates(hostInfoUpdates).Error; err != nil {
+				slog.Warn("failed to update host info", "host_id", host.ID, "error", err)
+			}
+		}
+	}
+
 	if req.Metrics == nil {
 		return &pb.SendMetricsResponse{
 			Success: false,
@@ -325,9 +401,15 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		HostID:               host.ID,
 		Timestamp:            time.Unix(req.Metrics.Timestamp, 0),
 		CPUUsagePercent:      req.Metrics.CpuUsagePercent,
+		CPUIowaitPercent:     req.Metrics.CpuIowaitPercent,
+		CPUStealPercent:      req.Metrics.CpuStealPercent,
 		MemoryTotalBytes:     req.Metrics.MemoryTotalBytes,
 		MemoryUsedBytes:      req.Metrics.MemoryUsedBytes,
 		MemoryAvailableBytes: req.Metrics.MemoryAvailableBytes,
+		MemoryBuffersBytes:   req.Metrics.MemoryBuffersBytes,
+		MemoryCachedBytes:    req.Metrics.MemoryCachedBytes,
+		SwapTotalBytes:       req.Metrics.SwapTotalBytes,
+		SwapUsedBytes:        req.Metrics.SwapUsedBytes,
 		LoadAvg1Min:          req.Metrics.LoadAvg_1Min,
 		LoadAvg5Min:          req.Metrics.LoadAvg_5Min,
 		LoadAvg15Min:         req.Metrics.LoadAvg_15Min,
@@ -340,6 +422,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		CPUTemperatureCelsius: req.Metrics.CpuTemperatureCelsius,
 		SensorReadings:        sensorReadings,
 		UptimeSeconds:         req.Metrics.UptimeSeconds,
+		ProcessesCount:        req.Metrics.ProcessesCount,
 	}
 
 	// Broadcast SSE first for low-latency real-time display (Netdata/Prometheus pattern)
@@ -348,9 +431,15 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		HostID:               host.ID,
 		Timestamp:            metric.Timestamp.Format(time.RFC3339),
 		CPUUsagePercent:      metric.CPUUsagePercent,
+		CPUIowaitPercent:     metric.CPUIowaitPercent,
+		CPUStealPercent:      metric.CPUStealPercent,
 		MemoryTotalBytes:     metric.MemoryTotalBytes,
 		MemoryUsedBytes:      metric.MemoryUsedBytes,
 		MemoryAvailableBytes: metric.MemoryAvailableBytes,
+		MemoryBuffersBytes:   metric.MemoryBuffersBytes,
+		MemoryCachedBytes:    metric.MemoryCachedBytes,
+		SwapTotalBytes:       metric.SwapTotalBytes,
+		SwapUsedBytes:        metric.SwapUsedBytes,
 		LoadAvg1Min:          metric.LoadAvg1Min,
 		LoadAvg5Min:          metric.LoadAvg5Min,
 		LoadAvg15Min:         metric.LoadAvg15Min,
@@ -363,6 +452,7 @@ func (s *AgentServer) SendMetrics(ctx context.Context, req *pb.SendMetricsReques
 		CPUTemperatureCelsius: metric.CPUTemperatureCelsius,
 		SensorReadings:        sseSensorReadings,
 		UptimeSeconds:         metric.UptimeSeconds,
+		ProcessesCount:        metric.ProcessesCount,
 	})
 
 	if len(req.ContainerMetrics) > 0 {

@@ -22,9 +22,15 @@ interface MinifiedMetrics {
 	h: string;       // host_id
 	t: number;       // timestamp (Unix epoch)
 	c: number;       // cpu_usage_percent
+	iw: number;      // cpu_iowait_percent (Linux only)
+	sl: number;      // cpu_steal_percent (Linux VMs only)
 	mu: number;      // memory_used_bytes
 	mt: number;      // memory_total_bytes
 	ma: number;      // memory_available_bytes
+	mb: number;      // memory_buffers_bytes (Linux only)
+	mc: number;      // memory_cached_bytes (Linux only)
+	st: number;      // swap_total_bytes
+	su: number;      // swap_used_bytes
 	du: number;      // disk_used_bytes
 	dt: number;      // disk_total_bytes
 	l1: number;      // load_avg_1min
@@ -36,6 +42,7 @@ interface MinifiedMetrics {
 	nt: number;      // network_tx_bytes_per_sec
 	tmp: number;     // cpu_temperature_celsius
 	u: number;       // uptime_seconds
+	pr: number;      // processes_count
 	sr?: MinifiedSensorReading[]; // all sensor readings
 }
 
@@ -84,7 +91,7 @@ function decodeMinifiedContainerMetrics(minified: MinifiedContainerMetricsUpdate
 /**
  * Decode minified SSE metrics format to full format
  */
-function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
+export function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
 	const sensorReadings: SensorReading[] | undefined = minified.sr?.map(sr => ({
 		key: sr.k,
 		temperature_celsius: sr.v
@@ -95,9 +102,15 @@ function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
 		host_id: minified.h,
 		timestamp: new Date(minified.t * 1000).toISOString(),
 		cpu_usage_percent: minified.c,
+		cpu_iowait_percent: minified.iw ?? 0,
+		cpu_steal_percent: minified.sl ?? 0,
 		memory_used_bytes: minified.mu,
 		memory_total_bytes: minified.mt,
 		memory_available_bytes: minified.ma,
+		memory_buffers_bytes: minified.mb ?? 0,
+		memory_cached_bytes: minified.mc ?? 0,
+		swap_total_bytes: minified.st ?? 0,
+		swap_used_bytes: minified.su ?? 0,
 		disk_used_bytes: minified.du,
 		disk_total_bytes: minified.dt,
 		load_avg_1min: minified.l1,
@@ -109,6 +122,7 @@ function decodeMinifiedMetrics(minified: MinifiedMetrics): Metric {
 		network_tx_bytes_per_sec: minified.nt ?? 0,
 		cpu_temperature_celsius: minified.tmp ?? 0,
 		uptime_seconds: minified.u,
+		processes_count: minified.pr ?? 0,
 		sensor_readings: sensorReadings
 	};
 }

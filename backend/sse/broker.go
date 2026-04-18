@@ -43,9 +43,15 @@ type MetricsUpdate struct {
 	HostID                string                  `json:"host_id"`
 	Timestamp             string                  `json:"timestamp"`
 	CPUUsagePercent       float64                 `json:"cpu_usage_percent"`
+	CPUIowaitPercent      float64                 `json:"cpu_iowait_percent"`
+	CPUStealPercent       float64                 `json:"cpu_steal_percent"`
 	MemoryTotalBytes      uint64                  `json:"memory_total_bytes"`
 	MemoryUsedBytes       uint64                  `json:"memory_used_bytes"`
 	MemoryAvailableBytes  uint64                  `json:"memory_available_bytes"`
+	MemoryBuffersBytes    uint64                  `json:"memory_buffers_bytes"`
+	MemoryCachedBytes     uint64                  `json:"memory_cached_bytes"`
+	SwapTotalBytes        uint64                  `json:"swap_total_bytes"`
+	SwapUsedBytes         uint64                  `json:"swap_used_bytes"`
 	LoadAvg1Min           float64                 `json:"load_avg_1min"`
 	LoadAvg5Min           float64                 `json:"load_avg_5min"`
 	LoadAvg15Min          float64                 `json:"load_avg_15min"`
@@ -57,6 +63,7 @@ type MetricsUpdate struct {
 	NetworkTxBytesPerSec  uint64                  `json:"network_tx_bytes_per_sec"`
 	CPUTemperatureCelsius float64                 `json:"cpu_temperature_celsius"`
 	UptimeSeconds         uint64                  `json:"uptime_seconds"`
+	ProcessesCount        uint64                  `json:"processes_count"`
 	SensorReadings        []SensorReadingMinified `json:"sensor_readings,omitempty"`
 }
 
@@ -74,9 +81,13 @@ type MetricsUpdateMinified struct {
 	HostID          string                  `json:"h"`            // host_id
 	Timestamp       int64                   `json:"t"`            // Unix timestamp
 	CPU             float64                 `json:"c"`            // cpu_usage_percent
+	CPUIowait       float64                 `json:"iw"`           // cpu_iowait_percent (Linux only)
+	CPUSteal        float64                 `json:"sl"`           // cpu_steal_percent (Linux VMs only)
 	MemoryUsed      uint64                  `json:"mu"`           // memory_used_bytes
 	MemoryTotal     uint64                  `json:"mt"`           // memory_total_bytes
 	MemoryAvailable uint64                  `json:"ma"`           // memory_available_bytes
+	MemoryBuffers   uint64                  `json:"mb"`           // memory_buffers_bytes (Linux only)
+	MemoryCached    uint64                  `json:"mc"`           // memory_cached_bytes (Linux only)
 	DiskUsed        uint64                  `json:"du"`           // disk_used_bytes
 	DiskTotal       uint64                  `json:"dt"`           // disk_total_bytes
 	LoadAvg1        float64                 `json:"l1"`           // load_avg_1min
@@ -88,6 +99,9 @@ type MetricsUpdateMinified struct {
 	NetTxRate       uint64                  `json:"nt"`           // network_tx_bytes_per_sec
 	CPUTemp         float64                 `json:"tmp"`          // cpu_temperature_celsius
 	Uptime          uint64                  `json:"u"`            // uptime_seconds
+	Processes       uint64                  `json:"pr"`           // processes_count
+	SwapTotal       uint64                  `json:"st"`           // swap_total_bytes
+	SwapUsed        uint64                  `json:"su"`           // swap_used_bytes
 	SensorReadings  []SensorReadingMinified `json:"sr,omitempty"` // all sensor readings
 }
 
@@ -238,9 +252,13 @@ func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
 		HostID:          update.HostID,
 		Timestamp:       timestamp,
 		CPU:             update.CPUUsagePercent,
+		CPUIowait:       update.CPUIowaitPercent,
+		CPUSteal:        update.CPUStealPercent,
 		MemoryUsed:      update.MemoryUsedBytes,
 		MemoryTotal:     update.MemoryTotalBytes,
 		MemoryAvailable: update.MemoryAvailableBytes,
+		MemoryBuffers:   update.MemoryBuffersBytes,
+		MemoryCached:    update.MemoryCachedBytes,
 		DiskUsed:        update.DiskUsedBytes,
 		DiskTotal:       update.DiskTotalBytes,
 		LoadAvg1:        update.LoadAvg1Min,
@@ -252,6 +270,9 @@ func toMinifiedMetrics(update MetricsUpdate) MetricsUpdateMinified {
 		NetTxRate:       update.NetworkTxBytesPerSec,
 		CPUTemp:         update.CPUTemperatureCelsius,
 		Uptime:          update.UptimeSeconds,
+		Processes:       update.ProcessesCount,
+		SwapTotal:       update.SwapTotalBytes,
+		SwapUsed:        update.SwapUsedBytes,
 		SensorReadings:  update.SensorReadings,
 	}
 }

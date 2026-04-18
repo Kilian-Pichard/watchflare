@@ -12,28 +12,66 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 )
 
-// Initialize warms up the CPU metrics collector.
-// cpu.Percent() requires an initial measurement to compute the delta on the next call;
-// without this, the first real measurement returns 0%.
-func Initialize() {
-	_, err := cpu.Percent(time.Second, false)
-	if err != nil {
-		slog.Warn("failed to initialize CPU metrics", "error", err)
-	}
+// Initialize is a no-op kept for API compatibility.
+// CPU metrics use a manual T1→sleep(1s)→T2 delta per collection, so no pre-warming is needed.
+func Initialize() {}
+
+// cpuStaticInfo caches CPU model/count/MHz — these never change at runtime.
+var (
+	cpuStaticOnce     sync.Once
+	cpuStaticModel    string
+	cpuStaticMHz      float64
+	cpuStaticPhysical int32
+	cpuStaticLogical  int32
+)
+
+func initCPUStatic() {
+	cpuStaticOnce.Do(func() {
+		if infos, err := cpu.Info(); err == nil && len(infos) > 0 {
+			cpuStaticModel = infos[0].ModelName
+			cpuStaticMHz = infos[0].Mhz
+		}
+		if count, err := cpu.Counts(false); err == nil {
+			cpuStaticPhysical = int32(count)
+		}
+		if count, err := cpu.Counts(true); err == nil {
+			cpuStaticLogical = int32(count)
+		}
+	})
+}
+
+// HostInfoSnapshot holds slowly-changing host properties collected alongside metrics.
+// It is NOT serialized to the WAL — the sender attaches the current snapshot at send time.
+type HostInfoSnapshot struct {
+	PlatformVersion  string
+	KernelVersion    string
+	KernelArch       string
+	CPUModelName     string
+	CPUPhysicalCount int32
+	CPULogicalCount  int32
+	CPUMhz           float64
+	ContainerRuntime string
 }
 
 // SystemMetrics represents collected system metrics
 type SystemMetrics struct {
-	CPUUsagePercent      float64
+	CPUUsagePercent   float64
+	CPUIowaitPercent  float64 // Linux only: waiting for I/O (0 on other platforms)
+	CPUStealPercent   float64 // Linux VMs only: CPU stolen by hypervisor (0 on other platforms)
 	MemoryTotalBytes     uint64
 	MemoryUsedBytes      uint64
 	MemoryAvailableBytes uint64
+	MemoryBuffersBytes   uint64 // Linux only: kernel buffer cache (0 on other platforms)
+	MemoryCachedBytes    uint64 // Linux only: page cache (0 on other platforms)
+	SwapTotalBytes       uint64
+	SwapUsedBytes        uint64
 	LoadAvg1Min          float64
 	LoadAvg5Min          float64
 	LoadAvg15Min         float64
 	DiskTotalBytes       uint64
 	DiskUsedBytes        uint64
 	UptimeSeconds        uint64
+	ProcessesCount       uint64
 	Timestamp            int64
 
 	// Disk I/O rates (bytes per second)
@@ -52,6 +90,10 @@ type SystemMetrics struct {
 
 	// Docker container metrics (only for hosts with containers)
 	ContainerMetrics []ContainerMetric
+
+	// HostInfo holds slowly-changing host properties (kernel, CPU model, etc.)
+	// Populated on every collection but NOT serialized to WAL.
+	HostInfo HostInfoSnapshot
 }
 
 // Package-level delta tracker for rate-based metrics (disk I/O, network)
@@ -71,13 +113,25 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		Timestamp: time.Now().Unix(),
 	}
 
-	// CPU usage (averaged over 1 second)
+	// CPU usage + iowait + steal: manual T1→sleep(1s)→T2 delta
 	if config.CollectCPU {
-		cpuPercent, err := cpu.Percent(time.Second, false)
+		t1, err := cpu.Times(false)
 		if err != nil {
-			slog.Debug("failed to collect CPU metrics", "error", err)
-		} else if len(cpuPercent) > 0 {
-			metrics.CPUUsagePercent = cpuPercent[0]
+			slog.Debug("failed to collect CPU metrics (T1)", "error", err)
+		} else {
+			time.Sleep(time.Second)
+			t2, err2 := cpu.Times(false)
+			if err2 != nil {
+				slog.Debug("failed to collect CPU metrics (T2)", "error", err2)
+			} else if len(t1) > 0 && len(t2) > 0 {
+				prev, curr := t1[0], t2[0]
+				totalDelta := curr.Total() - prev.Total()
+				if totalDelta > 0 {
+					metrics.CPUUsagePercent = (totalDelta - (curr.Idle - prev.Idle)) / totalDelta * 100
+					metrics.CPUIowaitPercent = (curr.Iowait - prev.Iowait) / totalDelta * 100
+					metrics.CPUStealPercent = (curr.Steal - prev.Steal) / totalDelta * 100
+				}
+			}
 		}
 	}
 
@@ -92,6 +146,19 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 			if memStats.Total >= memStats.Available {
 				metrics.MemoryUsedBytes = memStats.Total - memStats.Available
 			}
+			metrics.MemoryBuffersBytes = memStats.Buffers
+			metrics.MemoryCachedBytes = memStats.Cached
+		}
+	}
+
+	// Swap stats
+	if config.CollectSwap {
+		swapStats, err := mem.SwapMemory()
+		if err != nil {
+			slog.Debug("failed to collect swap metrics", "error", err)
+		} else {
+			metrics.SwapTotalBytes = swapStats.Total
+			metrics.SwapUsedBytes = swapStats.Used
 		}
 	}
 
@@ -174,11 +241,24 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 		}()
 	}
 
-	// System uptime
-	uptimeSeconds, err := host.Uptime()
+	// System uptime + process count + kernel/platform info (single host.Info call)
+	hostInfo, err := host.Info()
 	if err == nil {
-		metrics.UptimeSeconds = uptimeSeconds
+		metrics.UptimeSeconds = hostInfo.Uptime
+		metrics.ProcessesCount = hostInfo.Procs
+		metrics.HostInfo.PlatformVersion = hostInfo.PlatformVersion
+		metrics.HostInfo.KernelVersion = hostInfo.KernelVersion
+		metrics.HostInfo.KernelArch = hostInfo.KernelArch
 	}
+
+	// CPU model + frequency — cached once at startup (never changes at runtime)
+	initCPUStatic()
+	metrics.HostInfo.CPUModelName = cpuStaticModel
+	metrics.HostInfo.CPUMhz = cpuStaticMHz
+	metrics.HostInfo.CPUPhysicalCount = cpuStaticPhysical
+	metrics.HostInfo.CPULogicalCount = cpuStaticLogical
+
+	metrics.HostInfo.ContainerRuntime = config.ContainerRuntime
 
 	return metrics, nil
 }

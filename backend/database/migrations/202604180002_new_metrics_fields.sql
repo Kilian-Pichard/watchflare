@@ -1,0 +1,11 @@
+-- +goose Up
+ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_buffers_bytes BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_cached_bytes BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE metrics ADD COLUMN IF NOT EXISTS cpu_iowait_percent DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE metrics ADD COLUMN IF NOT EXISTS cpu_steal_percent DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+-- +goose Down
+ALTER TABLE metrics DROP COLUMN IF EXISTS memory_buffers_bytes;
+ALTER TABLE metrics DROP COLUMN IF EXISTS memory_cached_bytes;
+ALTER TABLE metrics DROP COLUMN IF EXISTS cpu_iowait_percent;
+ALTER TABLE metrics DROP COLUMN IF EXISTS cpu_steal_percent;

@@ -2,188 +2,107 @@ package sysinfo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net"
-	"os"
-	"os/exec"
-	"runtime"
-	"strings"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/host"
 )
 
 const sysinfoTimeout = 5 * time.Second
 
-// SystemInfo contains information about the system
+// SystemInfo contains information about the system, aligned with gopsutil naming conventions.
 type SystemInfo struct {
-	Hostname        string
-	IPv4Address     string
-	IPv6Address     string
-	Platform        string // "macOS", "Linux", "Windows" (user-friendly name)
-	PlatformVersion string // "15.6.1", "22.04.3" (version number)
-	PlatformFamily  string // "darwin", "linux", "windows" (technical family)
-	Architecture    string // "arm64", "amd64", "386"
-	Kernel          string // "24.6.0", "5.15.0-97-generic" (kernel version)
+	// Network
+	IPv4Address string
+	IPv6Address string
+
+	// gopsutil host.InfoStat fields
+	Hostname             string
+	OS                   string // "linux", "darwin", "windows"
+	Platform             string // distro name: "fedora", "ubuntu", "macos"
+	PlatformFamily       string // distro family: "rhel", "debian"
+	PlatformVersion      string // "43", "22.04", "15.6.1"
+	KernelVersion        string // "6.17.1-300.fc43.aarch64", "24.6.0"
+	KernelArch           string // "aarch64", "x86_64", "arm64"
+	VirtualizationSystem string // "kvm", "vmware", "xen" (empty if physical/unknown)
+	VirtualizationRole   string // "guest", "host" (empty if physical)
+	HostID               string // unique OS-provided UUID
+
+	// gopsutil cpu.InfoStat fields
+	CPUModelName    string
+	CPUPhysicalCount int
+	CPULogicalCount  int
+	CPUMhz           float64
 }
 
-// Collect gathers system information
+// Collect gathers system information using gopsutil.
 func Collect() (*SystemInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), sysinfoTimeout)
+	defer cancel()
+
 	info := &SystemInfo{}
 
-	// Get hostname
-	hostname, err := os.Hostname()
+	// Host info (hostname, OS, platform, kernel, virtualization, host ID)
+	hostInfo, err := host.InfoWithContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
+		return nil, err
 	}
-	info.Hostname = hostname
+	info.Hostname = hostInfo.Hostname
+	info.OS = hostInfo.OS
+	info.Platform = hostInfo.Platform
+	info.PlatformFamily = hostInfo.PlatformFamily
+	info.PlatformVersion = hostInfo.PlatformVersion
+	info.KernelVersion = hostInfo.KernelVersion
+	info.KernelArch = hostInfo.KernelArch
+	info.VirtualizationSystem = hostInfo.VirtualizationSystem
+	info.VirtualizationRole = hostInfo.VirtualizationRole
+	info.HostID = hostInfo.HostID
 
-	// Get OS info
-	info.PlatformFamily = runtime.GOOS
-	info.Architecture = runtime.GOARCH
-	info.Platform = getPlatformName()
-	info.PlatformVersion = getPlatformVersion()
-	info.Kernel = getKernelVersion()
-
-	// Get IP addresses
-	ipv4, ipv6, err := getIPAddresses()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get IP addresses: %w", err)
+	// CPU model info — take first entry, fail gracefully
+	cpuInfos, err := cpu.InfoWithContext(ctx)
+	if err == nil && len(cpuInfos) > 0 {
+		info.CPUModelName = cpuInfos[0].ModelName
+		info.CPUMhz = cpuInfos[0].Mhz
 	}
-	info.IPv4Address = ipv4
-	info.IPv6Address = ipv6
+
+	physCount, err := cpu.CountsWithContext(ctx, false)
+	if err == nil {
+		info.CPUPhysicalCount = physCount
+	}
+	logCount, err := cpu.CountsWithContext(ctx, true)
+	if err == nil {
+		info.CPULogicalCount = logCount
+	}
+
+	// IP addresses (not provided by gopsutil host package)
+	info.IPv4Address, info.IPv6Address = getIPAddresses()
 
 	return info, nil
 }
 
-// getIPAddresses returns the primary IPv4 and IPv6 addresses
-func getIPAddresses() (string, string, error) {
+// getIPAddresses returns the primary non-loopback IPv4 and IPv6 addresses.
+func getIPAddresses() (string, string) {
 	var ipv4, ipv6 string
 
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return "", "", err
+		return "", ""
 	}
 
 	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				// IPv4
-				if ipv4 == "" {
-					ipv4 = ipnet.IP.String()
-				}
-			} else {
-				// IPv6
-				if ipv6 == "" && !ipnet.IP.IsLinkLocalUnicast() {
-					ipv6 = ipnet.IP.String()
-				}
+		ipnet, ok := addr.(*net.IPNet)
+		if !ok || ipnet.IP.IsLoopback() {
+			continue
+		}
+		if ipnet.IP.To4() != nil {
+			if ipv4 == "" {
+				ipv4 = ipnet.IP.String()
 			}
+		} else if ipv6 == "" && !ipnet.IP.IsLinkLocalUnicast() {
+			ipv6 = ipnet.IP.String()
 		}
 	}
 
-	return ipv4, ipv6, nil
-}
-
-// getPlatformName returns a user-friendly platform name
-func getPlatformName() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "macOS"
-	case "linux":
-		return "Linux"
-	case "windows":
-		return "Windows"
-	default:
-		return runtime.GOOS
-	}
-}
-
-// getPlatformVersion returns the platform version
-func getPlatformVersion() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return getMacOSVersion()
-	case "linux":
-		return getLinuxVersion()
-	case "windows":
-		return getWindowsVersion()
-	default:
-		return "Unknown"
-	}
-}
-
-// getKernelVersion returns the kernel version
-func getKernelVersion() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return getMacOSKernelVersion()
-	case "linux":
-		return getLinuxKernelVersion()
-	case "windows":
-		return getWindowsKernelVersion()
-	default:
-		return "Unknown"
-	}
-}
-
-// macOS specific functions
-func getMacOSVersion() string {
-	ctx, cancel := context.WithTimeout(context.Background(), sysinfoTimeout)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, "sw_vers", "-productVersion").Output()
-	if err != nil {
-		return "Unknown"
-	}
-	return strings.TrimSpace(string(output))
-}
-
-func getMacOSKernelVersion() string {
-	ctx, cancel := context.WithTimeout(context.Background(), sysinfoTimeout)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, "uname", "-r").Output()
-	if err != nil {
-		return "Unknown"
-	}
-	return strings.TrimSpace(string(output))
-}
-
-// Linux specific functions
-func getLinuxVersion() string {
-	f, err := os.Open("/etc/os-release")
-	if err != nil {
-		return "Unknown"
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, 4*1024))
-	if err != nil {
-		return "Unknown"
-	}
-
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "VERSION_ID=") {
-			return strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), "\"")
-		}
-	}
-
-	return "Unknown"
-}
-
-func getLinuxKernelVersion() string {
-	ctx, cancel := context.WithTimeout(context.Background(), sysinfoTimeout)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, "uname", "-r").Output()
-	if err != nil {
-		return "Unknown"
-	}
-	return strings.TrimSpace(string(output))
-}
-
-// Windows specific functions
-func getWindowsVersion() string {
-	// For Windows, would need to use syscalls
-	return "Unknown"
-}
-
-func getWindowsKernelVersion() string {
-	// For Windows, would need to use syscalls
-	return "Unknown"
+	return ipv4, ipv6
 }

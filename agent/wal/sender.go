@@ -25,6 +25,7 @@ type Sender struct {
 	metricsInterval time.Duration
 	maxWALSize      int64
 	metricsConfig   *sysinfo.MetricsConfig
+	currentHostInfo metrics.HostInfoSnapshot // updated on each collect, attached to WAL replays
 }
 
 // NewSender creates a new Sender
@@ -162,6 +163,9 @@ func (s *Sender) collectAndSend() {
 		return
 	}
 
+	// Cache the current host info for WAL replay (not serialized to WAL)
+	s.currentHostInfo = m.HostInfo
+
 	// Round timestamp to nearest interval boundary
 	intervalSec := int64(s.metricsInterval.Seconds())
 	m.Timestamp = ((m.Timestamp + intervalSec/2) / intervalSec) * intervalSec
@@ -278,9 +282,15 @@ func (s *Sender) sendRecord(data []byte, includeContainers bool, containerMetric
 
 	m := &metrics.SystemMetrics{
 		CPUUsagePercent:       pbMetrics.CpuUsagePercent,
+		CPUIowaitPercent:      pbMetrics.CpuIowaitPercent,
+		CPUStealPercent:       pbMetrics.CpuStealPercent,
 		MemoryTotalBytes:      pbMetrics.MemoryTotalBytes,
 		MemoryUsedBytes:       pbMetrics.MemoryUsedBytes,
 		MemoryAvailableBytes:  pbMetrics.MemoryAvailableBytes,
+		MemoryBuffersBytes:    pbMetrics.MemoryBuffersBytes,
+		MemoryCachedBytes:     pbMetrics.MemoryCachedBytes,
+		SwapTotalBytes:        pbMetrics.SwapTotalBytes,
+		SwapUsedBytes:         pbMetrics.SwapUsedBytes,
 		LoadAvg1Min:           pbMetrics.LoadAvg_1Min,
 		LoadAvg5Min:           pbMetrics.LoadAvg_5Min,
 		LoadAvg15Min:          pbMetrics.LoadAvg_15Min,
@@ -293,7 +303,9 @@ func (s *Sender) sendRecord(data []byte, includeContainers bool, containerMetric
 		CPUTemperatureCelsius: pbMetrics.CpuTemperatureCelsius,
 		SensorReadings:        sensorReadings,
 		UptimeSeconds:         pbMetrics.UptimeSeconds,
+		ProcessesCount:        pbMetrics.ProcessesCount,
 		Timestamp:             pbMetrics.Timestamp,
+		HostInfo:              s.currentHostInfo,
 	}
 
 	if includeContainers && len(containerMetrics) > 0 {
@@ -315,9 +327,15 @@ func (s *Sender) serializeMetrics(m *metrics.SystemMetrics) ([]byte, error) {
 
 	pbMetrics := &pb.Metrics{
 		CpuUsagePercent:       m.CPUUsagePercent,
+		CpuIowaitPercent:      m.CPUIowaitPercent,
+		CpuStealPercent:       m.CPUStealPercent,
 		MemoryTotalBytes:      m.MemoryTotalBytes,
 		MemoryUsedBytes:       m.MemoryUsedBytes,
 		MemoryAvailableBytes:  m.MemoryAvailableBytes,
+		MemoryBuffersBytes:    m.MemoryBuffersBytes,
+		MemoryCachedBytes:     m.MemoryCachedBytes,
+		SwapTotalBytes:        m.SwapTotalBytes,
+		SwapUsedBytes:         m.SwapUsedBytes,
 		LoadAvg_1Min:          m.LoadAvg1Min,
 		LoadAvg_5Min:          m.LoadAvg5Min,
 		LoadAvg_15Min:         m.LoadAvg15Min,
@@ -330,6 +348,7 @@ func (s *Sender) serializeMetrics(m *metrics.SystemMetrics) ([]byte, error) {
 		CpuTemperatureCelsius: m.CPUTemperatureCelsius,
 		SensorReadings:        pbSensorReadings,
 		UptimeSeconds:         m.UptimeSeconds,
+		ProcessesCount:        m.ProcessesCount,
 		Timestamp:             m.Timestamp,
 	}
 

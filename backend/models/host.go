@@ -43,15 +43,22 @@ type Host struct {
 	Hostname        *string `json:"hostname"`
 	IPAddressV4     *string `json:"ip_address_v4"`
 	IPAddressV6     *string `json:"ip_address_v6"`
-	Platform        *string `json:"platform"`         // "macOS", "Linux", "Windows" (user-friendly)
-	PlatformVersion *string `json:"platform_version"` // "15.6.1", "22.04.3"
-	PlatformFamily  *string `json:"platform_family"`  // "darwin", "linux", "windows" (technical)
-	Architecture    *string `json:"architecture"`     // "arm64", "amd64"
-	Kernel          *string `json:"kernel"`           // "24.6.0", "5.15.0-97-generic"
-	EnvironmentType *string `json:"environment_type"` // "physical", "vm", "container", etc.
-	Hypervisor      *string `json:"hypervisor"`       // "kvm", "vmware", "virtualbox", "hyperv", "xen", "unknown" (empty if physical)
-	ContainerRuntime *string `json:"container_runtime"` // "docker", "lxc", "podman", "kubernetes", "unknown" (empty if not in container)
-	LastSeen        *time.Time `json:"last_seen"`
+	OS              *string `json:"os"`               // gopsutil OS: "linux", "darwin", "windows"
+	Platform        *string `json:"platform"`         // gopsutil Platform: distro name ("fedora", "ubuntu", "macos")
+	PlatformVersion *string `json:"platform_version"` // gopsutil PlatformVersion: "43", "22.04"
+	PlatformFamily  *string `json:"platform_family"`  // gopsutil PlatformFamily: "rhel", "debian"
+	KernelVersion   *string `json:"kernel_version"`   // gopsutil KernelVersion: "6.17.1-300.fc43.aarch64"
+	KernelArch      *string `json:"kernel_arch"`      // gopsutil KernelArch: "aarch64", "x86_64", "arm64"
+	EnvironmentType      *string `json:"environment_type"`       // "physical", "vm", "container", etc.
+	VirtualizationSystem *string `json:"virtualization_system"`  // gopsutil VirtualizationSystem: "kvm", "vmware", "xen"
+	VirtualizationRole   *string `json:"virtualization_role"`    // gopsutil VirtualizationRole: "guest", "host"
+	ContainerRuntime     *string `json:"container_runtime"`      // "docker", "lxc", "podman", "kubernetes"
+	HostID               *string `json:"host_id"`                // gopsutil HostID: unique OS-provided UUID
+	CPUModelName         *string `json:"cpu_model_name"`         // gopsutil cpu.InfoStat.ModelName
+	CPUPhysicalCount     *int    `json:"cpu_physical_count"`     // gopsutil cpu.Counts(false)
+	CPULogicalCount      *int    `json:"cpu_logical_count"`      // gopsutil cpu.Counts(true)
+	CPUMhz               *float64 `json:"cpu_mhz"`              // gopsutil cpu.InfoStat.Mhz
+	LastSeen             *time.Time `json:"last_seen"`
 
 	// Statut du host
 	// Valeurs: "pending", "online", "offline", "paused", "expired"

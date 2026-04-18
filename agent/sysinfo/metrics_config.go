@@ -19,6 +19,10 @@ type MetricsConfig struct {
 	CollectDockerCPU     bool
 	CollectDockerMemory  bool
 	CollectDockerNetwork bool
+
+	// ContainerRuntime is the runtime the agent is running inside ("docker", "kubernetes", etc.)
+	// Empty for physical/VM hosts. Detected once at startup and included in every HostInfo update.
+	ContainerRuntime string
 }
 
 // GetMetricsConfig returns the appropriate metrics configuration based on environment
@@ -64,7 +68,7 @@ func GetMetricsConfig(env *Environment, dockerMetrics bool) *MetricsConfig {
 		config.CollectDiskIO = true
 		config.CollectNetwork = true
 		config.CollectLoadAvg = true
-		config.CollectSwap = false       // VMs often don't use swap
+		config.CollectSwap = true
 		config.CollectTemperature = false // Can't read physical sensors
 
 	case EnvVMWithContainers:
@@ -75,7 +79,7 @@ func GetMetricsConfig(env *Environment, dockerMetrics bool) *MetricsConfig {
 		config.CollectDiskIO = true
 		config.CollectNetwork = true
 		config.CollectLoadAvg = true
-		config.CollectSwap = false
+		config.CollectSwap = true
 		config.CollectTemperature = false
 
 		// Docker metrics only if opt-in
