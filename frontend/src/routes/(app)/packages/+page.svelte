@@ -227,7 +227,7 @@
 <div class="mb-6">
     <h1 class="text-xl font-semibold text-foreground">Packages</h1>
     <p class="text-sm text-muted-foreground mt-0.5">
-        Inventory of all installed packages across your infrastructure.
+        Inventory of all installed packages
     </p>
 </div>
 
@@ -241,7 +241,7 @@
 {/if}
 
 <!-- Stat cards -->
-<div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+<div class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
     {#if initialLoading}
         {#each Array(4) as _}
             <div
@@ -600,7 +600,7 @@
                 <div class="rounded-lg border bg-card">
                     <!-- Header: name + status badge -->
                     <div
-                        class="rounded-t-lg bg-muted/30 px-4 py-2.5 border-b border-border flex items-center justify-between gap-2"
+                        class="rounded-t-lg bg-table-header px-4 py-2.5 border-b border-border flex items-center justify-between gap-2"
                     >
                         <span class="flex items-center gap-2 min-w-0">
                             <PackageIcon

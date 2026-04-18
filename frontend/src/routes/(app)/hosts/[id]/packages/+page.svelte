@@ -421,13 +421,10 @@
 
 <!-- Stats -->
 {#if loading}
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-        {#each Array(3) as _}
-            <div class="rounded-xl border bg-card px-4 py-3.5 animate-pulse">
-                <div class="h-3 w-20 rounded bg-muted mb-3"></div>
-                <div class="h-7 w-12 rounded bg-muted"></div>
-            </div>
-        {/each}
+    <div class="flex items-center gap-4 mb-4 animate-pulse">
+        <div class="h-4 w-24 rounded bg-muted"></div>
+        <div class="h-4 w-20 rounded bg-muted"></div>
+        <div class="h-4 w-28 rounded bg-muted"></div>
     </div>
 {:else if stats}
     <div class="flex items-center gap-x-4 gap-y-1 flex-wrap text-sm mb-4">
@@ -437,7 +434,7 @@
             > packages</span
         >
         {#if (stats.outdated_count || 0) > 0}
-            <span class="text-amber-500"
+            <span class="text-warning"
                 ><span class="font-medium">{stats.outdated_count}</span> outdated</span
             >
         {/if}
@@ -534,7 +531,7 @@
                     </button>
                 {/snippet}
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end">
+            <DropdownMenu.Content align="start">
                 {#each [{ value: "outdated" as StatusFilter, label: "Outdated" }, { value: "security" as StatusFilter, label: "Security update" }, { value: "up_to_date" as StatusFilter, label: "Up to date" }, { value: "not_checked" as StatusFilter, label: "Not checked" }] as status}
                     <DropdownMenu.Item
                         closeOnSelect={false}
@@ -603,7 +600,7 @@
                     </button>
                 {/snippet}
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end">
+            <DropdownMenu.Content align="start">
                 {#each [...(stats?.by_package_manager || [])].sort((a, b) => b.count - a.count) as pm}
                     <DropdownMenu.Item
                         closeOnSelect={false}
@@ -678,7 +675,7 @@
                     </button>
                 {/snippet}
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end">
+            <DropdownMenu.Content align="start">
                 {#each ALL_COLUMNS as column}
                     <DropdownMenu.Item
                         closeOnSelect={false}
@@ -738,7 +735,23 @@
 <!-- Packages Table/Cards -->
 <div class="rounded-xl border bg-card overflow-hidden mb-6">
     {#if loading}
-        <div class="flex items-center justify-center py-20">
+        <!-- Mobile: skeleton cards -->
+        <div class="md:hidden p-3 flex flex-col gap-2">
+            {#each Array(6) as _}
+                <div class="rounded-lg border bg-card animate-pulse">
+                    <div class="rounded-t-lg bg-table-header px-4 py-2.5 border-b border-border flex items-center justify-between gap-2">
+                        <div class="h-4 w-32 rounded bg-muted"></div>
+                        <div class="h-5 w-16 rounded-full bg-muted"></div>
+                    </div>
+                    <div class="px-4 py-2.5 flex items-center gap-2">
+                        <div class="h-3 w-12 rounded bg-muted"></div>
+                        <div class="h-5 w-14 rounded-full bg-muted"></div>
+                    </div>
+                </div>
+            {/each}
+        </div>
+        <!-- Desktop: simple loading -->
+        <div class="hidden md:flex items-center justify-center py-20">
             <p class="text-muted-foreground">Loading packages...</p>
         </div>
     {:else}
@@ -748,7 +761,7 @@
                 <div class="rounded-lg border bg-card">
                     <!-- Header: name + status badge -->
                     <div
-                        class="rounded-t-lg bg-muted/30 px-4 py-2.5 border-b border-border flex items-center justify-between gap-2"
+                        class="rounded-t-lg bg-table-header px-4 py-2.5 border-b border-border flex items-center justify-between gap-2"
                     >
                         <span class="flex items-center gap-2 min-w-0">
                             <PackageIcon
@@ -766,7 +779,7 @@
                             >
                         {:else if pkg.available_version}
                             <span
-                                class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                class="shrink-0 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-warning/10 text-warning border-warning/20"
                                 >Outdated</span
                             >
                         {:else if pkg.update_checked}
@@ -790,7 +803,7 @@
                             <span
                                 class="inline-flex items-center gap-1 text-xs font-mono font-medium {pkg.has_security_update
                                     ? 'text-destructive'
-                                    : 'text-amber-500'}"
+                                    : 'text-warning'}"
                             >
                                 {#if pkg.has_security_update}
                                     <ShieldAlert class="h-3 w-3 shrink-0" />
@@ -1010,7 +1023,7 @@
                                         >
                                     {:else if pkg.available_version}
                                         <span
-                                            class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                            class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium bg-warning/10 text-warning border-warning/20"
                                             >Outdated</span
                                         >
                                     {:else if pkg.update_checked}
@@ -1053,10 +1066,10 @@
                                                 >
                                             {:else}
                                                 <ArrowUp
-                                                    class="h-3.5 w-3.5 text-amber-500 shrink-0"
+                                                    class="h-3.5 w-3.5 text-warning shrink-0"
                                                 />
                                                 <span
-                                                    class="font-mono font-medium text-amber-500"
+                                                    class="font-mono font-medium text-warning"
                                                     >{pkg.available_version}</span
                                                 >
                                             {/if}

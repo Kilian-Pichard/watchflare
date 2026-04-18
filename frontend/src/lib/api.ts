@@ -318,12 +318,9 @@ export async function deleteHost(id: string): Promise<{ message: string }> {
 export async function regenerateToken(
   id: string,
 ): Promise<RegenerateTokenResponse> {
-  return apiRequest<RegenerateTokenResponse>(
-    `/hosts/${id}/regenerate-token`,
-    {
-      method: "POST",
-    },
-  );
+  return apiRequest<RegenerateTokenResponse>(`/hosts/${id}/regenerate-token`, {
+    method: "POST",
+  });
 }
 
 export async function validateIP(
@@ -367,12 +364,9 @@ export async function ignoreIPMismatch(
 export async function dismissReactivation(
   id: string,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(
-    `/hosts/${id}/dismiss-reactivation`,
-    {
-      method: "PUT",
-    },
-  );
+  return apiRequest<{ message: string }>(`/hosts/${id}/dismiss-reactivation`, {
+    method: "PUT",
+  });
 }
 
 // User preferences API calls
@@ -464,17 +458,13 @@ export async function getHostPackages(
     limit: params.limit,
     offset: params.offset,
   });
-  return apiRequest<GetPackagesResponse>(
-    `/hosts/${hostId}/packages${query}`,
-  );
+  return apiRequest<GetPackagesResponse>(`/hosts/${hostId}/packages${query}`);
 }
 
 export async function getPackageStats(
   hostId: string,
 ): Promise<GetPackageStatsResponse> {
-  return apiRequest<GetPackageStatsResponse>(
-    `/hosts/${hostId}/packages/stats`,
-  );
+  return apiRequest<GetPackageStatsResponse>(`/hosts/${hostId}/packages/stats`);
 }
 
 interface CollectionQueryParams {
@@ -539,7 +529,7 @@ export async function triggerPackageCollect(
 ): Promise<{ message: string; command_id: string }> {
   return apiRequest<{ message: string; command_id: string }>(
     `/hosts/${hostId}/packages/collect`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -548,7 +538,7 @@ export async function triggerAgentUpdate(
 ): Promise<{ message: string; command_id: string }> {
   return apiRequest<{ message: string; command_id: string }>(
     `/hosts/${hostId}/agent/update`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -577,19 +567,26 @@ export async function testSmtpConnection(
 
 // Alert Rules API calls
 export async function getAlertRules(): Promise<GetAlertRulesResponse> {
-  return apiRequest<GetAlertRulesResponse>('/settings/alerts');
+  return apiRequest<GetAlertRulesResponse>("/settings/alerts");
 }
 
 export async function updateAlertRules(
-  rules: Array<{ metric_type: AlertMetricType; enabled: boolean; threshold: number; duration_minutes: number }>,
+  rules: Array<{
+    metric_type: AlertMetricType;
+    enabled: boolean;
+    threshold: number;
+    duration_minutes: number;
+  }>,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>('/settings/alerts', {
-    method: 'PUT',
+  return apiRequest<{ message: string }>("/settings/alerts", {
+    method: "PUT",
     body: JSON.stringify({ rules }),
   });
 }
 
-export async function getHostAlertRules(hostId: string): Promise<GetHostAlertRulesResponse> {
+export async function getHostAlertRules(
+  hostId: string,
+): Promise<GetHostAlertRulesResponse> {
   return apiRequest<GetHostAlertRulesResponse>(`/hosts/${hostId}/alerts`);
 }
 
@@ -598,29 +595,41 @@ export async function upsertHostAlertRule(
   metricType: AlertMetricType,
   data: { enabled: boolean; threshold: number; duration_minutes: number },
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/hosts/${hostId}/alerts/${metricType}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
+  return apiRequest<{ message: string }>(
+    `/hosts/${hostId}/alerts/${metricType}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+    },
+  );
 }
 
 export async function deleteHostAlertRule(
   hostId: string,
   metricType: AlertMetricType,
 ): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>(`/hosts/${hostId}/alerts/${metricType}`, {
-    method: 'DELETE',
-  });
+  return apiRequest<{ message: string }>(
+    `/hosts/${hostId}/alerts/${metricType}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export async function getActiveIncidents(): Promise<GetActiveIncidentsResponse> {
-  return apiRequest<GetActiveIncidentsResponse>('/settings/alerts/active');
+  return apiRequest<GetActiveIncidentsResponse>("/settings/alerts/active");
 }
 
 export async function getHostIncidents(
   hostId: string,
-  params: { status?: IncidentStatusFilter; limit?: number; offset?: number } = {},
+  params: {
+    status?: IncidentStatusFilter;
+    limit?: number;
+    offset?: number;
+  } = {},
 ): Promise<GetHostIncidentsResponse> {
   const qs = buildQueryString(params);
-  return apiRequest<GetHostIncidentsResponse>(`/hosts/${hostId}/incidents${qs}`);
+  return apiRequest<GetHostIncidentsResponse>(
+    `/hosts/${hostId}/incidents${qs}`,
+  );
 }

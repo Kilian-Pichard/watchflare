@@ -224,8 +224,55 @@
 </svelte:head>
 
 {#if loading}
-    <div class="flex items-center justify-center py-20">
-        <p class="text-muted-foreground">Loading dashboard...</p>
+    <!-- Skeleton: header -->
+    <div class="mb-6 animate-pulse">
+        <div class="h-7 w-48 rounded bg-muted mb-2"></div>
+        <div class="h-4 w-64 rounded bg-muted"></div>
+    </div>
+    <!-- Skeleton: stats cards -->
+    <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 animate-pulse">
+        {#each Array(4) as _}
+            <div class="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5">
+                <div class="h-8 w-8 rounded-md bg-muted shrink-0"></div>
+                <div class="flex flex-col gap-1.5">
+                    <div class="h-3 w-12 rounded bg-muted"></div>
+                    <div class="h-4 w-8 rounded bg-muted"></div>
+                </div>
+            </div>
+        {/each}
+    </div>
+    <!-- Skeleton: charts -->
+    <div class="mb-6 flex items-center h-10 animate-pulse">
+        <div class="h-5 w-32 rounded bg-muted"></div>
+    </div>
+    <div class="mb-6 grid gap-4 xl:grid-cols-2 animate-pulse">
+        {#each Array(2) as _}
+            <div class="rounded-lg border bg-card p-4">
+                <div class="mb-3 flex items-center justify-between">
+                    <div class="h-4 w-20 rounded bg-muted"></div>
+                    <div class="h-4 w-12 rounded bg-muted"></div>
+                </div>
+                <div class="h-40 rounded bg-muted"></div>
+            </div>
+        {/each}
+    </div>
+    <!-- Skeleton: table -->
+    <div class="mb-4 h-6 w-32 rounded bg-muted animate-pulse"></div>
+    <div class="rounded-xl border bg-card animate-pulse">
+        <div class="border-b bg-table-header px-4 py-2.5 flex gap-8">
+            {#each Array(5) as _}
+                <div class="h-4 w-16 rounded bg-muted"></div>
+            {/each}
+        </div>
+        {#each Array(5) as _}
+            <div class="border-b px-4 py-3 flex gap-8">
+                <div class="h-4 w-24 rounded bg-muted"></div>
+                <div class="h-4 w-12 rounded bg-muted"></div>
+                <div class="h-4 w-10 rounded bg-muted"></div>
+                <div class="h-4 w-10 rounded bg-muted"></div>
+                <div class="h-4 w-10 rounded bg-muted"></div>
+            </div>
+        {/each}
     </div>
 {:else}
     <!-- Header with Welcome -->
@@ -292,20 +339,18 @@
     {/if}
 
     <!-- Hosts Table -->
-    <div class="mb-6">
-        <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-lg font-semibold">Host Summary</h2>
-        </div>
-        <HostTable
-            hosts={hostsList.filter((s) => s.host.status !== "pending")}
-            latestMetrics={$latestMetrics}
-            {activeIncidentHostIds}
-            onRename={handleRename}
-            onPause={handlePause}
-            onResume={handleResume}
-            onDelete={handleDeleteRequest}
-        />
+    <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Host Summary</h2>
     </div>
+    <HostTable
+        hosts={hostsList.filter((s) => s.host.status !== "pending")}
+        latestMetrics={$latestMetrics}
+        {activeIncidentHostIds}
+        onRename={handleRename}
+        onPause={handlePause}
+        onResume={handleResume}
+        onDelete={handleDeleteRequest}
+    />
 {/if}
 
 <!-- Delete Confirmation Modal -->

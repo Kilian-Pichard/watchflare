@@ -364,7 +364,11 @@ export interface GetPackageHistoryResponse {
 }
 
 // Global package view — deduplicated across all hosts
-export type GlobalPackageStatus = "security" | "outdated" | "up_to_date" | "not_checked";
+export type GlobalPackageStatus =
+  | "security"
+  | "outdated"
+  | "up_to_date"
+  | "not_checked";
 
 export interface GlobalPackage {
   name: string;
@@ -377,12 +381,12 @@ export interface GlobalPackage {
 
 export interface ListGlobalPackagesResponse {
   packages: GlobalPackage[];
-  total_count: number;           // filtered count (for pagination)
-  total_packages: number;        // global unfiltered count
-  outdated_count: number;        // global unfiltered
-  security_count: number;        // global unfiltered
-  outdated_hosts_count: number;  // global unfiltered — hosts with ≥1 outdated/security package
-  available_managers: string[];  // global unfiltered, for the manager filter dropdown
+  total_count: number; // filtered count (for pagination)
+  total_packages: number; // global unfiltered count
+  outdated_count: number; // global unfiltered
+  security_count: number; // global unfiltered
+  outdated_hosts_count: number; // global unfiltered — hosts with ≥1 outdated/security package
+  available_managers: string[]; // global unfiltered, for the manager filter dropdown
   limit: number;
   offset: number;
 }

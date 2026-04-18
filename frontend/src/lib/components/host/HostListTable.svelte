@@ -53,14 +53,14 @@
 
 <table class="w-full min-w-160">
     <thead>
-        <tr class="border-b bg-muted/30">
+        <tr class="border-b bg-table-header">
             <th
                 scope="col"
-                class="w-2/5 px-4 py-2 text-left text-sm font-semibold text-muted-foreground"
+                class="w-2/5 px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground"
                 onclick={() => onSort("name")}
             >
                 <span
-                    class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                    class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                 >
                     Name
                     {@render sortIcon("name")}
@@ -68,11 +68,11 @@
             </th>
             <th
                 scope="col"
-                class="w-1/5 px-4 py-2 text-left text-sm font-semibold text-muted-foreground"
+                class="w-1/5 px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground"
                 onclick={() => onSort("status")}
             >
                 <span
-                    class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                    class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                 >
                     Status
                     {@render sortIcon("status")}
@@ -80,11 +80,11 @@
             </th>
             <th
                 scope="col"
-                class="w-1/4 px-4 py-2 text-left text-sm font-semibold text-muted-foreground"
+                class="w-1/4 px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground"
                 onclick={() => onSort("ip")}
             >
                 <span
-                    class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                    class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                 >
                     IP Address
                     {@render sortIcon("ip")}
@@ -92,13 +92,13 @@
             </th>
             <th
                 scope="col"
-                class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground table-cell"
+                class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground table-cell"
             >
                 Agent
             </th>
             <th
                 scope="col"
-                class="px-4 py-2 text-right text-sm font-semibold text-muted-foreground"
+                class="px-4 py-2.5 text-right text-sm font-semibold text-muted-foreground"
             >
                 Actions
             </th>
@@ -110,7 +110,7 @@
                 onclick={() => goto(`/hosts/${host.id}`)}
                 class="hover:bg-muted/20 transition-colors cursor-pointer"
             >
-                <td class="px-4 py-3.5">
+                <td class="px-4 py-3">
                     <div class="flex flex-col">
                         <span class="font-medium text-foreground"
                             >{host.display_name}</span
@@ -122,7 +122,7 @@
                         {/if}
                     </div>
                 </td>
-                <td class="px-4 py-3.5">
+                <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
                         <span
                             class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(
@@ -196,17 +196,17 @@
                         {/if}
                     </div>
                 </td>
-                <td class="px-4 py-3.5 text-sm text-foreground">
+                <td class="px-4 py-3 text-sm text-foreground">
                     {host.ip_address_v4 || host.configured_ip || "-"}
                 </td>
                 <td
-                    class="px-4 py-3.5 text-sm text-muted-foreground table-cell"
+                    class="px-4 py-3 text-sm text-muted-foreground table-cell"
                 >
                     <span class="inline-flex items-center gap-1.5">
                         {host.agent_version ? `v${host.agent_version}` : "—"}
                         {#if isAgentOutdated(host.agent_version, latestAgentVersion)}
                             <span
-                                class="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                                class="inline-flex items-center rounded-full border border-warning/20 bg-warning/10 px-1.5 py-0.5 text-xs font-medium text-warning"
                                 title="v{latestAgentVersion} available"
                             >
                                 ↑
@@ -214,7 +214,7 @@
                         {/if}
                     </span>
                 </td>
-                <td class="px-4 py-3.5 text-right">
+                <td class="px-4 py-3 text-right">
                     <div class="flex items-center justify-end gap-3">
                         <button
                             onclick={(e) => {

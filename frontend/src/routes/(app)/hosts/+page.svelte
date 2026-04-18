@@ -11,6 +11,7 @@
     import HostFilters from "$lib/components/host/HostFilters.svelte";
     import HostListTable from "$lib/components/host/HostListTable.svelte";
     import AddHostModal from "$lib/components/host/AddHostModal.svelte";
+    import DataTable from "$lib/components/DataTable.svelte";
 
     const PER_PAGE = HOSTS_PER_PAGE;
 
@@ -233,7 +234,7 @@
         </p>
     </div>
 {:else}
-    <div class="rounded-lg border bg-card overflow-x-auto">
+    <DataTable grow>
         <HostListTable
             {hosts}
             {sortColumn}
@@ -243,10 +244,10 @@
             onDelete={openDeleteModal}
             onDismissReactivation={handleDismissReactivation}
         />
-
-        <!-- Pagination -->
-        <Pagination currentPage={currentPage} {totalPages} totalItems={total} pageSize={PER_PAGE} itemLabel="hosts" onPageChange={loadPage} />
-    </div>
+        {#snippet footer()}
+            <Pagination currentPage={currentPage} {totalPages} totalItems={total} pageSize={PER_PAGE} itemLabel="hosts" onPageChange={loadPage} />
+        {/snippet}
+    </DataTable>
 {/if}
 <AddHostModal open={showAddHost} onClose={() => (showAddHost = false)} />
 

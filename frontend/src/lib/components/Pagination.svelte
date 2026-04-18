@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as Select from '$lib/components/ui/select';
+	import { Button } from '$lib/components/ui/button';
 	import { ChevronLeft, ChevronRight } from 'lucide-svelte';
 
 	const {
@@ -55,23 +56,23 @@
 		</div>
 		{#if totalPages > 1}
 			<div class="flex items-center justify-center gap-2">
-				<button
-					type="button"
+				<Button
+					variant="outline"
+					size="icon-sm"
 					onclick={() => onPageChange(currentPage - 1)}
 					disabled={currentPage <= 1}
-					class="rounded-lg border bg-background p-1.5 text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					<ChevronLeft class="h-4 w-4" />
-				</button>
+				</Button>
 				<span class="text-sm text-muted-foreground">{currentPage} / {totalPages}</span>
-				<button
-					type="button"
+				<Button
+					variant="outline"
+					size="icon-sm"
 					onclick={() => onPageChange(currentPage + 1)}
 					disabled={currentPage >= totalPages}
-					class="rounded-lg border bg-background p-1.5 text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					<ChevronRight class="h-4 w-4" />
-				</button>
+				</Button>
 			</div>
 		{/if}
 	</div>
@@ -103,23 +104,23 @@
 		</div>
 		{#if totalPages > 1}
 			<div class="flex items-center gap-2">
-				<button
-					type="button"
+				<Button
+					variant="outline"
+					size="sm"
 					onclick={() => onPageChange(currentPage - 1)}
 					disabled={currentPage <= 1}
-					class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					Previous
-				</button>
+				</Button>
 				<span class="text-sm text-muted-foreground">{currentPage} / {totalPages}</span>
-				<button
-					type="button"
+				<Button
+					variant="outline"
+					size="sm"
 					onclick={() => onPageChange(currentPage + 1)}
 					disabled={currentPage >= totalPages}
-					class="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					Next
-				</button>
+				</Button>
 			</div>
 		{/if}
 	</div>

@@ -6,7 +6,7 @@
 	const { children } = $props();
 </script>
 
-<Tooltip.Provider>
+<Tooltip.Provider delayDuration={200}>
 	{@render children()}
 </Tooltip.Provider>
 

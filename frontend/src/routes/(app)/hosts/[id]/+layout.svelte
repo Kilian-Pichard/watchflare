@@ -379,8 +379,48 @@
 </svelte:head>
 
 {#if loading}
-    <div class="flex items-center justify-center py-20">
-        <p class="text-muted-foreground">Loading host details...</p>
+    <!-- Skeleton: HostDetailHeader -->
+    <div class="mb-4 rounded-xl border bg-card p-3 md:p-4 animate-pulse">
+        <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center gap-3">
+                <div class="h-7 w-48 rounded bg-muted"></div>
+                <div class="h-5 w-16 rounded-full bg-muted"></div>
+            </div>
+            <div class="h-8 w-8 rounded-lg bg-muted"></div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            {#each Array(4) as _}
+                <div class="h-6 w-28 rounded-full bg-muted"></div>
+            {/each}
+        </div>
+    </div>
+    <!-- Skeleton: live metric pills -->
+    <div class="flex flex-wrap gap-3 mb-4 animate-pulse">
+        {#each Array(3) as _}
+            <div
+                class="rounded-lg border bg-card px-3 py-2 flex items-center gap-3"
+            >
+                <div class="h-3.5 w-6 rounded bg-muted"></div>
+                <div class="h-5 w-10 rounded bg-muted"></div>
+            </div>
+        {/each}
+    </div>
+    <!-- Tabs (static, no skeleton needed) -->
+    <div
+        class="mb-6 flex gap-1 border-b overflow-x-auto overflow-y-clip no-scrollbar"
+    >
+        {#each [["overview", "Overview", `/hosts/${hostId}`], ["packages", "Packages", `/hosts/${hostId}/packages`], ["incidents", "Incidents", `/hosts/${hostId}/incidents`]] as [tab, label, href]}
+            <a
+                {href}
+                class="shrink-0 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px {isActiveTab(
+                    tab as 'overview' | 'packages' | 'incidents',
+                )
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'}"
+            >
+                {label}
+            </a>
+        {/each}
     </div>
 {:else if error}
     <div class="rounded-lg border border-destructive bg-destructive/10 p-4">

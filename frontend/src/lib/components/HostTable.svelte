@@ -208,9 +208,9 @@
     onStatusChange={handleStatusChange}
 />
 
-<div class="md:rounded-lg md:border md:bg-card">
-    <!-- Mobile: Cards layout -->
-    <div class="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+<div class="md:rounded-xl md:border md:bg-card">
+<!-- Mobile: Cards layout -->
+<div class="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
         {#each sortedHosts() as { host }}
             {@const metrics = getLastMetrics(host.id)}
             <a
@@ -218,7 +218,7 @@
                 class="block rounded-lg border bg-card hover:bg-muted/20 transition-colors"
             >
                 <!-- Header: name + status + actions -->
-                <div class="rounded-t-lg bg-muted/30 px-4 py-3 border-b border-border">
+                <div class="rounded-t-lg bg-table-header px-4 py-3 border-b border-border">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2 min-w-0">
                         <span
@@ -262,7 +262,7 @@
                                     {#snippet child({ props })}
                                         <button
                                             {...props}
-                                            class="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                            class="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-table-header-active hover:text-foreground"
                                             title="Host actions"
                                         >
                                             <EllipsisVertical class="h-4 w-4" />
@@ -370,14 +370,14 @@
                 <col class="w-25" />
             </colgroup>
             <thead>
-                <tr class="border-b bg-muted/30">
+                <tr class="border-b bg-table-header">
                     <th
                         scope="col"
-                        class="px-4 py-2 text-left text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("name")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 h-8 rounded-md px-2.5 cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             Host
                             {@render sortIcon("name")}
@@ -385,11 +385,11 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("status")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             Status
                             {@render sortIcon("status")}
@@ -397,11 +397,11 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("cpu")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             CPU
                             {@render sortIcon("cpu")}
@@ -409,11 +409,11 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("memory")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             Memory
                             {@render sortIcon("memory")}
@@ -421,11 +421,11 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("disk")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             Disk
                             {@render sortIcon("disk")}
@@ -433,11 +433,11 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("load")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             Load
                             {@render sortIcon("load")}
@@ -445,11 +445,11 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("net")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             Net
                             {@render sortIcon("net")}
@@ -457,11 +457,11 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                         onclick={() => handleSort("temp")}
                     >
                         <span
-                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-muted hover:text-foreground"
+                            class="group inline-flex items-center gap-1 justify-center h-8 rounded-md px-2.5 mx-auto cursor-pointer select-none transition-colors hover:bg-table-header-active hover:text-foreground"
                         >
                             Temp
                             {@render sortIcon("temp")}
@@ -469,7 +469,7 @@
                     </th>
                     <th
                         scope="col"
-                        class="px-4 py-2 text-center text-sm font-semibold text-muted-foreground"
+                        class="px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground"
                     >
                     </th>
                 </tr>
@@ -482,7 +482,7 @@
                         class="hover:bg-muted/20 transition-colors cursor-pointer"
                     >
                         <!-- Host Name -->
-                        <td class="px-4 py-3.5">
+                        <td class="px-4 py-3">
                             <div class="group flex flex-col">
                                 <div class="flex items-center gap-2">
                                     <span
@@ -509,7 +509,7 @@
                         </td>
 
                         <!-- Status -->
-                        <td class="px-4 py-3.5 text-center">
+                        <td class="px-4 py-3 text-center">
                             <span
                                 class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusClass(
                                     host.status,
@@ -528,7 +528,7 @@
                         </td>
 
                         <!-- CPU -->
-                        <td class="px-4 py-3.5 text-center">
+                        <td class="px-4 py-3 text-center">
                             {#if metrics.hasData}
                                 <div class="flex flex-col items-center">
                                     <span class="text-foreground">
@@ -542,7 +542,7 @@
                         </td>
 
                         <!-- Memory -->
-                        <td class="px-4 py-3.5 text-center">
+                        <td class="px-4 py-3 text-center">
                             {#if metrics.hasData}
                                 <div class="flex flex-col items-center">
                                     <span class="text-foreground">
@@ -556,7 +556,7 @@
                         </td>
 
                         <!-- Disk -->
-                        <td class="px-4 py-3.5 text-center">
+                        <td class="px-4 py-3 text-center">
                             {#if metrics.hasData}
                                 <div class="flex flex-col items-center">
                                     <span class="text-foreground">
@@ -570,7 +570,7 @@
                         </td>
 
                         <!-- Load Avg -->
-                        <td class="px-4 py-3.5 text-center">
+                        <td class="px-4 py-3 text-center">
                             {#if metrics.hasData}
                                 <span
                                     class="text-sm text-foreground whitespace-nowrap"
@@ -584,7 +584,7 @@
                         </td>
 
                         <!-- Network -->
-                        <td class="px-4 py-3.5 text-center">
+                        <td class="px-4 py-3 text-center">
                             {#if metrics.hasData}
                                 <div
                                     class="flex flex-col items-center text-sm whitespace-nowrap"
@@ -602,7 +602,7 @@
                         </td>
 
                         <!-- Temperature -->
-                        <td class="px-4 py-3.5 text-center">
+                        <td class="px-4 py-3 text-center">
                             {#if metrics.hasData && metrics.temp > 0}
                                 <span class="text-foreground"
                                     >{Math.round(metrics.temp)}°C</span
@@ -617,7 +617,7 @@
                         <!-- Actions menu -->
                         <!-- svelte-ignore a11y_click_events_have_key_events -->
                         <td
-                            class="px-4 py-3.5 text-center"
+                            class="px-4 py-3 text-center"
                             onclick={(e) => e.stopPropagation()}
                         >
                             <DropdownMenu.Root>
@@ -625,7 +625,7 @@
                                     {#snippet child({ props })}
                                         <button
                                             {...props}
-                                            class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                            class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-table-header-active hover:text-foreground"
                                             title="Host actions"
                                         >
                                             <EllipsisVertical class="h-5 w-5" />

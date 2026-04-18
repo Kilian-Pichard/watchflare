@@ -16,7 +16,7 @@
     const { stats }: { stats: Stats } = $props();
 </script>
 
-<div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
     <div
         class="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5"
     >

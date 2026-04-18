@@ -1,7 +1,6 @@
 <script lang="ts">
     import {
         getStatusClass,
-        formatRelativeTime,
         formatUptime,
         isAgentOutdated,
         formatBytes,
@@ -18,7 +17,6 @@
         Monitor,
         Cpu,
         Network,
-        Clock,
         ClockArrowUp,
         Tag,
         ArrowUpCircle,
@@ -67,11 +65,8 @@
             host.hostname
                 ? { icon: ServerIcon, text: host.hostname, type: 'hostname' }
                 : null,
-            host.ip_address_v4 || host.configured_ip
-                ? { icon: Network, text: host.ip_address_v4 || host.configured_ip, type: 'ip' }
-                : null,
-            host.agent_version
-                ? { icon: Tag, text: `Agent v${host.agent_version}`, type: 'agent_version' }
+            (host.ip_address_v4 || host.configured_ip)
+                ? { icon: Network, text: (host.ip_address_v4 || host.configured_ip)!, type: 'ip' }
                 : null,
             host.platform
                 ? {
@@ -91,9 +86,8 @@
             metric && metric.uptime_seconds > 0
                 ? { icon: ClockArrowUp, text: formatUptime(metric.uptime_seconds), type: 'uptime' }
                 : null,
-            host.last_seen &&
-            (host.status === "offline" || host.status === "paused")
-                ? { icon: Clock, text: `Last seen ${formatRelativeTime(host.last_seen)}`, type: 'last_seen' }
+            host.agent_version
+                ? { icon: Tag, text: `Agent v${host.agent_version}`, type: 'agent_version' }
                 : null,
         ].filter(Boolean) as { icon: typeof ServerIcon; text: string; type: string }[],
     );
@@ -227,15 +221,15 @@
     >
         {#each details as detail, i}
             {#if i > 0}
-                <span>·</span>
+                <span aria-hidden="true">·</span>
             {/if}
             <span class="inline-flex items-center gap-1">
                 {#if detail.type === 'platform'}
                     <OsIcon os={host.platform} class="h-3.5 w-3.5 shrink-0" />
                 {:else}
-                    <detail.icon class="h-3.5 w-3.5" />
+                    <detail.icon class="h-3.5 w-3.5 shrink-0" />
                 {/if}
-                {detail.text}{#if agentOutdated && detail.type === 'agent_version'}&nbsp;<span class="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"><ArrowUpCircle class="h-3 w-3" />v{latestAgentVersion}</span>{/if}
+                {detail.text}{#if agentOutdated && detail.type === 'agent_version'}&nbsp;<span class="inline-flex items-center gap-0.5 rounded-full border border-warning/20 bg-warning/10 px-1.5 py-0.5 text-xs font-medium text-warning"><ArrowUpCircle class="h-3 w-3" />v{latestAgentVersion}</span>{/if}
             </span>
         {/each}
     </div>
