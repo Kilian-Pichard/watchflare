@@ -154,6 +154,7 @@ function computeStats(
 		onlineHosts,
 		offlineHosts: totalHosts - onlineHosts,
 		avgCPU,
+		cpuTrend: 0,
 		avgMemory: totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0,
 		avgDisk: totalDisk > 0 ? (usedDisk / totalDisk) * 100 : 0,
 		totalMemory,

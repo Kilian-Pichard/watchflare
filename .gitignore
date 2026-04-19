@@ -23,6 +23,7 @@ build/
 watchflare-agent*
 !watchflare-agent.service
 watchflare-backend*
+watchflare-app*
 *_linux
 test_env_*
 

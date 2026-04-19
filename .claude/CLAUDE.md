@@ -23,8 +23,9 @@ Scope is optional: `feat(agent): description`, `fix(backend): description`
 ### Backend
 ```bash
 cd backend
-go run .                                # Dev
-go build -o watchflare-backend          # Build (always use -o flag)
+go run .                                            # Dev
+go build -o watchflare-backend                      # Backend only (no frontend)
+go build -tags embed_frontend -o watchflare-app     # Backend + embedded frontend (production)
 go test ./...                           # Tests (uses in-memory SQLite)
 go test ./handlers -v                   # Single package
 go test -run TestCreateAgent ./services # Single test

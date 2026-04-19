@@ -76,7 +76,7 @@ func fetchLatestVersionFromGitHub(url string) (string, error) {
 		return "", fmt.Errorf("failed to build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "watchflare-backend")
+	req.Header.Set("User-Agent", "watchflare-app")
 
 	resp, err := client.Do(req)
 	if err != nil {

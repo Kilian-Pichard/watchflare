@@ -39,11 +39,11 @@ git clone https://github.com/Kilian-Pichard/watchflare.git
 cd watchflare
 
 # Configure environment
-cp backend/.env.example .env
+cp .env.example .env
 # Edit .env: set POSTGRES_PASSWORD and JWT_SECRET
 
 # Start
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml up -d
 
 # Open http://localhost:8080 and create your admin account
 ```
