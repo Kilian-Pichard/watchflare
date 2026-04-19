@@ -24,6 +24,7 @@ const serviceCtlTimeout = 30 * time.Second
 
 const (
 	binaryInstallPath  = "/usr/local/bin/watchflare-agent"
+	updatePendingFile  = "/var/lib/watchflare/update-pending"
 	macOSServiceName   = "io.watchflare.agent"
 	plistPath          = "/Library/LaunchDaemons/io.watchflare.agent.plist"
 	systemdServiceName = "watchflare-agent"
@@ -69,12 +70,16 @@ func ApplyUpdate(info *UpdateInfo) error {
 	}
 	logStep("binary extracted", "path", tmpBinary)
 
-	// On Linux, the re-exec from /tmp is unnecessary: Linux allows replacing
-	// an in-use binary via inode renaming — the running process keeps the old
-	// inode until it exits. Apply directly without copying to /tmp.
-	// (macOS routes through Homebrew and never reaches this point.)
+	// On Linux, the agent runs as an unprivileged user and cannot replace its
+	// own binary or manage the systemd service directly. Instead, write a
+	// trigger file that the watchflare-agent-update.path unit detects, which
+	// starts watchflare-agent-update.service (running as root) to apply the update.
 	if runtime.GOOS == "linux" {
-		return ApplyExtracted(tmpBinary, "")
+		if err := WriteTriggerFile(tmpBinary); err != nil {
+			os.Remove(tmpBinary)
+			return err
+		}
+		return nil
 	}
 
 	// macOS (direct install): re-exec from /tmp to avoid the SIP restriction
@@ -320,7 +325,7 @@ func stopService() error {
 		if _, err := exec.LookPath("systemctl"); err != nil {
 			return nil
 		}
-		cmd := exec.CommandContext(ctx, "systemctl", "stop", systemdServiceName)
+		cmd := exec.CommandContext(ctx, "systemctl", "stop", systemdServiceName+".service")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to stop service: %w\n%s", err, string(out))
 		}
@@ -333,6 +338,96 @@ func stopService() error {
 	}
 }
 
+// WriteTriggerFile writes the path of the extracted binary to the update-pending
+// file. The watchflare-agent-update.path unit detects this file and starts
+// watchflare-agent-update.service (running as root) to apply the update.
+func WriteTriggerFile(binaryPath string) error {
+	return writeTriggerFile(updatePendingFile, binaryPath)
+}
+
+func writeTriggerFile(triggerPath, binaryPath string) error {
+	if err := os.WriteFile(triggerPath, []byte(binaryPath+"\n"), 0640); err != nil {
+		return fmt.Errorf("failed to write update trigger file: %w", err)
+	}
+	logStep("update staged", "trigger", triggerPath, "binary", binaryPath)
+	logStep("waiting for updater service to apply update")
+	return nil
+}
+
+// ApplyFromTrigger is called by `watchflare-agent _apply-update` running as root.
+// It reads the trigger file written by WriteTriggerFile, validates the binary path,
+// atomically replaces the agent binary, restarts the service, and removes the trigger.
+func ApplyFromTrigger() error {
+	return applyFromTrigger(updatePendingFile, binaryInstallPath)
+}
+
+func applyFromTrigger(triggerPath, installPath string) error {
+	exe, _ := os.Executable()
+	logStep("apply-update start", "pid", os.Getpid(), "exe", exe)
+
+	data, err := os.ReadFile(triggerPath)
+	if err != nil {
+		return fmt.Errorf("failed to read trigger file: %w", err)
+	}
+
+	binaryPath := strings.TrimSpace(string(data))
+	if binaryPath == "" {
+		os.Remove(triggerPath) //nolint:errcheck
+		return fmt.Errorf("trigger file is empty")
+	}
+
+	// filepath.Clean removes ".." before the prefix check to prevent traversal attacks.
+	binaryPath = filepath.Clean(binaryPath)
+
+	// Remove trigger file immediately — prevents retry loops if subsequent steps fail.
+	// The path unit re-triggers the service as long as the file exists.
+	if err := os.Remove(triggerPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove trigger file: %w", err)
+	}
+
+	// Validate: must be a regular file under /tmp (no symlinks, no traversal).
+	if !strings.HasPrefix(binaryPath, "/tmp/") {
+		return fmt.Errorf("invalid binary path %q: must be under /tmp", binaryPath)
+	}
+	info, err := os.Lstat(binaryPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat binary: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("invalid binary path %q: not a regular file", binaryPath)
+	}
+
+	logStep("applying update", "src", binaryPath, "dst", installPath)
+
+	// Atomically replace the binary: stage → chown → rename
+	stagingPath := installPath + ".new"
+	if err := copyFile(binaryPath, stagingPath, 0755); err != nil {
+		os.Remove(stagingPath)
+		return fmt.Errorf("failed to stage binary: %w", err)
+	}
+	if err := os.Chown(stagingPath, 0, 0); err != nil {
+		os.Remove(stagingPath)
+		return fmt.Errorf("failed to set binary ownership: %w", err)
+	}
+	if err := os.Rename(stagingPath, installPath); err != nil {
+		os.Remove(stagingPath)
+		return fmt.Errorf("failed to replace binary: %w", err)
+	}
+	os.Remove(binaryPath)
+	logStep("binary replaced")
+
+	// Restart the agent service
+	logStep("restarting service")
+	ctx, cancel := context.WithTimeout(context.Background(), serviceCtlTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "restart", systemdServiceName+".service")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to restart service: %w\n%s", err, string(out))
+	}
+	logStep("service restarted")
+	return nil
+}
+
 func startService() error {
 	ctx, cancel := context.WithTimeout(context.Background(), serviceCtlTimeout)
 	defer cancel()
@@ -341,7 +436,7 @@ func startService() error {
 		if _, err := exec.LookPath("systemctl"); err != nil {
 			return nil
 		}
-		cmd := exec.CommandContext(ctx, "systemctl", "start", systemdServiceName)
+		cmd := exec.CommandContext(ctx, "systemctl", "start", systemdServiceName+".service")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start service: %w\n%s", err, string(out))
 		}

@@ -15,7 +15,10 @@ const systemctlTimeout = 30 * time.Second
 
 const (
 	systemdServiceFile = "/etc/systemd/system/watchflare-agent.service"
+	updateServiceFile  = "/etc/systemd/system/watchflare-agent-update.service"
+	updatePathFile     = "/etc/systemd/system/watchflare-agent-update.path"
 	serviceName        = BinaryName
+	updatePathName     = "watchflare-agent-update.path"
 )
 
 // LinuxService implements ServiceManager for Linux (systemd)
@@ -58,10 +61,9 @@ Environment="WATCHFLARE_DATA_DIR=%s"
 
 # Security hardening
 NoNewPrivileges=true
-PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=%s %s
+ReadWritePaths=%s %s /tmp
 
 # Logging
 StandardOutput=append:%s
@@ -75,17 +77,53 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 `, UserName, UserName, InstallDir, BinaryName, ConfigDir, DataDir, DataDir, LogPath, LogPath, LogPath, BinaryName)
 
-	// Write service file
 	if err := os.WriteFile(systemdServiceFile, []byte(serviceContent), 0644); err != nil {
 		return fmt.Errorf("failed to write service file: %w", err)
 	}
-
-	// Set ownership
 	if err := os.Chown(systemdServiceFile, 0, 0); err != nil {
 		return fmt.Errorf("failed to set ownership: %w", err)
 	}
-
 	fmt.Printf("  → Installed to %s\n", systemdServiceFile)
+
+	// Install updater service (runs as root, triggered by path unit)
+	updateServiceContent := fmt.Sprintf(`[Unit]
+Description=Watchflare Agent Updater
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=%s/%s _apply-update
+RemainAfterExit=no
+`, InstallDir, BinaryName)
+
+	if err := os.WriteFile(updateServiceFile, []byte(updateServiceContent), 0644); err != nil {
+		return fmt.Errorf("failed to write update service file: %w", err)
+	}
+	if err := os.Chown(updateServiceFile, 0, 0); err != nil {
+		return fmt.Errorf("failed to set update service ownership: %w", err)
+	}
+	fmt.Printf("  → Installed to %s\n", updateServiceFile)
+
+	// Install path unit (watches for update-pending trigger file)
+	updatePathContent := fmt.Sprintf(`[Unit]
+Description=Watch for Watchflare Agent Update Requests
+Wants=watchflare-agent-update.service
+
+[Path]
+PathExists=%s/update-pending
+Unit=watchflare-agent-update.service
+
+[Install]
+WantedBy=multi-user.target
+`, DataDir)
+
+	if err := os.WriteFile(updatePathFile, []byte(updatePathContent), 0644); err != nil {
+		return fmt.Errorf("failed to write update path file: %w", err)
+	}
+	if err := os.Chown(updatePathFile, 0, 0); err != nil {
+		return fmt.Errorf("failed to set update path ownership: %w", err)
+	}
+	fmt.Printf("  → Installed to %s\n", updatePathFile)
 
 	// Reload systemd
 	ctx, cancel := context.WithTimeout(context.Background(), systemctlTimeout)
@@ -94,8 +132,17 @@ WantedBy=multi-user.target
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to reload systemd: %w", err)
 	}
-
 	fmt.Println("  → Systemd daemon reloaded")
+
+	// Enable path unit (auto-starts on boot, watches for trigger file)
+	enableCtx, enableCancel := context.WithTimeout(context.Background(), systemctlTimeout)
+	defer enableCancel()
+	enableCmd := exec.CommandContext(enableCtx, "systemctl", "enable", "--now", updatePathName)
+	if err := enableCmd.Run(); err != nil {
+		return fmt.Errorf("failed to enable update path unit: %w", err)
+	}
+	fmt.Printf("  → Enabled %s\n", updatePathName)
+
 	return nil
 }
 
@@ -112,14 +159,17 @@ func (s *LinuxService) Uninstall() error {
 		}
 	}
 
-	// Disable service — error intentionally ignored (may not have been enabled)
+	// Disable main service and path unit — errors intentionally ignored
 	disableCtx, disableCancel := context.WithTimeout(context.Background(), systemctlTimeout)
-	exec.CommandContext(disableCtx, "systemctl", "disable", serviceName).Run() //nolint:errcheck
+	exec.CommandContext(disableCtx, "systemctl", "disable", "--now", updatePathName).Run() //nolint:errcheck
+	exec.CommandContext(disableCtx, "systemctl", "disable", serviceName).Run()             //nolint:errcheck
 	disableCancel()
 
-	// Remove service file
-	if err := os.Remove(systemdServiceFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove service file: %w", err)
+	// Remove unit files
+	for _, f := range []string{systemdServiceFile, updateServiceFile, updatePathFile} {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove %s: %w", f, err)
+		}
 	}
 
 	// Reload systemd

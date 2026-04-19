@@ -55,6 +55,10 @@ func main() {
 			cmd.Update()
 			return
 
+		case "_apply-update":
+			cmd.ApplyUpdate()
+			return
+
 		case "help", "-h", "--help":
 			printHelp()
 			return

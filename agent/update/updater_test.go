@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -121,6 +122,104 @@ func TestExtractBinary_SkipsNonRegular(t *testing.T) {
 	_, err = extractBinary(tmp.Name())
 	if err == nil {
 		t.Error("expected error: directory entry must not be extracted as binary")
+	}
+}
+
+// --- writeTriggerFile ---
+
+func TestWriteTriggerFile_WritesContent(t *testing.T) {
+	dir := t.TempDir()
+	triggerPath := dir + "/update-pending"
+	binaryPath := "/tmp/watchflare-agent-new-12345"
+
+	if err := writeTriggerFile(triggerPath, binaryPath); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(triggerPath)
+	if err != nil {
+		t.Fatalf("read trigger file: %v", err)
+	}
+	if strings.TrimSpace(string(data)) != binaryPath {
+		t.Errorf("content = %q, want %q", strings.TrimSpace(string(data)), binaryPath)
+	}
+}
+
+func TestWriteTriggerFile_NoDir(t *testing.T) {
+	err := writeTriggerFile("/nonexistent/dir/update-pending", "/tmp/something")
+	if err == nil {
+		t.Error("expected error when directory does not exist")
+	}
+}
+
+// --- applyFromTrigger ---
+
+func TestApplyFromTrigger_NoTriggerFile(t *testing.T) {
+	dir := t.TempDir()
+	err := applyFromTrigger(dir+"/update-pending", dir+"/watchflare-agent")
+	if err == nil {
+		t.Error("expected error when trigger file does not exist")
+	}
+}
+
+func TestApplyFromTrigger_EmptyFile(t *testing.T) {
+	dir := t.TempDir()
+	triggerPath := dir + "/update-pending"
+	os.WriteFile(triggerPath, []byte("\n"), 0640) //nolint:errcheck
+
+	err := applyFromTrigger(triggerPath, dir+"/watchflare-agent")
+	if err == nil || !strings.Contains(err.Error(), "empty") {
+		t.Errorf("expected 'empty' error, got %v", err)
+	}
+}
+
+func TestApplyFromTrigger_PathNotUnderTmp(t *testing.T) {
+	dir := t.TempDir()
+	triggerPath := dir + "/update-pending"
+	os.WriteFile(triggerPath, []byte("/var/lib/something\n"), 0640) //nolint:errcheck
+
+	err := applyFromTrigger(triggerPath, dir+"/watchflare-agent")
+	if err == nil || !strings.Contains(err.Error(), "must be under /tmp") {
+		t.Errorf("expected path validation error, got %v", err)
+	}
+}
+
+func TestApplyFromTrigger_PathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	triggerPath := dir + "/update-pending"
+	// filepath.Clean resolves /tmp/../etc/passwd → /etc/passwd, which then fails the /tmp/ check
+	os.WriteFile(triggerPath, []byte("/tmp/../etc/passwd\n"), 0640) //nolint:errcheck
+
+	err := applyFromTrigger(triggerPath, dir+"/watchflare-agent")
+	if err == nil || !strings.Contains(err.Error(), "must be under /tmp") {
+		t.Errorf("expected path traversal rejection, got %v", err)
+	}
+}
+
+func TestApplyFromTrigger_Symlink(t *testing.T) {
+	dir := t.TempDir()
+	triggerPath := dir + "/update-pending"
+
+	// Create a symlink inside /tmp pointing to a file outside /tmp
+	realTarget := dir + "/real-file"
+	os.WriteFile(realTarget, []byte("data"), 0644) //nolint:errcheck
+
+	tmpDir, err := os.MkdirTemp("/tmp", "wf-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	linkPath := tmpDir + "/watchflare-link"
+	if err := os.Symlink(realTarget, linkPath); err != nil {
+		t.Fatal(err)
+	}
+
+	os.WriteFile(triggerPath, []byte(linkPath+"\n"), 0640) //nolint:errcheck
+
+	err = applyFromTrigger(triggerPath, dir+"/watchflare-agent")
+	if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Errorf("expected symlink rejection, got %v", err)
 	}
 }
 

@@ -15,6 +15,20 @@ import (
 
 const brewCheckTimeout = 10 * time.Second
 
+// ApplyUpdate handles the internal `watchflare-agent _apply-update` command.
+// It is called by watchflare-agent-update.service running as root.
+// It reads the trigger file written by the agent, validates and applies the update.
+func ApplyUpdate() {
+	if err := install.CheckRoot(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if err := update.ApplyFromTrigger(); err != nil {
+		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 // Update handles the `watchflare-agent update [--check]` command.
 // It runs in two phases:
 //
