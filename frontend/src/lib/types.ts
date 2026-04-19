@@ -281,6 +281,7 @@ export interface HostUpdateEvent {
   reactivated?: boolean;
   hostname?: string;
   clock_desync?: boolean;
+  agent_version?: string;
 }
 
 export interface MetricsUpdateEvent extends Metric {

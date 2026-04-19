@@ -337,7 +337,7 @@ func TestHeartbeat_DelegatesToSendHeartbeat(t *testing.T) {
 
 	c := startMockServer(t, mock)
 
-	if _, err := c.Heartbeat("agent-1", "key-1"); err != nil {
+	if _, err := c.Heartbeat("agent-1", "key-1", ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if receivedIPv4 != "" {
@@ -345,6 +345,26 @@ func TestHeartbeat_DelegatesToSendHeartbeat(t *testing.T) {
 	}
 	if receivedIPv6 != "" {
 		t.Errorf("Heartbeat should send empty IPv6, got %q", receivedIPv6)
+	}
+}
+
+func TestSendHeartbeat_SendsAgentVersion(t *testing.T) {
+	var receivedVersion string
+
+	mock := &mockAgentServer{
+		heartbeatFn: func(req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
+			receivedVersion = req.AgentVersion
+			return &pb.HeartbeatResponse{Success: true}, nil
+		},
+	}
+
+	c := startMockServer(t, mock)
+
+	if _, err := c.SendHeartbeat("agent-1", "key-1", "", "", "0.32.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedVersion != "0.32.1" {
+		t.Errorf("AgentVersion: got %q, want %q", receivedVersion, "0.32.1")
 	}
 }
 
@@ -360,7 +380,7 @@ func TestSendHeartbeat_Success(t *testing.T) {
 
 	c := startMockServer(t, mock)
 
-	if _, err := c.SendHeartbeat("agent-1", "key-1", "1.2.3.4", "::1"); err != nil {
+	if _, err := c.SendHeartbeat("agent-1", "key-1", "1.2.3.4", "::1", ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -374,7 +394,7 @@ func TestSendHeartbeat_Rejected(t *testing.T) {
 
 	c := startMockServer(t, mock)
 
-	_, err := c.SendHeartbeat("agent-1", "key-1", "", "")
+	_, err := c.SendHeartbeat("agent-1", "key-1", "", "", "")
 	if err == nil {
 		t.Fatal("expected error for rejected heartbeat, got nil")
 	}
@@ -395,7 +415,7 @@ func TestSendHeartbeat_ReturnsPendingCommands(t *testing.T) {
 
 	c := startMockServer(t, mock)
 
-	cmds, err := c.SendHeartbeat("agent-1", "key-1", "", "")
+	cmds, err := c.SendHeartbeat("agent-1", "key-1", "", "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

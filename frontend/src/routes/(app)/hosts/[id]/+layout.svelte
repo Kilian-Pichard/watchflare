@@ -173,6 +173,7 @@
                     configured_ip: update.configured_ip,
                     ignore_ip_mismatch: update.ignore_ip_mismatch,
                     last_seen: update.last_seen,
+                    agent_version: update.agent_version ?? host.agent_version,
                 };
                 clockDesync = update.clock_desync || false;
             }

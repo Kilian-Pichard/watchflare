@@ -73,6 +73,7 @@ message HeartbeatRequest {
   string ip_address_v4 = 3; // Current IPv4 (may change)
   string ip_address_v6 = 4; // Current IPv6 (may change)
   int64 timestamp = 5;      // Unix timestamp in seconds (for anti-replay)
+  string agent_version = 6; // Agent binary version, used to update DB immediately after self-update
 }
 
 // HeartbeatResponse acknowledges the heartbeat and may carry pending commands

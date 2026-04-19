@@ -37,7 +37,8 @@ type HostUpdate struct {
 	LastSeen         string `json:"last_seen"`
 	Reactivated      bool   `json:"reactivated,omitempty"`  // true if agent was reactivated (UUID reused)
 	Hostname         string `json:"hostname,omitempty"`     // hostname for reactivation notification
-	ClockDesync      bool   `json:"clock_desync,omitempty"` // true if agent's clock is out of sync
+	ClockDesync      bool   `json:"clock_desync,omitempty"`  // true if agent's clock is out of sync
+	AgentVersion     string `json:"agent_version,omitempty"` // current agent version
 }
 
 // MetricsUpdate is the input struct for BroadcastMetricsUpdate.

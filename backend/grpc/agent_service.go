@@ -234,6 +234,21 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 		}, nil
 	}
 
+	// Update agent version in DB if it changed (e.g. immediately after a self-update + restart)
+	if req.AgentVersion != "" {
+		currentVersion := ""
+		if host.AgentVersion != nil {
+			currentVersion = *host.AgentVersion
+		}
+		if req.AgentVersion != currentVersion {
+			if err := database.DB.Model(&host).Update("agent_version", req.AgentVersion).Error; err != nil {
+				slog.Warn("failed to update agent version", "host_id", host.ID, "error", err)
+			} else {
+				host.AgentVersion = &req.AgentVersion
+			}
+		}
+	}
+
 	// Update heartbeat cache (in-memory, no DB write)
 	// Fall back to DB values if heartbeat sends empty IPs (agent uses Heartbeat() not SendHeartbeat())
 	ipv4 := req.IpAddressV4
@@ -263,6 +278,10 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 	if host.ConfiguredIP != nil {
 		configuredIP = *host.ConfiguredIP
 	}
+	agentVersion := ""
+	if host.AgentVersion != nil {
+		agentVersion = *host.AgentVersion
+	}
 	broker.BroadcastHostUpdate(sse.HostUpdate{
 		ID:               host.ID,
 		Status:           models.StatusOnline,
@@ -271,6 +290,7 @@ func (s *AgentServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (
 		ConfiguredIP:     configuredIP,
 		IgnoreIPMismatch: host.IgnoreIPMismatch,
 		LastSeen:         time.Now().Format(time.RFC3339),
+		AgentVersion:     agentVersion,
 	})
 
 	return &pb.HeartbeatResponse{

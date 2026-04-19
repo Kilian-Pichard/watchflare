@@ -334,11 +334,12 @@ func (x *RegisterHostResponse) GetReactivated() bool {
 // HeartbeatRequest contains info sent with each heartbeat
 type HeartbeatRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`               // UUID of the host
-	AgentKey      string                 `protobuf:"bytes,2,opt,name=agent_key,json=agentKey,proto3" json:"agent_key,omitempty"`            // Authentication key
-	IpAddressV4   string                 `protobuf:"bytes,3,opt,name=ip_address_v4,json=ipAddressV4,proto3" json:"ip_address_v4,omitempty"` // Current IPv4 (may change)
-	IpAddressV6   string                 `protobuf:"bytes,4,opt,name=ip_address_v6,json=ipAddressV6,proto3" json:"ip_address_v6,omitempty"` // Current IPv6 (may change)
-	Timestamp     int64                  `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                         // Unix timestamp in seconds (for anti-replay)
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`                // UUID of the host
+	AgentKey      string                 `protobuf:"bytes,2,opt,name=agent_key,json=agentKey,proto3" json:"agent_key,omitempty"`             // Authentication key
+	IpAddressV4   string                 `protobuf:"bytes,3,opt,name=ip_address_v4,json=ipAddressV4,proto3" json:"ip_address_v4,omitempty"`  // Current IPv4 (may change)
+	IpAddressV6   string                 `protobuf:"bytes,4,opt,name=ip_address_v6,json=ipAddressV6,proto3" json:"ip_address_v6,omitempty"`  // Current IPv6 (may change)
+	Timestamp     int64                  `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                          // Unix timestamp in seconds (for anti-replay)
+	AgentVersion  string                 `protobuf:"bytes,6,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"` // Agent binary version, used to update DB immediately after self-update
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -406,6 +407,13 @@ func (x *HeartbeatRequest) GetTimestamp() int64 {
 		return x.Timestamp
 	}
 	return 0
+}
+
+func (x *HeartbeatRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
 }
 
 // HeartbeatResponse acknowledges the heartbeat and may carry pending commands
@@ -1732,13 +1740,14 @@ const file_shared_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\aca_cert\x18\x05 \x01(\tR\x06caCert\x12\x1f\n" +
 	"\vserver_name\x18\x06 \x01(\tR\n" +
 	"serverName\x12 \n" +
-	"\vreactivated\x18\a \x01(\bR\vreactivated\"\xb0\x01\n" +
+	"\vreactivated\x18\a \x01(\bR\vreactivated\"\xd5\x01\n" +
 	"\x10HeartbeatRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1b\n" +
 	"\tagent_key\x18\x02 \x01(\tR\bagentKey\x12\"\n" +
 	"\rip_address_v4\x18\x03 \x01(\tR\vipAddressV4\x12\"\n" +
 	"\rip_address_v6\x18\x04 \x01(\tR\vipAddressV6\x12\x1c\n" +
-	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\"}\n" +
+	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x12#\n" +
+	"\ragent_version\x18\x06 \x01(\tR\fagentVersion\"}\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x124\n" +

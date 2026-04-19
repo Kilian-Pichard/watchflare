@@ -219,20 +219,21 @@ func SaveCACertificate(caCertPEM, certPath string) error {
 }
 
 // Heartbeat sends a simple heartbeat (wrapper for SendHeartbeat with empty IPs)
-func (c *Client) Heartbeat(agentID, agentKey string) ([]*pb.PendingCommand, error) {
-	return c.SendHeartbeat(agentID, agentKey, "", "")
+func (c *Client) Heartbeat(agentID, agentKey, agentVersion string) ([]*pb.PendingCommand, error) {
+	return c.SendHeartbeat(agentID, agentKey, "", "", agentVersion)
 }
 
 // SendHeartbeat sends a heartbeat to the backend and returns any pending commands.
-func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6 string) ([]*pb.PendingCommand, error) {
+func (c *Client) SendHeartbeat(agentID, agentKey, ipv4, ipv6, agentVersion string) ([]*pb.PendingCommand, error) {
 	timestamp := time.Now().Unix()
 
 	req := &pb.HeartbeatRequest{
-		AgentId:     agentID,
-		AgentKey:    agentKey,
-		IpAddressV4: ipv4,
-		IpAddressV6: ipv6,
-		Timestamp:   timestamp,
+		AgentId:      agentID,
+		AgentKey:     agentKey,
+		IpAddressV4:  ipv4,
+		IpAddressV6:  ipv6,
+		Timestamp:    timestamp,
+		AgentVersion: agentVersion,
 	}
 
 	// Attach HMAC authentication metadata

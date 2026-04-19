@@ -143,6 +143,8 @@
                         update.ignore_ip_mismatch ??
                         hosts[idx].ignore_ip_mismatch,
                     last_seen: update.last_seen,
+                    agent_version:
+                        update.agent_version ?? hosts[idx].agent_version,
                 };
                 hosts = [...hosts];
             }

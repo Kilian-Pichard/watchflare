@@ -461,6 +461,68 @@ func TestHeartbeat_Online(t *testing.T) {
 	assert.True(t, resp.Success)
 }
 
+func TestHeartbeat_UpdatesAgentVersion(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	oldVersion := "0.31.0"
+	host := &models.Host{
+		ID:           uuid.New().String(),
+		AgentID:      uuid.New().String(),
+		DisplayName:  "version-update-host",
+		Status:       models.StatusOnline,
+		AgentKey:     "version-update-key-abc123",
+		AgentVersion: &oldVersion,
+	}
+	require.NoError(t, database.DB.Create(host).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(host) })
+
+	req := &pb.HeartbeatRequest{
+		AgentId:      host.AgentID,
+		AgentKey:     host.AgentKey,
+		AgentVersion: "0.32.1",
+	}
+	resp, err := s.Heartbeat(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+
+	var updated models.Host
+	require.NoError(t, database.DB.First(&updated, "id = ?", host.ID).Error)
+	require.NotNil(t, updated.AgentVersion)
+	assert.Equal(t, "0.32.1", *updated.AgentVersion)
+}
+
+func TestHeartbeat_SkipsVersionUpdateWhenUnchanged(t *testing.T) {
+	setupGRPCTestDB(t)
+	s := NewAgentServer()
+
+	version := "0.32.1"
+	host := &models.Host{
+		ID:           uuid.New().String(),
+		AgentID:      uuid.New().String(),
+		DisplayName:  "version-unchanged-host",
+		Status:       models.StatusOnline,
+		AgentKey:     "version-unchanged-key-abc123",
+		AgentVersion: &version,
+	}
+	require.NoError(t, database.DB.Create(host).Error)
+	t.Cleanup(func() { database.DB.Unscoped().Delete(host) })
+
+	req := &pb.HeartbeatRequest{
+		AgentId:      host.AgentID,
+		AgentKey:     host.AgentKey,
+		AgentVersion: "0.32.1",
+	}
+	resp, err := s.Heartbeat(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+
+	var updated models.Host
+	require.NoError(t, database.DB.First(&updated, "id = ?", host.ID).Error)
+	require.NotNil(t, updated.AgentVersion)
+	assert.Equal(t, "0.32.1", *updated.AgentVersion)
+}
+
 func TestReportDroppedMetrics_InvalidCredentials(t *testing.T) {
 	setupGRPCTestDB(t)
 	s := NewAgentServer()
