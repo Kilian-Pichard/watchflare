@@ -19,6 +19,8 @@
         TimeRange,
         ContainerMetric,
     } from "$lib/types";
+
+    type SSECallback = (event: SSEEvent) => void;
     import HostDetailHeader from "$lib/components/host/HostDetailHeader.svelte";
     import HostLiveStats from "$lib/components/host/HostLiveStats.svelte";
     import HostAlerts from "$lib/components/host/HostAlerts.svelte";
@@ -73,6 +75,9 @@
     // Incremented each time a package_inventory_update SSE event arrives for this host
     let packageInventorySignal = $state(0);
 
+    // Child pages can subscribe to per-host SSE events via context
+    const ssePageCallbacks = new Set<SSECallback>();
+
     // Modals
     let showDeleteConfirm = $state(false);
     let showRegenerateConfirm = $state(false);
@@ -119,6 +124,10 @@
         setIncidentsCache: (data: typeof incidentsCache) => {
             incidentsCache = data;
         },
+        subscribeToSSE: (cb: SSECallback): (() => void) => {
+            ssePageCallbacks.add(cb);
+            return () => ssePageCallbacks.delete(cb);
+        },
     });
 
     const showIPMismatchWarning = $derived(
@@ -162,6 +171,7 @@
 
     function handleSSEMessage(event: SSEEvent) {
         handleSSEReactivation(event);
+        ssePageCallbacks.forEach((cb) => cb(event));
         if (event.type === "host_update") {
             const update = event.data as HostUpdateEvent;
             if (host && update.id === host.id) {

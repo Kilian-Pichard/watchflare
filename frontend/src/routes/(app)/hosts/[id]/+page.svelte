@@ -2,7 +2,6 @@
     import { onMount, onDestroy, getContext } from "svelte";
     import { page } from "$app/stores";
     import * as api from "$lib/api.js";
-    import { sseStore } from "$lib/stores/sse";
     import { logger, TIME_RANGES } from "$lib/utils";
     import type {
         Metric,
@@ -34,6 +33,7 @@
         overviewCache: OverviewCache | null;
         setOverviewCache: (data: OverviewCache) => void;
         setLatestMetric: (m: Metric | null) => void;
+        subscribeToSSE: (cb: (event: SSEEvent) => void) => () => void;
     }>("hostDetail");
 
     const cached = ctx.overviewCache;
@@ -49,7 +49,7 @@
     let sseUnsubscribe: (() => void) | null = null;
 
     onMount(() => {
-        sseUnsubscribe = sseStore.connect(handleSSEMessage);
+        sseUnsubscribe = ctx.subscribeToSSE(handleSSEMessage);
     });
 
     onDestroy(() => {
