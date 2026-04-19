@@ -52,7 +52,7 @@ archives:
     name_template: "watchflare-app_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
-  name_template: "watchflare-app_checksums.txt"
+  name_template: "watchflare_checksums.txt"
 
 brews:
   - name: watchflare-agent
