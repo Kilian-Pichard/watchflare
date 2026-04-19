@@ -113,7 +113,7 @@
         <ShieldAlert class="h-4 w-4 shrink-0 mt-0.5" />
         <div>
             <p class="font-medium">Cookies are not marked Secure</p>
-            <p class="mt-0.5 text-warning/80">Set <code class="font-mono text-xs bg-warning/10 px-1 rounded">COOKIE_SECURE=true</code> in your environment and serve Watchflare over HTTPS in production.</p>
+            <p class="mt-0.5 text-warning/80">Serve Watchflare over HTTPS to enable secure cookies. Use a reverse proxy (Nginx, Caddy) or configure direct TLS via <code class="font-mono text-xs bg-warning/10 px-1 rounded">TLS_CERT_FILE</code> / <code class="font-mono text-xs bg-warning/10 px-1 rounded">TLS_KEY_FILE</code>.</p>
         </div>
     </div>
 {/if}

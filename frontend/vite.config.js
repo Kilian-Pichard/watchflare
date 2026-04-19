@@ -19,6 +19,9 @@ export default defineConfig({
 
 	server: {
 		port: 5173,
+		allowedHosts: process.env.VITE_ALLOWED_HOSTS
+			? process.env.VITE_ALLOWED_HOSTS.split(',')
+			: [],
 
 		proxy: {
 			'/api/v1': {

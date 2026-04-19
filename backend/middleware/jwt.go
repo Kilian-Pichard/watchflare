@@ -13,9 +13,9 @@ import (
 )
 
 func clearJWTCookie(c *gin.Context) {
-	isProd := config.AppConfig.Environment == "production"
 	domain := config.AppConfig.CookieDomain
-	c.SetCookie("jwt_token", "", -1, "/", domain, isProd, true)
+	secure := config.CookieSecure(c.Request.TLS != nil, c.Request.RemoteAddr, c.GetHeader("X-Forwarded-Proto"))
+	c.SetCookie("jwt_token", "", -1, "/", domain, secure, true)
 }
 
 // AuthMiddleware validates JWT token from cookie and extracts user ID

@@ -13,7 +13,8 @@ import (
 // setJWTCookie sets the JWT token as an HttpOnly cookie.
 func setJWTCookie(c *gin.Context, token string) {
 	domain := config.AppConfig.CookieDomain
-	c.SetCookie("jwt_token", token, 60*60*24*7, "/", domain, config.AppConfig.CookieSecure, true)
+	secure := config.CookieSecure(c.Request.TLS != nil, c.Request.RemoteAddr, c.GetHeader("X-Forwarded-Proto"))
+	c.SetCookie("jwt_token", token, 60*60*24*7, "/", domain, secure, true)
 }
 
 // getUserID extracts the authenticated user ID from the Gin context
@@ -118,7 +119,8 @@ func Login(c *gin.Context) {
 // Logout clears the JWT cookie
 func Logout(c *gin.Context) {
 	domain := config.AppConfig.CookieDomain
-	c.SetCookie("jwt_token", "", -1, "/", domain, config.AppConfig.CookieSecure, true)
+	secure := config.CookieSecure(c.Request.TLS != nil, c.Request.RemoteAddr, c.GetHeader("X-Forwarded-Proto"))
+	c.SetCookie("jwt_token", "", -1, "/", domain, secure, true)
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
 

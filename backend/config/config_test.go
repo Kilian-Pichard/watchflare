@@ -62,6 +62,69 @@ func TestParseOrigins(t *testing.T) {
 	})
 }
 
+func boolPtr(b bool) *bool { return &b }
+
+func TestCookieSecure(t *testing.T) {
+	AppConfig = &Config{TrustedProxies: []string{"127.0.0.1", "::1"}}
+
+	t.Run("override true forces secure regardless of connection", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = boolPtr(true)
+		assert.True(t, CookieSecure(false, "10.0.0.1:1234", ""))
+	})
+
+	t.Run("override false forces insecure regardless of TLS", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = boolPtr(false)
+		assert.False(t, CookieSecure(true, "127.0.0.1:1234", "https"))
+	})
+
+	t.Run("direct TLS returns true when no override", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = nil
+		assert.True(t, CookieSecure(true, "10.0.0.5:1234", ""))
+	})
+
+	t.Run("trusted proxy with X-Forwarded-Proto https returns true", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = nil
+		assert.True(t, CookieSecure(false, "127.0.0.1:54321", "https"))
+	})
+
+	t.Run("trusted proxy with X-Forwarded-Proto http returns false", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = nil
+		assert.False(t, CookieSecure(false, "127.0.0.1:54321", "http"))
+	})
+
+	t.Run("untrusted proxy header is ignored", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = nil
+		assert.False(t, CookieSecure(false, "10.0.0.99:1234", "https"))
+	})
+
+	t.Run("plain HTTP no proxy returns false", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = nil
+		assert.False(t, CookieSecure(false, "192.168.1.5:1234", ""))
+	})
+
+	t.Run("ipv6 loopback trusted proxy", func(t *testing.T) {
+		AppConfig.CookieSecureOverride = nil
+		assert.True(t, CookieSecure(false, "[::1]:54321", "https"))
+	})
+}
+
+func TestParseProxies(t *testing.T) {
+	t.Run("parses comma-separated IPs", func(t *testing.T) {
+		result := parseProxies("127.0.0.1,::1")
+		assert.Equal(t, []string{"127.0.0.1", "::1"}, result)
+	})
+
+	t.Run("trims whitespace", func(t *testing.T) {
+		result := parseProxies("127.0.0.1, ::1")
+		assert.Equal(t, []string{"127.0.0.1", "::1"}, result)
+	})
+
+	t.Run("returns empty slice for empty string", func(t *testing.T) {
+		result := parseProxies("")
+		assert.Equal(t, []string{}, result)
+	})
+}
+
 func TestLoad_ValidConfig(t *testing.T) {
 	os.Setenv("JWT_SECRET", "a-valid-secret-that-is-at-least-32-chars!")
 	defer os.Unsetenv("JWT_SECRET")

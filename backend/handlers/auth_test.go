@@ -213,6 +213,7 @@ func TestLogin(t *testing.T) {
 				assert.NotNil(t, jwtCookie)
 				assert.NotEmpty(t, jwtCookie.Value)
 				assert.True(t, jwtCookie.HttpOnly)
+				assert.False(t, jwtCookie.Secure) // plain HTTP in tests — no TLS, no trusted proxy
 			},
 		},
 		{
@@ -608,4 +609,95 @@ func TestUpdatePreferences(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
+}
+
+// TestCookieSecureFlag_Login verifies that the Secure flag on the JWT cookie
+// follows per-request HTTPS detection logic.
+func TestCookieSecureFlag_Login(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB()
+
+	user := &models.User{Email: "secure@test.com"}
+	user.HashPassword("password123")
+	database.DB.Create(user)
+
+	loginBody, _ := json.Marshal(map[string]string{
+		"email":    "secure@test.com",
+		"password": "password123",
+	})
+
+	getJWTCookie := func(w *httptest.ResponseRecorder) *http.Cookie {
+		for _, c := range w.Result().Cookies() {
+			if c.Name == "jwt_token" {
+				return c
+			}
+		}
+		return nil
+	}
+
+	t.Run("plain HTTP — Secure=false", func(t *testing.T) {
+		config.AppConfig.CookieSecureOverride = nil
+		config.AppConfig.TrustedProxies = []string{"127.0.0.1", "::1"}
+
+		router := setupRouter()
+		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		cookie := getJWTCookie(w)
+		assert.NotNil(t, cookie)
+		assert.False(t, cookie.Secure)
+	})
+
+	t.Run("trusted proxy with X-Forwarded-Proto https — Secure=true", func(t *testing.T) {
+		config.AppConfig.CookieSecureOverride = nil
+		config.AppConfig.TrustedProxies = []string{"127.0.0.1", "::1"}
+
+		router := setupRouter()
+		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.RemoteAddr = "127.0.0.1:54321"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		cookie := getJWTCookie(w)
+		assert.NotNil(t, cookie)
+		assert.True(t, cookie.Secure)
+	})
+
+	t.Run("untrusted source with X-Forwarded-Proto https — Secure=false", func(t *testing.T) {
+		config.AppConfig.CookieSecureOverride = nil
+		config.AppConfig.TrustedProxies = []string{"127.0.0.1", "::1"}
+
+		router := setupRouter()
+		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.RemoteAddr = "10.0.0.99:54321"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		cookie := getJWTCookie(w)
+		assert.NotNil(t, cookie)
+		assert.False(t, cookie.Secure)
+	})
+
+	t.Run("COOKIE_SECURE override true — Secure=true regardless", func(t *testing.T) {
+		override := true
+		config.AppConfig.CookieSecureOverride = &override
+		config.AppConfig.TrustedProxies = []string{}
+		defer func() { config.AppConfig.CookieSecureOverride = nil }()
+
+		router := setupRouter()
+		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		cookie := getJWTCookie(w)
+		assert.NotNil(t, cookie)
+		assert.True(t, cookie.Secure)
+	})
 }

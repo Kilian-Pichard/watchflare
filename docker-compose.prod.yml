@@ -19,7 +19,9 @@ services:
       - TLS_PKI_DIR=/var/lib/watchflare/pki
       - GRPC_TIMESTAMP_WINDOW=${GRPC_TIMESTAMP_WINDOW:-300}
       - ENV=production
-      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - COOKIE_SECURE=${COOKIE_SECURE:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1}
     volumes:
       - pki_data:/var/lib/watchflare/pki
     depends_on:

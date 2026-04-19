@@ -19,7 +19,8 @@ const testJWTSecret = "test-secret-key-must-be-32-chars!!"
 
 func setupTestConfig() {
 	config.AppConfig = &config.Config{
-		JWTSecret: testJWTSecret,
+		JWTSecret:      testJWTSecret,
+		TrustedProxies: []string{"127.0.0.1", "::1"},
 	}
 }
 
@@ -232,4 +233,52 @@ func TestAuthMiddleware_UserIDInContext(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestClearJWTCookie_SecureFlag verifies that the clearing cookie set on auth
+// failure respects per-request HTTPS detection.
+func TestClearJWTCookie_SecureFlag(t *testing.T) {
+	setupTestConfig()
+	gin.SetMode(gin.TestMode)
+
+	getJWTCookie := func(w *httptest.ResponseRecorder) *http.Cookie {
+		for _, c := range w.Result().Cookies() {
+			if c.Name == "jwt_token" {
+				return c
+			}
+		}
+		return nil
+	}
+
+	router := gin.New()
+	router.Use(AuthMiddleware())
+	router.GET("/protected", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	t.Run("plain HTTP — clearing cookie Secure=false", func(t *testing.T) {
+		config.AppConfig.CookieSecureOverride = nil
+
+		req, _ := http.NewRequest("GET", "/protected", nil) // no jwt_token cookie
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		cookie := getJWTCookie(w)
+		assert.NotNil(t, cookie)
+		assert.False(t, cookie.Secure)
+	})
+
+	t.Run("trusted proxy HTTPS — clearing cookie Secure=true", func(t *testing.T) {
+		config.AppConfig.CookieSecureOverride = nil
+
+		req, _ := http.NewRequest("GET", "/protected", nil)
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.RemoteAddr = "127.0.0.1:54321"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		cookie := getJWTCookie(w)
+		assert.NotNil(t, cookie)
+		assert.True(t, cookie.Secure)
+	})
 }

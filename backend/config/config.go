@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -13,12 +14,19 @@ import (
 type Config struct {
 	GRPCPort    string
 	DatabaseURL string
-	JWTSecret          string
-	SMTPEncryptionKey  string
-	CORSOrigins        []string
+	JWTSecret         string
+	SMTPEncryptionKey string
+	CORSOrigins       []string
 	Environment  string
 	CookieDomain string // Domain for JWT cookie (empty = localhost, set in production)
-	CookieSecure bool   // Secure flag on JWT cookie — set false when serving over HTTP without TLS
+
+	// Cookie security — nil means auto-detect per request (recommended).
+	// Set via COOKIE_SECURE env var only to force-override auto-detection.
+	CookieSecureOverride *bool
+
+	// TrustedProxies is the list of IP addresses allowed to set X-Forwarded-Proto.
+	// Defaults to loopback only. Add your reverse proxy IP if it runs on a separate host.
+	TrustedProxies []string
 
 	// TLS Configuration
 	TLSMode   string // "auto" or "custom"
@@ -52,10 +60,11 @@ func Load() {
 		),
 		JWTSecret:         getEnv("JWT_SECRET", ""),
 		SMTPEncryptionKey: getEnv("SMTP_ENCRYPTION_KEY", ""),
-		CORSOrigins:       parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
-		Environment:  getEnv("ENV", "development"),
-		CookieDomain: getEnv("COOKIE_DOMAIN", ""), // Empty for dev (localhost), set in production
-		CookieSecure: getBoolEnv("COOKIE_SECURE", false),
+		CORSOrigins:          parseOrigins(getEnv("CORS_ORIGINS", "http://localhost:5173")),
+		Environment:          getEnv("ENV", "development"),
+		CookieDomain:         getEnv("COOKIE_DOMAIN", ""),
+		CookieSecureOverride: getOptionalBoolEnv("COOKIE_SECURE"),
+		TrustedProxies:       parseProxies(getEnv("TRUSTED_PROXIES", "127.0.0.1,::1")),
 
 		// TLS Configuration
 		TLSMode:   getEnv("TLS_MODE", "auto"),
@@ -110,17 +119,21 @@ func Load() {
 		}
 	}
 
-	// Warn about cookie security
-	if !AppConfig.CookieSecure {
-		slog.Warn("COOKIE_SECURE is false — JWT cookies are not marked Secure, set to true when serving over HTTPS")
-	} else if AppConfig.Environment != "production" {
-		slog.Warn("COOKIE_SECURE is true in a non-production environment — ensure you are serving over HTTPS or cookies will not be sent by browsers")
+	cookieSecureMode := "auto (HTTPS detected per request)"
+	if AppConfig.CookieSecureOverride != nil {
+		if *AppConfig.CookieSecureOverride {
+			cookieSecureMode = "true (forced via COOKIE_SECURE)"
+		} else {
+			cookieSecureMode = "false (forced via COOKIE_SECURE)"
+			slog.Warn("COOKIE_SECURE=false is set — cookies will never be marked Secure regardless of HTTPS")
+		}
 	}
 
 	slog.Info("configuration loaded",
 		"grpc_port", AppConfig.GRPCPort,
 		"environment", AppConfig.Environment,
-		"cookie_secure", AppConfig.CookieSecure,
+		"cookie_secure", cookieSecureMode,
+		"trusted_proxies", AppConfig.TrustedProxies,
 	)
 }
 
@@ -142,16 +155,58 @@ func parseOrigins(originsStr string) []string {
 	return origins
 }
 
-func getBoolEnv(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		b, err := strconv.ParseBool(value)
-		if err != nil {
-			slog.Warn("invalid boolean env var, using default", "key", key, "default", defaultValue)
-			return defaultValue
-		}
-		return b
+func getOptionalBoolEnv(key string) *bool {
+	val := os.Getenv(key)
+	if val == "" {
+		return nil
 	}
-	return defaultValue
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		slog.Warn("invalid boolean env var, ignoring", "key", key)
+		return nil
+	}
+	return &b
+}
+
+func parseProxies(s string) []string {
+	if s == "" {
+		return []string{}
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+// CookieSecure returns whether the Secure flag should be set on the JWT cookie
+// for the current request.
+//
+// Priority:
+//  1. COOKIE_SECURE env var (explicit override) — forces true or false unconditionally
+//  2. Direct TLS connection (Request.TLS != nil) — always secure
+//  3. X-Forwarded-Proto: https from a trusted proxy IP — secure behind reverse proxy
+//  4. Default: false (plain HTTP)
+func CookieSecure(tls bool, remoteAddr, xForwardedProto string) bool {
+	if AppConfig.CookieSecureOverride != nil {
+		return *AppConfig.CookieSecureOverride
+	}
+	if tls {
+		return true
+	}
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	for _, trusted := range AppConfig.TrustedProxies {
+		if host == trusted {
+			return xForwardedProto == "https"
+		}
+	}
+	return false
 }
 
 func getIntEnv(key string, defaultValue int) int {
