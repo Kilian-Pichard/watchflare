@@ -21,6 +21,7 @@
     } from "$lib/types";
 
     type SSECallback = (event: SSEEvent) => void;
+    import { ChevronRight } from "lucide-svelte";
     import HostDetailHeader from "$lib/components/host/HostDetailHeader.svelte";
     import HostLiveStats from "$lib/components/host/HostLiveStats.svelte";
     import HostAlerts from "$lib/components/host/HostAlerts.svelte";
@@ -393,6 +394,12 @@
 </svelte:head>
 
 {#if loading}
+    <!-- Skeleton: breadcrumb -->
+    <div class="flex items-center gap-1 mb-3 animate-pulse">
+        <div class="h-3.5 w-10 rounded bg-muted"></div>
+        <div class="h-3.5 w-3.5 rounded bg-muted"></div>
+        <div class="h-3.5 w-24 rounded bg-muted"></div>
+    </div>
     <!-- Skeleton: HostDetailHeader -->
     <div class="mb-4 rounded-xl border bg-card p-3 md:p-4 animate-pulse">
         <div class="flex items-start justify-between mb-3">
@@ -442,6 +449,12 @@
         <p class="text-sm text-destructive">{error}</p>
     </div>
 {:else if host}
+    <!-- Breadcrumb -->
+    <nav aria-label="Breadcrumb" class="flex items-center gap-1 mb-3 text-sm">
+        <a href="/hosts" class="text-muted-foreground hover:text-foreground transition-colors">Hosts</a>
+        <ChevronRight class="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+        <span class="text-foreground font-medium truncate">{host.display_name}</span>
+    </nav>
     <HostDetailHeader
         {host}
         metric={latestMetric}
