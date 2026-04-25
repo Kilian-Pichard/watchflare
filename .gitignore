@@ -51,6 +51,7 @@ docs/private/
 *.swo
 *~
 .DS_Store
+.zed
 
 # Temporary files
 tmp/
