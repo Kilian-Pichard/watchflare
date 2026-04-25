@@ -182,7 +182,8 @@ func runHeartbeat(ctx context.Context, grpcClient *client.Client, cfg *config.Co
 	for {
 		select {
 		case <-ticker.C:
-			cmds, err := grpcClient.Heartbeat(cfg.AgentID, cfg.AgentKey, AgentVersion)
+			ipv4, ipv6 := sysinfo.GetIPAddresses()
+			cmds, err := grpcClient.SendHeartbeat(cfg.AgentID, cfg.AgentKey, ipv4, ipv6, AgentVersion)
 			if err != nil {
 				slog.Warn("heartbeat failed", "error", errors.FormatError(err, "Heartbeat"))
 			} else {
