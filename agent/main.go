@@ -102,6 +102,7 @@ func printHelp() {
 	fmt.Println("  update --check   Check for updates without installing")
 	fmt.Println()
 	fmt.Println("Other:")
+	fmt.Println("  (no args)  Run agent in foreground")
 	fmt.Println("  version    Show version information")
 	fmt.Println("  help       Show this help message")
 	fmt.Println()
