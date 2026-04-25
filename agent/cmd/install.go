@@ -22,10 +22,8 @@ func Install() {
 		fmt.Println()
 		fmt.Println("  brew tap watchflare-io/watchflare")
 		fmt.Println("  brew install watchflare-agent")
-		fmt.Println("  brew services start watchflare-agent")
-		fmt.Println()
-		fmt.Println("After installation, register the agent:")
 		fmt.Println("  watchflare-agent register --token=YOUR_TOKEN --host=YOUR_HOST")
+		fmt.Println("  brew services start watchflare-agent")
 		return
 	}
 
