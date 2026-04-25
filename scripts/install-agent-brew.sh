@@ -57,7 +57,7 @@ if [ "$UNINSTALL" = true ]; then
 
     brew services stop watchflare-agent 2>/dev/null || true
     brew uninstall watchflare-agent 2>/dev/null || true
-    brew untap Kilian-Pichard/watchflare 2>/dev/null || true
+    brew untap watchflare-io/watchflare 2>/dev/null || true
 
     echo ""
     echo -e "${GREEN}✓ Uninstalled${NC}"
@@ -94,7 +94,7 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 
 echo "Installing watchflare-agent via Homebrew..."
-brew tap Kilian-Pichard/watchflare
+brew tap watchflare-io/watchflare
 brew install watchflare-agent
 echo -e "${GREEN}✓ Installed${NC}"
 echo ""

@@ -6,7 +6,7 @@ If you discover a security vulnerability in Watchflare, please report it respons
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please use [GitHub Security Advisories](https://github.com/Kilian-Pichard/watchflare/security/advisories/new) to report vulnerabilities privately.
+Instead, please use [GitHub Security Advisories](https://github.com/watchflare-io/watchflare/security/advisories/new) to report vulnerabilities privately.
 
 ## Scope
 

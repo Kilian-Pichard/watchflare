@@ -20,7 +20,7 @@ func Install() {
 	if runtime.GOOS == "darwin" {
 		fmt.Println("On macOS, the agent is installed and managed via Homebrew:")
 		fmt.Println()
-		fmt.Println("  brew tap Kilian-Pichard/watchflare")
+		fmt.Println("  brew tap watchflare-io/watchflare")
 		fmt.Println("  brew install watchflare-agent")
 		fmt.Println("  brew services start watchflare-agent")
 		fmt.Println()

@@ -1,6 +1,6 @@
 services:
   watchflare:
-    image: ghcr.io/kilian-pichard/watchflare:latest
+    image: ghcr.io/watchflare-io/watchflare:latest
     container_name: watchflare
     ports:
       - "${HUB_PORT:-8080}:8080"

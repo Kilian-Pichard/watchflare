@@ -35,7 +35,7 @@ Backend (Go)
 ### Docker Compose (recommended)
 
 ```bash
-git clone https://github.com/Kilian-Pichard/watchflare.git
+git clone https://github.com/watchflare-io/watchflare.git
 cd watchflare
 
 # Configure environment

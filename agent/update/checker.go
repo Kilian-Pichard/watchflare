@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	githubAPIURL    = "https://api.github.com/repos/Kilian-Pichard/watchflare/releases/latest"
+	githubAPIURL    = "https://api.github.com/repos/watchflare-io/watchflare/releases/latest"
 	downloadBaseURL = "https://get.watchflare.io"
 	httpTimeout     = 30 * time.Second
 )

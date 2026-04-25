@@ -19,7 +19,7 @@ RUN mkdir -p /app/data/pki
 
 # Stage 3: Runtime
 FROM dhi.io/debian-base:trixie
-LABEL org.opencontainers.image.source="https://github.com/Kilian-Pichard/watchflare"
+LABEL org.opencontainers.image.source="https://github.com/watchflare-io/watchflare"
 LABEL org.opencontainers.image.description="Watchflare Host Monitoring"
 COPY --from=backend-builder --chown=65532:65532 /app/backend/watchflare-app /usr/local/bin/watchflare-app
 COPY --from=backend-builder --chown=65532:65532 /app/data /var/lib/watchflare

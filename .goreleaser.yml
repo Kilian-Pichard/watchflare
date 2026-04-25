@@ -59,7 +59,7 @@ brews:
     ids:
       - agent
     repository:
-      owner: Kilian-Pichard
+      owner: watchflare-io
       name: homebrew-watchflare
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     commit_author:

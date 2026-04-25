@@ -105,7 +105,7 @@ func Update() {
 			fmt.Println("  brew upgrade watchflare-agent && brew services restart watchflare-agent")
 		} else {
 			fmt.Println("To update on macOS, install via Homebrew:")
-			fmt.Println("  brew tap Kilian-Pichard/watchflare")
+			fmt.Println("  brew tap watchflare-io/watchflare")
 			fmt.Println("  brew install watchflare-agent")
 		}
 		return
