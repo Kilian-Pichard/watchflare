@@ -56,8 +56,6 @@ type ServiceManager interface {
 	ShowLogs() error
 }
 
-// GetServiceManager is defined in platform-specific files (common_linux.go, common_darwin.go).
-// On macOS it returns an error — use Homebrew to manage the agent.
 
 // CheckRoot verifies that the program is running as root
 func CheckRoot() error {
@@ -114,11 +112,10 @@ func CreateUser() error {
 
 // createUserLinux creates a system user on Linux
 func createUserLinux(username string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
-	defer cancel()
-
 	// Create group first
-	cmd := exec.CommandContext(ctx, "groupadd", "--system", username)
+	groupCtx, groupCancel := context.WithTimeout(context.Background(), execTimeout)
+	defer groupCancel()
+	cmd := exec.CommandContext(groupCtx, "groupadd", "--system", username)
 	if err := cmd.Run(); err != nil {
 		// Ignore if group already exists
 		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 9 {
@@ -127,7 +124,9 @@ func createUserLinux(username string) error {
 	}
 
 	// Create user
-	cmd = exec.CommandContext(ctx, "useradd",
+	userCtx, userCancel := context.WithTimeout(context.Background(), execTimeout)
+	defer userCancel()
+	cmd = exec.CommandContext(userCtx, "useradd",
 		"--system",
 		"--gid", username,
 		"--home-dir", "/var/empty",
@@ -221,14 +220,17 @@ func InstallBinary(sourcePath string) error {
 		return fmt.Errorf("failed to create destination binary: %w", err)
 	}
 
-	// Copy file (bounded to prevent disk exhaustion from oversized source)
-	if _, err := io.CopyN(dst, src, maxBinaryBytes); err != nil && err != io.EOF {
-		dst.Close()
-		return fmt.Errorf("failed to copy binary: %w", err)
+	// Copy file (bounded to prevent disk exhaustion from oversized source).
+	// Read maxBinaryBytes+1 to detect truncation: if n > maxBinaryBytes the source is too large.
+	n, copyErr := io.CopyN(dst, src, maxBinaryBytes+1)
+	dst.Close()
+	if copyErr != nil && copyErr != io.EOF {
+		os.Remove(destPath)
+		return fmt.Errorf("failed to copy binary: %w", copyErr)
 	}
-
-	if err := dst.Close(); err != nil {
-		return fmt.Errorf("failed to write binary: %w", err)
+	if n > maxBinaryBytes {
+		os.Remove(destPath)
+		return fmt.Errorf("binary exceeds maximum size of %d MB", maxBinaryBytes/1024/1024)
 	}
 
 	gid, err := getGroupID("root")
@@ -286,28 +288,36 @@ func CreateLogFile() error {
 func RemoveFiles() error {
 	binaryPath := InstallDir + "/" + BinaryName
 
-	if err := os.Remove(binaryPath); err != nil && !os.IsNotExist(err) {
+	err := os.Remove(binaryPath)
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove binary: %w", err)
 	}
-
-	fmt.Printf("  → Removed %s\n", binaryPath)
+	if err == nil {
+		fmt.Printf("  → Removed %s\n", binaryPath)
+	}
 	return nil
 }
 
 // RemoveDirectories removes data and config directories
 func RemoveDirectories(removeData, removeConfig bool) error {
 	if removeData {
-		if err := os.RemoveAll(DataDir); err != nil && !os.IsNotExist(err) {
+		err := os.RemoveAll(DataDir)
+		if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove data directory: %w", err)
 		}
-		fmt.Printf("  → Removed %s\n", DataDir)
+		if err == nil {
+			fmt.Printf("  → Removed %s\n", DataDir)
+		}
 	}
 
 	if removeConfig {
-		if err := os.RemoveAll(ConfigDir); err != nil && !os.IsNotExist(err) {
+		err := os.RemoveAll(ConfigDir)
+		if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove config directory: %w", err)
 		}
-		fmt.Printf("  → Removed %s\n", ConfigDir)
+		if err == nil {
+			fmt.Printf("  → Removed %s\n", ConfigDir)
+		}
 	}
 
 	return nil
@@ -315,10 +325,10 @@ func RemoveDirectories(removeData, removeConfig bool) error {
 
 // RemoveUser removes the watchflare system user
 func RemoveUser() error {
-	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
-	defer cancel()
+	userCtx, userCancel := context.WithTimeout(context.Background(), execTimeout)
+	defer userCancel()
 
-	cmd := exec.CommandContext(ctx, "userdel", UserName)
+	cmd := exec.CommandContext(userCtx, "userdel", UserName)
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 6 {
 			// User doesn't exist, that's fine
@@ -328,7 +338,9 @@ func RemoveUser() error {
 	}
 
 	// Try to remove group (may fail if other users use it, that's okay)
-	exec.CommandContext(ctx, "groupdel", UserName).Run() //nolint:errcheck
+	groupCtx, groupCancel := context.WithTimeout(context.Background(), execTimeout)
+	defer groupCancel()
+	_ = exec.CommandContext(groupCtx, "groupdel", UserName).Run()
 
 	fmt.Printf("  → Removed user '%s'\n", UserName)
 	return nil
@@ -336,11 +348,13 @@ func RemoveUser() error {
 
 // RemoveLogFile removes the agent log file
 func RemoveLogFile() error {
-	if err := os.Remove(LogPath); err != nil && !os.IsNotExist(err) {
+	err := os.Remove(LogPath)
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove log file: %w", err)
 	}
-
-	fmt.Printf("  → Removed %s\n", LogPath)
+	if err == nil {
+		fmt.Printf("  → Removed %s\n", LogPath)
+	}
 	return nil
 }
 
