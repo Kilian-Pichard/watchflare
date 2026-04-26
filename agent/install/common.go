@@ -67,17 +67,11 @@ func CheckRoot() error {
 
 // getUserID returns the UID for a username
 func getUserID(username string) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "id", "-u", username)
-	output, err := cmd.Output()
+	u, err := user.Lookup(username)
 	if err != nil {
-		return 0, fmt.Errorf("user not found or incomplete: %w", err)
+		return 0, fmt.Errorf("user not found: %w", err)
 	}
-
-	// Parse output (just a number like "200\n")
-	var uid int
-	_, err = fmt.Sscanf(string(output), "%d", &uid)
+	uid, err := strconv.Atoi(u.Uid)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse UID: %w", err)
 	}
@@ -214,36 +208,40 @@ func InstallBinary(sourcePath string) error {
 	}
 	defer src.Close()
 
-	// Create destination file
-	dst, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	// Write to a temp file in the same directory so os.Rename is atomic (same filesystem).
+	tmp, err := os.CreateTemp(InstallDir, BinaryName+".tmp.*")
 	if err != nil {
-		return fmt.Errorf("failed to create destination binary: %w", err)
+		return fmt.Errorf("failed to create temp file: %w", err)
 	}
+	tmpPath := tmp.Name()
 
 	// Copy file (bounded to prevent disk exhaustion from oversized source).
 	// Read maxBinaryBytes+1 to detect truncation: if n > maxBinaryBytes the source is too large.
-	n, copyErr := io.CopyN(dst, src, maxBinaryBytes+1)
-	dst.Close()
+	n, copyErr := io.CopyN(tmp, src, maxBinaryBytes+1)
+	tmp.Close()
 	if copyErr != nil && copyErr != io.EOF {
-		os.Remove(destPath)
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to copy binary: %w", copyErr)
 	}
 	if n > maxBinaryBytes {
-		os.Remove(destPath)
+		os.Remove(tmpPath)
 		return fmt.Errorf("binary exceeds maximum size of %d MB", maxBinaryBytes/1024/1024)
 	}
 
-	gid, err := getGroupID("root")
-	if err != nil {
-		return fmt.Errorf("failed to get GID for root: %w", err)
-	}
-
-	if err := os.Chown(destPath, 0, gid); err != nil {
+	if err := os.Chown(tmpPath, 0, 0); err != nil {
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to set ownership: %w", err)
 	}
 
-	if err := os.Chmod(destPath, 0755); err != nil {
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	// Atomic replace: the destination is never in a partial state
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to install binary: %w", err)
 	}
 
 	fmt.Printf("  → Installed to %s\n", destPath)
