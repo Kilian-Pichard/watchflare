@@ -145,6 +145,9 @@ func Collect(config *sysinfo.MetricsConfig) (*SystemMetrics, error) {
 			metrics.MemoryAvailableBytes = memStats.Available
 			if memStats.Total >= memStats.Available {
 				metrics.MemoryUsedBytes = memStats.Total - memStats.Available
+			} else {
+				slog.Debug("memory available exceeds total, reporting used as 0",
+					"total", memStats.Total, "available", memStats.Available)
 			}
 			metrics.MemoryBuffersBytes = memStats.Buffers
 			metrics.MemoryCachedBytes = memStats.Cached
