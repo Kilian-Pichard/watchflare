@@ -14,6 +14,10 @@ import (
 const (
 	execTimeout    = 10 * time.Second
 	maxBinaryBytes = 100 * 1024 * 1024 // 100 MB
+
+	// Exit codes for Linux user management commands
+	exitCodeAlreadyExists = 9 // groupadd/useradd: entity already exists
+	exitCodeNoSuchUser    = 6 // userdel: user does not exist
 )
 
 const (
@@ -28,7 +32,7 @@ const (
 
 // ServiceManager defines the interface for OS-specific service management
 type ServiceManager interface {
-	// Install installs the systemd service
+	// Install installs the agent service
 	Install() error
 
 	// Uninstall removes the service
@@ -91,54 +95,7 @@ func getGroupID(groupname string) (int, error) {
 	return gid, nil
 }
 
-// CreateUser creates the watchflare system user
-func CreateUser() error {
-	username := UserName
 
-	// Check if user already exists
-	if _, err := user.Lookup(username); err == nil {
-		fmt.Printf("  → User '%s' already exists\n", username)
-		return nil
-	}
-
-	return createUserLinux(username)
-}
-
-// createUserLinux creates a system user on Linux
-func createUserLinux(username string) error {
-	// Create group first
-	groupCtx, groupCancel := context.WithTimeout(context.Background(), execTimeout)
-	defer groupCancel()
-	cmd := exec.CommandContext(groupCtx, "groupadd", "--system", username)
-	if err := cmd.Run(); err != nil {
-		// Ignore if group already exists
-		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 9 {
-			return fmt.Errorf("failed to create group: %w", err)
-		}
-	}
-
-	// Create user
-	userCtx, userCancel := context.WithTimeout(context.Background(), execTimeout)
-	defer userCancel()
-	cmd = exec.CommandContext(userCtx, "useradd",
-		"--system",
-		"--gid", username,
-		"--home-dir", "/var/empty",
-		"--shell", "/usr/sbin/nologin",
-		"--comment", "Watchflare Agent",
-		username,
-	)
-
-	if err := cmd.Run(); err != nil {
-		// Ignore if user already exists
-		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 9 {
-			return fmt.Errorf("failed to create user: %w", err)
-		}
-	}
-
-	fmt.Printf("  → Created user '%s'\n", username)
-	return nil
-}
 
 // CreateDirectories creates all necessary directories with proper permissions
 func CreateDirectories() error {
@@ -328,7 +285,7 @@ func RemoveUser() error {
 
 	cmd := exec.CommandContext(userCtx, "userdel", UserName)
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 6 {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == exitCodeNoSuchUser {
 			// User doesn't exist, that's fine
 			return nil
 		}
@@ -366,11 +323,5 @@ func AskConfirmation(prompt string) bool {
 
 // GetBinaryPath returns the path to the running binary
 func GetBinaryPath() (string, error) {
-	// /proc/self/exe is Linux-specific; os.Executable() is the portable fallback
-	if path, err := os.Readlink("/proc/self/exe"); err == nil {
-		return path, nil
-	}
-
-	// Fall back to os.Executable()
 	return os.Executable()
 }
