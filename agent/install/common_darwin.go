@@ -14,3 +14,9 @@ func GetServiceManager() (ServiceManager, error) {
 func CreateUser() error {
 	return fmt.Errorf("manual installation is not supported on macOS, use Homebrew")
 }
+
+// AddToDockerGroup is a no-op on macOS: the agent runs as the invoking user
+// who already has access to the Docker socket via Docker Desktop.
+func AddToDockerGroup() error {
+	return nil
+}

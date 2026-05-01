@@ -81,11 +81,11 @@ func Run() {
 
 	// Detect environment and create metrics config
 	env := sysinfo.DetectEnvironment()
-	metricsConfig := sysinfo.GetMetricsConfig(env, *cfg.DockerMetrics)
+	metricsConfig := sysinfo.GetMetricsConfig(env, *cfg.ContainerMetrics)
 	metricsConfig.ContainerRuntime = env.ContainerRuntime
 	slog.Info("environment detected", "type", env.String())
-	if *cfg.DockerMetrics {
-		slog.Info("Docker container metrics enabled")
+	if *cfg.ContainerMetrics {
+		slog.Info("container metrics enabled")
 	}
 
 	// Initialize metrics collector (important for macOS CPU metrics)

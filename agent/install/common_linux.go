@@ -61,3 +61,22 @@ func createUserLinux(username string) error {
 	fmt.Printf("  → Created user '%s'\n", username)
 	return nil
 }
+
+// AddToDockerGroup adds the watchflare user to the docker group so the agent
+// can access the Docker socket and collect container metrics.
+func AddToDockerGroup() error {
+	if _, err := user.LookupGroup("docker"); err != nil {
+		return fmt.Errorf("docker group not found: is Docker installed?")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "usermod", "-aG", "docker", UserName)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add %s to docker group: %w\n%s", UserName, err, out)
+	}
+
+	fmt.Printf("  → Added '%s' to the docker group\n", UserName)
+	return nil
+}
