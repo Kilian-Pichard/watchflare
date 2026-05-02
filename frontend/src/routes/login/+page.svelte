@@ -41,10 +41,13 @@
             }
             goto("/");
         } catch (err) {
-            error =
-                err.message === "invalid credentials"
-                    ? "Invalid credentials."
-                    : err.message;
+            if (err.message === "invalid credentials") {
+                error = "Invalid credentials.";
+            } else if (err.status === 503) {
+                error = "Service unavailable.";
+            } else {
+                error = "An unexpected error occurred. Please try again.";
+            }
         } finally {
             loading = false;
         }
