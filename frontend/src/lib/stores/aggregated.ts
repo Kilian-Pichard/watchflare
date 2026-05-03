@@ -149,6 +149,8 @@ function computeStats(
 	const totalDisk = lastPoint?.disk_total_bytes || 0;
 	const usedDisk = lastPoint?.disk_used_bytes || 0;
 
+	const loadAvg = lastPoint?.load_avg_1min || 0;
+
 	return {
 		totalHosts,
 		onlineHosts,
@@ -161,6 +163,7 @@ function computeStats(
 		usedMemory,
 		totalDisk,
 		usedDisk,
+		loadAvg,
 	};
 }
 
