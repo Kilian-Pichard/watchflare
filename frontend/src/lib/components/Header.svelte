@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { goto } from "$app/navigation";
     import {
         mobileMenuOpen,
         sidebarCollapsed,
@@ -7,7 +6,7 @@
         sidebarTransitioning,
     } from "$lib/stores/sidebar";
     import { uiStore, alertCount } from "$lib/stores";
-    import { Search, Plus } from "lucide-svelte";
+    import { Search } from "lucide-svelte";
     import CommandPalette from "./CommandPalette.svelte";
 
     let commandPaletteOpen = $state(false);
@@ -136,23 +135,8 @@
             >W</a
         >
 
-        <!-- Add Host + Alerts -->
+        <!-- Alerts -->
         <div class="flex items-center gap-3 shrink-0 ms-auto h-full">
-            <button
-                onclick={() => goto("/hosts", { state: { openAddHost: true } })}
-                class="hidden sm:flex items-center gap-1.5 h-9.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-                <Plus class="h-4 w-4" />
-                <span class="hidden sm:inline">Add Host</span>
-            </button>
-            <button
-                onclick={() => goto("/hosts", { state: { openAddHost: true } })}
-                class="flex sm:hidden items-center gap-1.5 h-9.5 w-9.5 xs:h-full xs:w-fit p-0 xs:px-4 py-1.5 justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
-                aria-label="Add Host"
-            >
-                <Plus class="h-4 w-4" />
-                <span class="hidden xs:inline sm:hidden">Add</span>
-            </button>
             <button
                 onclick={toggleAlerts}
                 class="relative flex h-9.5 w-9.5 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

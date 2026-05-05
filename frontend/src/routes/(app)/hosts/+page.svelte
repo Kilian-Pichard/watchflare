@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { page } from "$app/stores";
     import * as api from "$lib/api.js";
     import { handleSSEReactivation, logger } from "$lib/utils";
     import { HOSTS_PER_PAGE, SEARCH_DEBOUNCE_MS } from "$lib/constants";
@@ -48,12 +47,6 @@
     let showRename = $state(false);
     let selectedHost: Host | null = $state(null);
     let newHostName = $state("");
-
-    $effect(() => {
-        if (($page.state as { openAddHost?: boolean }).openAddHost) {
-            showAddHost = true;
-        }
-    });
 
     let totalPages = $derived(Math.max(1, Math.ceil(total / perPage)));
 
