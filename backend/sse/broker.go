@@ -118,6 +118,7 @@ type AggregatedMetricsUpdate struct {
 	MemoryAvailableBytes uint64  `json:"memory_available_bytes"`
 	DiskTotalBytes       uint64  `json:"disk_total_bytes"`
 	DiskUsedBytes        uint64  `json:"disk_used_bytes"`
+	LoadAvg1Min          float64 `json:"load_avg_1min"`
 }
 
 // ContainerMetricMinified represents a minified container metric for SSE

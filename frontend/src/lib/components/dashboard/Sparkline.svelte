@@ -42,8 +42,8 @@
 	// Stable unique ID per instance for the SVG gradient reference
 	const id = `sg-${Math.random().toString(36).slice(2, 7)}`;
 
-	function buildPath(vals: number[], ts?: number[], tr?: TimeRange, fixedMin?: number, fixedMax?: number): { line: string; fill: string } {
-		if (vals.length < 2) return { line: '', fill: '' };
+	function buildPath(vals: number[], ts?: number[], tr?: TimeRange, fixedMin?: number, fixedMax?: number): { line: string; fill: string; dots: { x: number; y: number }[] } {
+		if (vals.length < 2) return { line: '', fill: '', dots: [] };
 
 		const min = fixedMin ?? Math.min(...vals);
 		const max = fixedMax ?? Math.max(...vals);
@@ -75,18 +75,20 @@
 			}
 		}
 
-		// Split into continuous segments
+		// Split into continuous segments; collect isolated single points as dots
 		const segments: { x: number; y: number }[][] = [];
+		const dots: { x: number; y: number }[] = [];
 		let seg: { x: number; y: number }[] = [];
 		for (let i = 0; i < pts.length; i++) {
 			seg.push(pts[i]);
 			if (gapAfter.has(i)) {
 				if (seg.length >= 2) segments.push(seg);
+				else if (seg.length === 1) dots.push(seg[0]);
 				seg = [];
 			}
 		}
 		if (seg.length >= 2) segments.push(seg);
-		if (segments.length === 0 && pts.length >= 2) segments.push(pts);
+		else if (seg.length === 1) dots.push(seg[0]);
 
 		// Catmull-Rom → cubic bezier smooth path for one segment
 		function smoothSegment(s: { x: number; y: number }[]): string {
@@ -115,37 +117,44 @@
 			})
 			.join(' ');
 
-		return { line, fill };
+		return { line, fill, dots };
 	}
 
 	const path = $derived(buildPath(values, timestamps, timeRange, yMin, yMax));
 </script>
 
-<svg
-	viewBox="0 0 {W} {H}"
-	preserveAspectRatio="none"
-	class="w-full h-8 {className}"
-	aria-hidden="true"
-	overflow="hidden"
->
-	<defs>
-		<linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-			<stop offset="0%" stop-color="currentColor" stop-opacity="0.15" />
-			<stop offset="100%" stop-color="currentColor" stop-opacity="0" />
-		</linearGradient>
-	</defs>
-	{#if path.fill}
-		<path d={path.fill} fill="url(#{id})" stroke="none" />
-	{/if}
-	{#if path.line}
-		<path
-			d={path.line}
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			vector-effect="non-scaling-stroke"
-		/>
-	{/if}
-</svg>
+<div class="relative w-full h-8 {className}" aria-hidden="true">
+	<svg
+		viewBox="0 0 {W} {H}"
+		preserveAspectRatio="none"
+		class="w-full h-full"
+		overflow="hidden"
+	>
+		<defs>
+			<linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+				<stop offset="0%" stop-color="currentColor" stop-opacity="0.15" />
+				<stop offset="100%" stop-color="currentColor" stop-opacity="0" />
+			</linearGradient>
+		</defs>
+		{#if path.fill}
+			<path d={path.fill} fill="url(#{id})" stroke="none" />
+		{/if}
+		{#if path.line}
+			<path
+				d={path.line}
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				vector-effect="non-scaling-stroke"
+			/>
+		{/if}
+	</svg>
+	{#each path.dots as dot}
+		<div
+			class="absolute rounded-full bg-current pointer-events-none"
+			style="width: 2px; height: 2px; left: {(dot.x / W) * 100}%; top: {(dot.y / H) * 100}%; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px hsl(var(--card))"
+		></div>
+	{/each}
+</div>
