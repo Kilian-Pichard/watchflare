@@ -1,11 +1,19 @@
 <script lang="ts">
+	import type { TimeRange } from '$lib/types';
+
 	const {
 		values,
 		timestamps,
+		timeRange,
+		yMin,
+		yMax,
 		class: className = "",
 	}: {
 		values: number[];
 		timestamps?: number[];
+		timeRange?: TimeRange;
+		yMin?: number;
+		yMax?: number;
 		class?: string;
 	} = $props();
 
@@ -13,27 +21,57 @@
 	const H = 36;
 	const TENSION = 0.4;
 
+	// 1.5× bucket interval per time range, in seconds — mirrors UPlotChart GAP_THRESHOLDS
+	const GAP_THRESHOLDS_S: Record<string, number> = {
+		"1h":  45,
+		"12h": 900,
+		"24h": 1350,
+		"7d":  10800,
+		"30d": 43200,
+	};
+
+	// Duration of each time range in seconds
+	const TIME_RANGE_S: Record<string, number> = {
+		"1h":  3600,
+		"12h": 43200,
+		"24h": 86400,
+		"7d":  604800,
+		"30d": 2592000,
+	};
+
 	// Stable unique ID per instance for the SVG gradient reference
 	const id = `sg-${Math.random().toString(36).slice(2, 7)}`;
 
-	function buildPath(vals: number[], ts?: number[]): { line: string; fill: string } {
+	function buildPath(vals: number[], ts?: number[], tr?: TimeRange, fixedMin?: number, fixedMax?: number): { line: string; fill: string } {
 		if (vals.length < 2) return { line: '', fill: '' };
 
-		const min = Math.min(...vals);
-		const max = Math.max(...vals);
+		const min = fixedMin ?? Math.min(...vals);
+		const max = fixedMax ?? Math.max(...vals);
 		const range = max - min || 1;
 
+		// X positioning: time-based when timestamps + timeRange are available,
+		// anchored to [lastTs - duration, lastTs] to match the large charts.
+		// Fallback: index-based.
+		const duration = tr ? TIME_RANGE_S[tr] : null;
+		const useTime = ts && ts.length === vals.length && duration != null;
+		const xStart = useTime ? ts![ts!.length - 1] - duration! : 0;
+
 		const pts = vals.map((v, i) => ({
-			x: (i / (vals.length - 1)) * W,
+			x: useTime
+				? Math.max(0, Math.min(W, ((ts![i] - xStart) / duration!) * W))
+				: (i / (vals.length - 1)) * W,
 			y: H - ((v - min) / range) * (H * 0.85) - H * 0.075,
 		}));
 
-		// Detect gaps: flag index i if the interval to i+1 is > 2× average
+		// Gap detection: use time-range-aware threshold when available,
+		// otherwise fall back to 2× average interval heuristic.
 		const gapAfter = new Set<number>();
 		if (ts && ts.length === vals.length && ts.length > 1) {
-			const avgInterval = (ts[ts.length - 1] - ts[0]) / (ts.length - 1);
+			const threshold = tr && GAP_THRESHOLDS_S[tr]
+				? GAP_THRESHOLDS_S[tr]
+				: (ts[ts.length - 1] - ts[0]) / (ts.length - 1) * 2;
 			for (let i = 0; i < ts.length - 1; i++) {
-				if (ts[i + 1] - ts[i] > avgInterval * 2) gapAfter.add(i);
+				if (ts[i + 1] - ts[i] > threshold) gapAfter.add(i);
 			}
 		}
 
@@ -80,7 +118,7 @@
 		return { line, fill };
 	}
 
-	const path = $derived(buildPath(values, timestamps));
+	const path = $derived(buildPath(values, timestamps, timeRange, yMin, yMax));
 </script>
 
 <svg
@@ -88,6 +126,7 @@
 	preserveAspectRatio="none"
 	class="w-full h-8 {className}"
 	aria-hidden="true"
+	overflow="hidden"
 >
 	<defs>
 		<linearGradient id={id} x1="0" y1="0" x2="0" y2="1">

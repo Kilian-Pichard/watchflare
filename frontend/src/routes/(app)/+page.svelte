@@ -2,6 +2,7 @@
     import { onMount, onDestroy } from "svelte";
     import { formatPercent, handleSSEReactivation, logger } from "$lib/utils";
     import { DROPPED_METRICS_POLL_INTERVAL } from "$lib/constants";
+    import { listAllPackages } from "$lib/api";
     import {
         userStore,
         currentUser,
@@ -39,6 +40,7 @@
     }
 
     let loading = $state(true);
+    let packagesStats = $state({ outdatedCount: 0, securityCount: 0, outdatedHostsCount: 0 });
     let user = $derived($currentUser);
     let stats = $derived($dashboardStats);
     let droppedAlerts = $derived($alertsStore.droppedMetrics);
@@ -78,6 +80,10 @@
                 ? (firstMetric.disk_used_bytes / firstMetric.disk_total_bytes) * 100
                 : null
         ),
+        loadAvg: getTrend(
+            lastMetric?.load_avg_1min ?? null,
+            firstMetric?.load_avg_1min ?? null
+        ),
     });
 
     async function loadData() {
@@ -93,11 +99,17 @@
                 (userTimeRange as string) === "6h" ? "12h" : userTimeRange;
             aggregatedStore.setTimeRange(migratedTimeRange);
 
-            await Promise.all([
+            const [,,,pkgData] = await Promise.all([
                 hostStatsStore.load(),
                 alertsStore.load(),
                 aggregatedStore.load(migratedTimeRange),
+                listAllPackages({ limit: 1 }),
             ]);
+            packagesStats = {
+                outdatedCount: pkgData.outdated_count,
+                securityCount: pkgData.security_count,
+                outdatedHostsCount: pkgData.outdated_hosts_count,
+            };
         } catch (err) {
             logger.error("Failed to load data:", err);
         } finally {
@@ -156,7 +168,7 @@
     <!-- Skeleton: bento grid -->
     <div class="grid grid-cols-8 gap-4 mb-6 animate-pulse">
         <!-- Stat cards (2×1 each) -->
-        {#each Array(4) as _}
+        {#each Array(8) as _}
             <div class="col-span-4 md:col-span-2 flex flex-col gap-2 rounded-lg border bg-card p-4">
                 <div class="flex items-center justify-between">
                     <div class="h-4 w-16 rounded bg-muted"></div>
@@ -211,7 +223,7 @@
     <!-- Bento grid: stats + charts in a single 8-column grid -->
     <div class="grid grid-cols-8 gap-4 mb-6">
         <!-- Stat cards — each 2×1 (col-span-2 on md+, col-span-4 on mobile) -->
-        <DashboardStats {stats} {trends} timeRange={selectedTimeRange} hasSufficientTrendData={hasSufficientTrendData} aggregatedMetrics={$aggregatedMetrics} />
+        <DashboardStats {stats} {trends} timeRange={selectedTimeRange} hasSufficientTrendData={hasSufficientTrendData} aggregatedMetrics={$aggregatedMetrics} {packagesStats} droppedAlerts={droppedAlerts} />
 
         <!-- Chart cards — each 4×2 (col-span-4 on md+, col-span-8 on mobile) -->
         <DashboardCharts
