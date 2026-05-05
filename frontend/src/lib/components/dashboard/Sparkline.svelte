@@ -17,8 +17,6 @@
 		class?: string;
 	} = $props();
 
-	const W = 100;
-	const H = 36;
 	const TENSION = 0.4;
 
 	// 1.5× bucket interval per time range, in seconds — mirrors UPlotChart GAP_THRESHOLDS
@@ -39,19 +37,79 @@
 		"30d": 2592000,
 	};
 
-	// Stable unique ID per instance for the SVG gradient reference
-	const id = `sg-${Math.random().toString(36).slice(2, 7)}`;
+	let canvas: HTMLCanvasElement | null = $state(null);
 
-	function buildPath(vals: number[], ts?: number[], tr?: TimeRange, fixedMin?: number, fixedMax?: number): { line: string; fill: string; dots: { x: number; y: number }[] } {
-		if (vals.length < 2) return { line: '', fill: '', dots: [] };
+	// Per-instance cache: resolving a color creates a temporary canvas — only do it once per value.
+	// Modern browsers may return oklch()/lab() from getComputedStyle instead of rgb(),
+	// so we let the canvas 2D context parse the color and sample the resulting sRGB bytes.
+	const colorCache = new Map<string, [number, number, number, number]>();
 
+	function resolveColor(cssColor: string): [number, number, number, number] {
+		if (colorCache.has(cssColor)) return colorCache.get(cssColor)!;
+		const tmp = document.createElement('canvas');
+		tmp.width = tmp.height = 1;
+		const tmpCtx = tmp.getContext('2d')!;
+		tmpCtx.fillStyle = cssColor;
+		tmpCtx.fillRect(0, 0, 1, 1);
+		const [r, g, b, a] = tmpCtx.getImageData(0, 0, 1, 1).data;
+		const result: [number, number, number, number] = [r, g, b, a / 255];
+		colorCache.set(cssColor, result);
+		return result;
+	}
+
+	function catmullRomPath(ctx: CanvasRenderingContext2D, s: { x: number; y: number }[]) {
+		ctx.moveTo(s[0].x, s[0].y);
+		for (let i = 0; i < s.length - 1; i++) {
+			const p0 = s[Math.max(0, i - 1)];
+			const p1 = s[i];
+			const p2 = s[i + 1];
+			const p3 = s[Math.min(s.length - 1, i + 2)];
+			ctx.bezierCurveTo(
+				p1.x + (p2.x - p0.x) * TENSION,
+				p1.y + (p2.y - p0.y) * TENSION,
+				p2.x - (p3.x - p1.x) * TENSION,
+				p2.y - (p3.y - p1.y) * TENSION,
+				p2.x,
+				p2.y,
+			);
+		}
+	}
+
+	function redraw(
+		el: HTMLCanvasElement,
+		vals: number[],
+		ts: number[] | undefined,
+		tr: TimeRange | undefined,
+		fixedMin: number | undefined,
+		fixedMax: number | undefined,
+	) {
+		const dpr = window.devicePixelRatio || 1;
+		const W = el.offsetWidth;
+		const H = el.offsetHeight;
+		if (W === 0 || H === 0) return;
+
+		// Resize backing store only when needed
+		const pw = Math.round(W * dpr);
+		const ph = Math.round(H * dpr);
+		if (el.width !== pw || el.height !== ph) {
+			el.width = pw;
+			el.height = ph;
+		}
+
+		const ctx = el.getContext('2d')!;
+		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		ctx.clearRect(0, 0, W, H);
+
+		if (vals.length < 2) return;
+
+		const [r, g, b, a] = resolveColor(getComputedStyle(el).color);
+		const strokeColor = `rgba(${r},${g},${b},${a})`;
+		const gradTop    = `rgba(${r},${g},${b},${a * 0.35})`;
+		const gradBottom = `rgba(${r},${g},${b},0)`;
 		const min = fixedMin ?? Math.min(...vals);
 		const max = fixedMax ?? Math.max(...vals);
 		const range = max - min || 1;
 
-		// X positioning: time-based when timestamps + timeRange are available,
-		// anchored to [lastTs - duration, lastTs] to match the large charts.
-		// Fallback: index-based.
 		const duration = tr ? TIME_RANGE_S[tr] : null;
 		const useTime = ts && ts.length === vals.length && duration != null;
 		const xStart = useTime ? ts![ts!.length - 1] - duration! : 0;
@@ -90,71 +148,69 @@
 		if (seg.length >= 2) segments.push(seg);
 		else if (seg.length === 1) dots.push(seg[0]);
 
-		// Catmull-Rom → cubic bezier smooth path for one segment
-		function smoothSegment(s: { x: number; y: number }[]): string {
-			let d = `M ${s[0].x.toFixed(2)},${s[0].y.toFixed(2)}`;
-			for (let i = 0; i < s.length - 1; i++) {
-				const p0 = s[Math.max(0, i - 1)];
-				const p1 = s[i];
-				const p2 = s[i + 1];
-				const p3 = s[Math.min(s.length - 1, i + 2)];
-				const cp1x = p1.x + (p2.x - p0.x) * TENSION;
-				const cp1y = p1.y + (p2.y - p0.y) * TENSION;
-				const cp2x = p2.x - (p3.x - p1.x) * TENSION;
-				const cp2y = p2.y - (p3.y - p1.y) * TENSION;
-				d += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
-			}
-			return d;
+		// Draw gradient fill under each segment
+		const grad = ctx.createLinearGradient(0, 0, 0, H);
+		grad.addColorStop(0, gradTop);
+		grad.addColorStop(1, gradBottom);
+		ctx.fillStyle = grad;
+		for (const s of segments) {
+			ctx.beginPath();
+			catmullRomPath(ctx, s);
+			ctx.lineTo(s[s.length - 1].x, H);
+			ctx.lineTo(s[0].x, H);
+			ctx.closePath();
+			ctx.fill();
 		}
 
-		const line = segments.map(smoothSegment).join(' ');
+		// Draw lines
+		ctx.strokeStyle = strokeColor;
+		ctx.lineWidth = 1;
+		ctx.lineCap = 'round';
+		ctx.lineJoin = 'round';
+		for (const s of segments) {
+			ctx.beginPath();
+			catmullRomPath(ctx, s);
+			ctx.stroke();
+		}
 
-		const fill = segments
-			.map((s) => {
-				const last = s[s.length - 1];
-				const first = s[0];
-				return `${smoothSegment(s)} L ${last.x.toFixed(2)},${H} L ${first.x.toFixed(2)},${H} Z`;
-			})
-			.join(' ');
-
-		return { line, fill, dots };
+		// Draw isolated dots
+		ctx.fillStyle = strokeColor;
+		for (const dot of dots) {
+			ctx.beginPath();
+			ctx.arc(dot.x, dot.y, 1, 0, Math.PI * 2);
+			ctx.fill();
+		}
 	}
 
-	const path = $derived(buildPath(values, timestamps, timeRange, yMin, yMax));
+	// Redraw when props change — RAF batches rapid successive updates into one frame
+	$effect(() => {
+		const el   = canvas;
+		const vals = values;
+		const ts   = timestamps;
+		const tr   = timeRange;
+		const fMin = yMin;
+		const fMax = yMax;
+
+		const id = requestAnimationFrame(() => {
+			if (el) redraw(el, vals, ts, tr, fMin, fMax);
+		});
+		return () => cancelAnimationFrame(id);
+	});
+
+	// Redraw on container resize (window resize, sidebar toggle, etc.)
+	$effect(() => {
+		if (!canvas) return;
+		const el = canvas;
+		const ro = new ResizeObserver(() => {
+			redraw(el, values, timestamps, timeRange, yMin, yMax);
+		});
+		ro.observe(el);
+		return () => ro.disconnect();
+	});
 </script>
 
-<div class="relative w-full h-8 {className}" aria-hidden="true">
-	<svg
-		viewBox="0 0 {W} {H}"
-		preserveAspectRatio="none"
-		class="w-full h-full"
-		overflow="hidden"
-	>
-		<defs>
-			<linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-				<stop offset="0%" stop-color="currentColor" stop-opacity="0.15" />
-				<stop offset="100%" stop-color="currentColor" stop-opacity="0" />
-			</linearGradient>
-		</defs>
-		{#if path.fill}
-			<path d={path.fill} fill="url(#{id})" stroke="none" />
-		{/if}
-		{#if path.line}
-			<path
-				d={path.line}
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				vector-effect="non-scaling-stroke"
-			/>
-		{/if}
-	</svg>
-	{#each path.dots as dot}
-		<div
-			class="absolute rounded-full bg-current pointer-events-none"
-			style="width: 2px; height: 2px; left: {(dot.x / W) * 100}%; top: {(dot.y / H) * 100}%; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px hsl(var(--card))"
-		></div>
-	{/each}
-</div>
+<canvas
+	bind:this={canvas}
+	class="w-full h-8 {className}"
+	aria-hidden="true"
+></canvas>
